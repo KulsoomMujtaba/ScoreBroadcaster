@@ -4,7 +4,7 @@ import android.util.Log
 import com.example.scorebroadcaster.data.StreamConfig
 import com.pedro.common.ConnectChecker
 import com.pedro.encoder.input.video.CameraHelper
-import com.pedro.library.rtmp.RtmpCamera2
+import com.pedro.library.rtmps.RtmpsCamera2
 import com.pedro.library.view.OpenGlView
 
 private const val TAG = "RtmpLiveStreamer"
@@ -30,12 +30,12 @@ interface StreamStatusCallback {
 }
 
 /**
- * Wraps [RtmpCamera2] (pedroSG94/RootEncoder) and manages the camera + RTMP session.
+ * Wraps [RtmpsCamera2] (pedroSG94/RootEncoder) and manages the camera + RTMPS session.
  *
  * Usage:
  * 1. Construct with an [OpenGlView] and a [StreamStatusCallback].
  * 2. Call [startPreview] to open the camera preview on the surface.
- * 3. Call [start] with a [StreamConfig] to begin RTMP streaming.
+ * 3. Call [start] with a [StreamConfig] to begin RTMPS streaming.
  * 4. Call [release] to stop the stream and camera when done.
  */
 class RtmpLiveStreamer(
@@ -44,20 +44,20 @@ class RtmpLiveStreamer(
 ) {
     private var retryCount = 0
 
-    private val rtmpCamera = RtmpCamera2(openGlView, object : ConnectChecker {
+    private val rtmpCamera = RtmpsCamera2(openGlView, object : ConnectChecker {
         override fun onConnectionStarted(url: String) {
-            Log.d(TAG, "RTMP connecting to $url")
+            Log.d(TAG, "RTMPS connecting to $url")
             callback.onConnecting()
         }
 
         override fun onConnectionSuccess() {
-            Log.d(TAG, "RTMP connection established")
+            Log.d(TAG, "RTMPS connection established")
             retryCount = 0
             callback.onConnected()
         }
 
         override fun onConnectionFailed(reason: String) {
-            Log.w(TAG, "RTMP connection failed ($retryCount/$MAX_RETRIES): $reason")
+            Log.w(TAG, "RTMPS connection failed ($retryCount/$MAX_RETRIES): $reason")
             // Delegate to a named method so rtmpCamera.getStreamClient().reTry() can be called
             // safely after rtmpCamera is fully initialised.
             handleConnectionFailed(reason)
@@ -68,17 +68,17 @@ class RtmpLiveStreamer(
         }
 
         override fun onDisconnect() {
-            Log.d(TAG, "RTMP disconnected")
+            Log.d(TAG, "RTMPS disconnected")
             callback.onDisconnected()
         }
 
         override fun onAuthError() {
-            Log.e(TAG, "RTMP authentication error")
+            Log.e(TAG, "RTMPS authentication error")
             callback.onError("Authentication failed — check your stream key")
         }
 
         override fun onAuthSuccess() {
-            Log.d(TAG, "RTMP authentication succeeded")
+            Log.d(TAG, "RTMPS authentication succeeded")
         }
     })
 
@@ -96,7 +96,7 @@ class RtmpLiveStreamer(
         val videoOk = rtmpCamera.prepareVideo(
             VIDEO_WIDTH, VIDEO_HEIGHT, VIDEO_FPS,
             config.bitrateKbps * 1_000,
-            0,      // iFrameinterval (0 = auto)
+            2,      // iFrameInterval (2 = one keyframe every 2 s, required by Facebook ingest)
             0 // rotation
         )
         val audioOk = rtmpCamera.prepareAudio(AUDIO_BITRATE, AUDIO_SAMPLE_RATE, true)
@@ -105,7 +105,7 @@ class RtmpLiveStreamer(
             return false
         }
         val url = buildRtmpUrl(config)
-        Log.i(TAG, "Starting RTMP stream → $url")
+        Log.i(TAG, "Starting RTMPS stream → $url")
         rtmpCamera.startStream(url)
         return true
     }
