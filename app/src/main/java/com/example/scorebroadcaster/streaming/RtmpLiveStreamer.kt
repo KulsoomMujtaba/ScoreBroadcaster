@@ -4,7 +4,7 @@ import android.util.Log
 import com.example.scorebroadcaster.data.StreamConfig
 import com.pedro.common.ConnectChecker
 import com.pedro.encoder.input.video.CameraHelper
-import com.pedro.library.rtmp.RtmpCamera2
+import com.pedro.library.rtmps.RtmpsCamera2
 import com.pedro.library.view.OpenGlView
 
 private const val TAG = "RtmpLiveStreamer"
@@ -15,10 +15,10 @@ private const val VIDEO_WIDTH = 1280
 private const val VIDEO_HEIGHT = 720
 private const val VIDEO_FPS = 30
 private const val AUDIO_BITRATE = 128_000
-private const val AUDIO_SAMPLE_RATE = 44100
+private const val AUDIO_SAMPLE_RATE = 44_100
 
 /**
- * Callback interface that [RtmpLiveStreamer] uses to report RTMP lifecycle events.
+ * Callback interface that [RtmpLiveStreamer] uses to report RTMPS lifecycle events.
  * All methods may be called from a background thread.
  */
 interface StreamStatusCallback {
@@ -30,12 +30,15 @@ interface StreamStatusCallback {
 }
 
 /**
- * Wraps [RtmpCamera2] (pedroSG94/RootEncoder) and manages the camera + RTMP session.
+ * Wraps [RtmpsCamera2] (pedroSG94/RootEncoder) and manages the camera + RTMPS session.
+ *
+ * Uses **RTMPS** (TLS on port 443) which is required by Facebook Live and many other
+ * modern ingest endpoints that reject plain RTMP.
  *
  * Usage:
  * 1. Construct with an [OpenGlView] and a [StreamStatusCallback].
  * 2. Call [startPreview] to open the camera preview on the surface.
- * 3. Call [start] with a [StreamConfig] to begin RTMP streaming.
+ * 3. Call [start] with a [StreamConfig] to begin RTMPS streaming.
  * 4. Call [release] to stop the stream and camera when done.
  */
 class RtmpLiveStreamer(
@@ -44,20 +47,21 @@ class RtmpLiveStreamer(
 ) {
     private var retryCount = 0
 
-    private val rtmpCamera = RtmpCamera2(openGlView, object : ConnectChecker {
+    // RtmpsCamera2 uses TLS – required by Facebook Live (rtmps://live-api-s.facebook.com:443/rtmp/)
+    private val rtmpCamera = RtmpsCamera2(openGlView, object : ConnectChecker {
         override fun onConnectionStarted(url: String) {
-            Log.d(TAG, "RTMP connecting to $url")
+            Log.d(TAG, "RTMPS connecting to $url")
             callback.onConnecting()
         }
 
         override fun onConnectionSuccess() {
-            Log.d(TAG, "RTMP connection established")
+            Log.d(TAG, "RTMPS connection established")
             retryCount = 0
             callback.onConnected()
         }
 
         override fun onConnectionFailed(reason: String) {
-            Log.w(TAG, "RTMP connection failed ($retryCount/$MAX_RETRIES): $reason")
+            Log.w(TAG, "RTMPS connection failed ($retryCount/$MAX_RETRIES): $reason")
             // Delegate to a named method so rtmpCamera.getStreamClient().reTry() can be called
             // safely after rtmpCamera is fully initialised.
             handleConnectionFailed(reason)
@@ -68,17 +72,17 @@ class RtmpLiveStreamer(
         }
 
         override fun onDisconnect() {
-            Log.d(TAG, "RTMP disconnected")
+            Log.d(TAG, "RTMPS disconnected")
             callback.onDisconnected()
         }
 
         override fun onAuthError() {
-            Log.e(TAG, "RTMP authentication error")
+            Log.e(TAG, "RTMPS authentication error")
             callback.onError("Authentication failed — check your stream key")
         }
 
         override fun onAuthSuccess() {
-            Log.d(TAG, "RTMP authentication succeeded")
+            Log.d(TAG, "RTMPS authentication succeeded")
         }
     })
 
@@ -88,7 +92,7 @@ class RtmpLiveStreamer(
     }
 
     /**
-     * Prepares H.264 + AAC encoders and starts pushing to the RTMP endpoint derived from
+     * Prepares H.264 + AAC encoders and starts pushing to the RTMPS endpoint derived from
      * [config].  Returns `false` and fires [StreamStatusCallback.onError] if encoder
      * preparation fails.
      */
@@ -96,8 +100,8 @@ class RtmpLiveStreamer(
         val videoOk = rtmpCamera.prepareVideo(
             VIDEO_WIDTH, VIDEO_HEIGHT, VIDEO_FPS,
             config.bitrateKbps * 1_000,
-            0,      // iFrameinterval (0 = auto)
-            0 // rotation
+            2,      // iFrameInterval — keyframe every 2 s; required by Facebook ingest
+            0       // rotation
         )
         val audioOk = rtmpCamera.prepareAudio(AUDIO_BITRATE, AUDIO_SAMPLE_RATE, true)
         if (!videoOk || !audioOk) {
@@ -105,12 +109,12 @@ class RtmpLiveStreamer(
             return false
         }
         val url = buildRtmpUrl(config)
-        Log.i(TAG, "Starting RTMP stream → $url")
+        Log.i(TAG, "Starting RTMPS stream → $url")
         rtmpCamera.startStream(url)
         return true
     }
 
-    /** Stops the RTMP stream (if active) and the camera preview. */
+    /** Stops the RTMPS stream (if active) and the camera preview. */
     fun release() {
         try {
             rtmpCamera.stopStream()
@@ -133,16 +137,32 @@ class RtmpLiveStreamer(
             rtmpCamera.getStreamClient().reTry(RECONNECT_DELAY_MS, reason)
         } else {
             retryCount = 0
+            // Stop the internal retry loop BEFORE surfacing the error, otherwise
+            // RootEncoder keeps calling onConnectionFailed indefinitely.
+            rtmpCamera.getStreamClient().stopRetry()
             callback.onError("Connection failed after $MAX_RETRIES attempts: $reason")
         }
     }
 
     /**
-     * Builds the final RTMP URL by appending [StreamConfig.streamKey] to
-     * [StreamConfig.serverUrl], inserting a `/` separator when needed.
+     * Builds the final stream URL.
+     *
+     * - If [StreamConfig.streamKey] is blank the [StreamConfig.serverUrl] is used as-is
+     *   (the user already included the key in the URL).
+     * - Otherwise the key is appended with exactly one `/` separator, stripping any
+     *   trailing `/` from the base URL and leading `/` from the key to avoid doubles.
+     *
+     * Facebook Live example:
+     *   serverUrl  = "rtmps://live-api-s.facebook.com:443/rtmp"
+     *   streamKey  = "1234567890?s_ps=1&s_sw=0&s_vt=api-s&a=AbCd1234"
+     *   result     = "rtmps://live-api-s.facebook.com:443/rtmp/1234567890?s_ps=1&..."
      */
     private fun buildRtmpUrl(config: StreamConfig): String {
-        val base = config.serverUrl.trimEnd('/')
-        return "$base/${config.streamKey}"
+        val key = config.streamKey.trim()
+        return if (key.isEmpty()) {
+            config.serverUrl.trimEnd('/')
+        } else {
+            "${config.serverUrl.trimEnd('/')}/${key.trimStart()}"
+        }
     }
 }
