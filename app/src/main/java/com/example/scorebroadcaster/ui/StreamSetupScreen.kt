@@ -45,6 +45,7 @@ private const val RESOLUTION_PRESET = "720p"
 @Composable
 fun StreamSetupScreen(
     liveStreamViewModel: LiveStreamViewModel = viewModel(),
+    onNavigateToPreview: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val streamingStatus by liveStreamViewModel.streamingStatus.collectAsStateWithLifecycle()
@@ -150,7 +151,7 @@ fun StreamSetupScreen(
         ) {
             Button(
                 onClick = {
-                    liveStreamViewModel.startStreaming(
+                    liveStreamViewModel.prepareStreaming(
                         StreamConfig(
                             serverUrl = serverUrl,
                             streamKey = streamKey,
@@ -158,6 +159,7 @@ fun StreamSetupScreen(
                             bitrateKbps = selectedBitrate
                         )
                     )
+                    onNavigateToPreview()
                 },
                 modifier = Modifier.weight(1f),
                 enabled = !isStreaming && serverUrl.isNotBlank() && streamKey.isNotBlank()

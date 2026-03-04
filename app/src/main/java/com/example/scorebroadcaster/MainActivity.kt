@@ -14,6 +14,7 @@ import androidx.navigation.compose.rememberNavController
 import com.example.scorebroadcaster.ui.CameraPreviewScreen
 import com.example.scorebroadcaster.ui.HomeScreen
 import com.example.scorebroadcaster.ui.ScoringScreen
+import com.example.scorebroadcaster.ui.StreamPreviewScreen
 import com.example.scorebroadcaster.ui.StreamSetupScreen
 import com.example.scorebroadcaster.ui.theme.ScoreBroadcasterTheme
 import com.example.scorebroadcaster.viewmodel.LiveStreamViewModel
@@ -45,7 +46,13 @@ class MainActivity : ComponentActivity() {
                             ScoringScreen(matchViewModel = matchViewModel)
                         }
                         composable("stream_setup") {
-                            StreamSetupScreen(liveStreamViewModel = liveStreamViewModel)
+                            StreamSetupScreen(
+                                liveStreamViewModel = liveStreamViewModel,
+                                onNavigateToPreview = { navController.navigate("stream_preview") }
+                            )
+                        }
+                        composable("stream_preview") {
+                            StreamPreviewScreen(liveStreamViewModel = liveStreamViewModel)
                         }
                     }
                 }
