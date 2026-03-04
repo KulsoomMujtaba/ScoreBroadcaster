@@ -1,9 +1,12 @@
 package com.example.scorebroadcaster.streaming
 
+import android.graphics.Bitmap
 import android.util.Log
 import com.example.scorebroadcaster.data.StreamConfig
 import com.pedro.common.ConnectChecker
+import com.pedro.encoder.input.gl.render.filters.`object`.ImageObjectFilterRender
 import com.pedro.encoder.input.video.CameraHelper
+import com.pedro.encoder.utils.gl.TranslateTo
 import com.pedro.library.rtmp.RtmpCamera2
 import com.pedro.library.view.OpenGlView
 
@@ -47,6 +50,9 @@ class RtmpLiveStreamer(
     private val callback: StreamStatusCallback
 ) {
     private var retryCount = 0
+
+    /** OpenGL filter that composites the scoreboard bitmap on every encoded frame. */
+    private val overlayFilter = ImageObjectFilterRender()
 
     private val rtmpCamera = RtmpCamera2(openGlView, object : ConnectChecker {
         override fun onConnectionStarted(url: String) {
@@ -130,12 +136,18 @@ class RtmpLiveStreamer(
         val scheme = if (url.startsWith("rtmps://", ignoreCase = true)) "RTMPS" else "RTMP"
         Log.i(TAG, "Starting $scheme stream → $url (bitrate=${'${'}config.bitrateKbps}{'${'}'${'}'} kbps, ${'${'}VIDEO_WIDTH}{'${'}'${'}'}x${'${'}VIDEO_HEIGHT}{'${'}'${'}'}@${'${'}VIDEO_FPS}{'${'}'${'}'}fps)")
         rtmpCamera.startStream(url)
+        setupOverlay()
         return true
     }
 
     /** Stops the stream (if active) and releases the camera preview. */
     fun release() {
         Log.d(TAG, "Releasing streamer (stopStream + stopPreview)")
+        try {
+            rtmpCamera.getGlInterface().clearFilters()
+        } catch (e: Exception) {
+            Log.w(TAG, "clearFilters threw: ${e.message}")
+        }
         try {
             rtmpCamera.stopStream()
         } catch (e: Exception) {
@@ -148,7 +160,38 @@ class RtmpLiveStreamer(
         }
     }
 
+    /**
+     * Pushes a freshly rendered scoreboard [bitmap] into the OpenGL overlay filter so it
+     * appears on every subsequent encoded frame sent to the RTMP server.
+     *
+     * Safe to call from any thread. RootEncoder queues the texture upload to its GL thread.
+     */
+    fun updateOverlayBitmap(bitmap: Bitmap) {
+        try {
+            overlayFilter.setImage(bitmap)
+            overlayFilter.setDefaultScale(VIDEO_WIDTH, VIDEO_HEIGHT)
+            overlayFilter.setPosition(TranslateTo.BOTTOM)
+            Log.d(TAG, "RootEncoder overlay set OK")
+        } catch (e: Exception) {
+            Log.e(TAG, "RootEncoder overlay set failed: ${e.message}")
+        }
+    }
+
     // ---- private helpers --------------------------------------------------------
+
+    /**
+     * Registers [overlayFilter] with the RootEncoder GL pipeline so it is applied to every
+     * encoded frame. The filter starts invisible (alpha = 0) until [updateOverlayBitmap] is
+     * called for the first time.
+     */
+    private fun setupOverlay() {
+        try {
+            rtmpCamera.getGlInterface().addFilter(overlayFilter)
+            Log.d(TAG, "RootEncoder overlay filter added")
+        } catch (e: Exception) {
+            Log.e(TAG, "RootEncoder overlay set failed: ${e.message}")
+        }
+    }
 
     private fun handleConnectionFailed(reason: String) {
         if (retryCount < MAX_RETRIES) {
