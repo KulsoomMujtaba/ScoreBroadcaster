@@ -125,7 +125,6 @@ class RtmpLiveStreamer(
     }
 
     // ---- private helpers --------------------------------------------------------
-
     private fun handleConnectionFailed(reason: String) {
         if (retryCount < MAX_RETRIES) {
             retryCount++
@@ -133,16 +132,27 @@ class RtmpLiveStreamer(
             rtmpCamera.getStreamClient().reTry(RECONNECT_DELAY_MS, reason)
         } else {
             retryCount = 0
+            // Tell RootEncoder it has no retries left so its internal shouldRetry() returns false,
+            // preventing any further reconnect attempts after we surface the error.
+            rtmpCamera.getStreamClient().setReTries(0)
+            // Stop the stream cleanly to release the connection.
+            try { rtmpCamera.stopStream() } catch (_: Exception) {}
             callback.onError("Connection failed after $MAX_RETRIES attempts: $reason")
         }
     }
+
 
     /**
      * Builds the final RTMP URL by appending [StreamConfig.streamKey] to
      * [StreamConfig.serverUrl], inserting a `/` separator when needed.
      */
     private fun buildRtmpUrl(config: StreamConfig): String {
-        val base = config.serverUrl.trimEnd('/')
-        return "$base/${config.streamKey}"
+        val key = config.streamKey.trim()
+        return if (key.isEmpty()) {
+            // Full URL was pasted into the Server URL field — use it directly
+            config.serverUrl.trimEnd('/')
+        } else {
+            "${config.serverUrl.trimEnd('/')}/${key.trimStart('/')}"
+        }
     }
 }
