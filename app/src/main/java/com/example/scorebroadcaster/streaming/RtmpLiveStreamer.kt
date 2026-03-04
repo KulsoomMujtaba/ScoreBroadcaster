@@ -1,11 +1,11 @@
 package com.example.scorebroadcaster.streaming
 
 import android.util.Log
-import android.view.SurfaceView
 import com.example.scorebroadcaster.data.StreamConfig
+import com.pedro.common.ConnectChecker
 import com.pedro.encoder.input.video.CameraHelper
 import com.pedro.library.rtmp.RtmpCamera2
-import com.pedro.rtmp.utils.ConnectCheckerRtmp
+import com.pedro.library.view.OpenGlView
 
 private const val TAG = "RtmpLiveStreamer"
 private const val RECONNECT_DELAY_MS = 5_000L
@@ -33,51 +33,56 @@ interface StreamStatusCallback {
  * Wraps [RtmpCamera2] (pedroSG94/RootEncoder) and manages the camera + RTMP session.
  *
  * Usage:
- * 1. Construct with a [SurfaceView] and a [StreamStatusCallback].
+ * 1. Construct with an [OpenGlView] and a [StreamStatusCallback].
  * 2. Call [startPreview] to open the camera preview on the surface.
  * 3. Call [start] with a [StreamConfig] to begin RTMP streaming.
  * 4. Call [release] to stop the stream and camera when done.
  */
 class RtmpLiveStreamer(
-    surfaceView: SurfaceView,
+    openGlView: OpenGlView,
     private val callback: StreamStatusCallback
 ) {
     private var retryCount = 0
 
-    private val rtmpCamera = RtmpCamera2(surfaceView, object : ConnectCheckerRtmp {
-        override fun onConnectionSuccessRtmp() {
+    private val rtmpCamera = RtmpCamera2(openGlView, object : ConnectChecker {
+        override fun onConnectionStarted(url: String) {
+            Log.d(TAG, "RTMP connecting to $url")
+            callback.onConnecting()
+        }
+
+        override fun onConnectionSuccess() {
             Log.d(TAG, "RTMP connection established")
             retryCount = 0
             callback.onConnected()
         }
 
-        override fun onConnectionFailedRtmp(reason: String) {
+        override fun onConnectionFailed(reason: String) {
             Log.w(TAG, "RTMP connection failed ($retryCount/$MAX_RETRIES): $reason")
-            // Delegate to a named method so rtmpCamera.reTry() can be called safely
-            // after rtmpCamera is fully initialised.
-            onConnectionFailed(reason)
+            // Delegate to a named method so rtmpCamera.getStreamClient().reTry() can be called
+            // safely after rtmpCamera is fully initialised.
+            handleConnectionFailed(reason)
         }
 
-        override fun onNewBitrateRtmp(bitrate: Long) {
+        override fun onNewBitrate(bitrate: Long) {
             Log.v(TAG, "Bitrate update: $bitrate bps")
         }
 
-        override fun onDisconnectRtmp() {
+        override fun onDisconnect() {
             Log.d(TAG, "RTMP disconnected")
             callback.onDisconnected()
         }
 
-        override fun onAuthErrorRtmp() {
+        override fun onAuthError() {
             Log.e(TAG, "RTMP authentication error")
             callback.onError("Authentication failed — check your stream key")
         }
 
-        override fun onAuthSuccessRtmp() {
+        override fun onAuthSuccess() {
             Log.d(TAG, "RTMP authentication succeeded")
         }
     })
 
-    /** Opens the back-facing camera and shows the feed on the attached [SurfaceView]. */
+    /** Opens the back-facing camera and shows the feed on the attached [OpenGlView]. */
     fun startPreview() {
         rtmpCamera.startPreview(CameraHelper.Facing.BACK, VIDEO_WIDTH, VIDEO_HEIGHT)
     }
@@ -100,7 +105,6 @@ class RtmpLiveStreamer(
         val url = buildRtmpUrl(config)
         Log.i(TAG, "Starting RTMP stream → $url")
         rtmpCamera.startStream(url)
-        callback.onConnecting()
         return true
     }
 
@@ -120,11 +124,11 @@ class RtmpLiveStreamer(
 
     // ---- private helpers --------------------------------------------------------
 
-    private fun onConnectionFailed(reason: String) {
+    private fun handleConnectionFailed(reason: String) {
         if (retryCount < MAX_RETRIES) {
             retryCount++
             callback.onReconnecting()
-            rtmpCamera.reTry(RECONNECT_DELAY_MS, reason)
+            rtmpCamera.getStreamClient().reTry(RECONNECT_DELAY_MS, reason)
         } else {
             retryCount = 0
             callback.onError("Connection failed after $MAX_RETRIES attempts: $reason")
