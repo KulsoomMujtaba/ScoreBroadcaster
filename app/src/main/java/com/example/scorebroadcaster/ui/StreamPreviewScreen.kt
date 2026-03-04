@@ -94,7 +94,9 @@ fun StreamPreviewScreen(
     // Start streaming once permissions are confirmed; stop automatically when screen is popped.
     if (permissionsGranted) {
         DisposableEffect(Unit) {
-            liveStreamViewModel.startStreaming(openGlView)
+            openGlView.post {
+                liveStreamViewModel.startStreaming(openGlView)
+            }
             onDispose { liveStreamViewModel.stopStreaming() }
         }
     }
