@@ -96,8 +96,8 @@ class RtmpLiveStreamer(
         val videoOk = rtmpCamera.prepareVideo(
             VIDEO_WIDTH, VIDEO_HEIGHT, VIDEO_FPS,
             config.bitrateKbps * 1_000,
-            0,      // iFrameinterval (0 = auto)
-            0 // rotation
+            0,     // rotation
+            false  // isFrontCamera — we use the back camera
         )
         val audioOk = rtmpCamera.prepareAudio(AUDIO_BITRATE, AUDIO_SAMPLE_RATE, true)
         if (!videoOk || !audioOk) {
