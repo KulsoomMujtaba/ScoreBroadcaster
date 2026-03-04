@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.dp
 fun HomeScreen(
     onLivePreviewClick: () -> Unit,
     onScoringOnlyClick: () -> Unit,
+    onStreamSetupClick: () -> Unit,
     onResetMatchClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -52,6 +53,16 @@ fun HomeScreen(
         ) {
             Text(
                 text = "Scoring Only",
+                style = MaterialTheme.typography.titleMedium
+            )
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+        Button(
+            onClick = onStreamSetupClick,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(
+                text = "Stream Setup",
                 style = MaterialTheme.typography.titleMedium
             )
         }
