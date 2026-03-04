@@ -5,11 +5,12 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.ui.Modifier
-import com.example.scorebroadcaster.ui.ScoringScreen
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.scorebroadcaster.ui.CameraPreviewScreen
 import com.example.scorebroadcaster.ui.theme.ScoreBroadcasterTheme
+import com.example.scorebroadcaster.viewmodel.MatchViewModel
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -17,8 +18,9 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             ScoreBroadcasterTheme {
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    ScoringScreen(modifier = Modifier.padding(innerPadding))
+                val matchViewModel: MatchViewModel = viewModel()
+                Scaffold(modifier = Modifier.fillMaxSize()) { _ ->
+                    CameraPreviewScreen(matchViewModel = matchViewModel)
                 }
             }
         }
