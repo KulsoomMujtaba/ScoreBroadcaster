@@ -2,7 +2,6 @@ package com.example.scorebroadcaster.ui
 
 import android.Manifest
 import android.content.pm.PackageManager
-import android.view.SurfaceView
 import android.view.ViewGroup
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -37,6 +36,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.scorebroadcaster.data.StreamingStatus
 import com.example.scorebroadcaster.viewmodel.LiveStreamViewModel
+import com.pedro.library.view.OpenGlView
 
 private val STREAMING_PERMISSIONS = arrayOf(
     Manifest.permission.CAMERA,
@@ -74,9 +74,9 @@ fun StreamPreviewScreen(
         permissionsGranted = results.values.all { it }
     }
 
-    // SurfaceView is remembered so it survives recompositions; RtmpCamera2 renders into it.
-    val surfaceView = remember {
-        SurfaceView(context).apply {
+    // OpenGlView is remembered so it survives recompositions; RtmpCamera2 renders into it.
+    val openGlView = remember {
+        OpenGlView(context).apply {
             layoutParams = ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT
@@ -94,7 +94,7 @@ fun StreamPreviewScreen(
     // Start streaming once permissions are confirmed; stop automatically when screen is popped.
     if (permissionsGranted) {
         DisposableEffect(Unit) {
-            liveStreamViewModel.startStreaming(surfaceView)
+            liveStreamViewModel.startStreaming(openGlView)
             onDispose { liveStreamViewModel.stopStreaming() }
         }
     }
@@ -109,7 +109,7 @@ fun StreamPreviewScreen(
     ) {
         if (permissionsGranted) {
             AndroidView(
-                factory = { surfaceView },
+                factory = { openGlView },
                 modifier = Modifier.fillMaxSize()
             )
         } else {

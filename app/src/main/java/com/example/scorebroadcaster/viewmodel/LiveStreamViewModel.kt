@@ -2,7 +2,6 @@ package com.example.scorebroadcaster.viewmodel
 
 import android.app.Application
 import android.content.SharedPreferences
-import android.view.SurfaceView
 import androidx.core.content.edit
 import androidx.lifecycle.AndroidViewModel
 import androidx.security.crypto.EncryptedSharedPreferences
@@ -11,6 +10,7 @@ import com.example.scorebroadcaster.data.StreamConfig
 import com.example.scorebroadcaster.data.StreamingStatus
 import com.example.scorebroadcaster.streaming.RtmpLiveStreamer
 import com.example.scorebroadcaster.streaming.StreamStatusCallback
+import com.pedro.library.view.OpenGlView
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -59,12 +59,12 @@ class LiveStreamViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     /**
-     * Creates an [RtmpLiveStreamer] using the [SurfaceView] from `StreamPreviewScreen`
+     * Creates an [RtmpLiveStreamer] using the [OpenGlView] from `StreamPreviewScreen`
      * and the config staged by [prepareStreaming], then begins camera preview + RTMP.
      *
      * Status transitions: Connecting → Streaming (on connect) / Reconnecting / Error.
      */
-    fun startStreaming(surfaceView: SurfaceView) {
+    fun startStreaming(openGlView: OpenGlView) {
         val config = pendingConfig ?: run {
             _streamingStatus.value = StreamingStatus.Error("No stream configuration set")
             return
@@ -82,7 +82,7 @@ class LiveStreamViewModel(application: Application) : AndroidViewModel(applicati
         }
 
         streamer?.release()
-        streamer = RtmpLiveStreamer(surfaceView, callback).also { s ->
+        streamer = RtmpLiveStreamer(openGlView, callback).also { s ->
             s.startPreview()
             s.start(config)
         }
