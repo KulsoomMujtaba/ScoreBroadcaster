@@ -26,4 +26,9 @@ class MatchViewModel : ViewModel() {
             _state.value = reduce(_events.value)
         }
     }
+
+    fun resetMatch() {
+        _events.value = emptyList()
+        _state.value = MatchState()
+    }
 }
