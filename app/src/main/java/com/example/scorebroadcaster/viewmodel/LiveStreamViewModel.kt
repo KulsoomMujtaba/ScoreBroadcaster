@@ -2,6 +2,7 @@ package com.example.scorebroadcaster.viewmodel
 
 import android.app.Application
 import android.content.SharedPreferences
+import androidx.core.content.edit
 import androidx.lifecycle.AndroidViewModel
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
@@ -38,10 +39,10 @@ class LiveStreamViewModel(application: Application) : AndroidViewModel(applicati
     fun getLastStreamKey(): String = encryptedPrefs.getString(KEY_STREAM_KEY, "") ?: ""
 
     fun startStreaming(config: StreamConfig) {
-        encryptedPrefs.edit()
-            .putString(KEY_SERVER_URL, config.serverUrl)
-            .putString(KEY_STREAM_KEY, config.streamKey)
-            .apply()
+        encryptedPrefs.edit {
+            putString(KEY_SERVER_URL, config.serverUrl)
+            putString(KEY_STREAM_KEY, config.streamKey)
+        }
         // TODO: implement actual RTMP streaming; update status to Streaming on success
         _streamingStatus.value = StreamingStatus.Connecting
     }
