@@ -14,7 +14,9 @@ import androidx.navigation.compose.rememberNavController
 import com.example.scorebroadcaster.ui.CameraPreviewScreen
 import com.example.scorebroadcaster.ui.HomeScreen
 import com.example.scorebroadcaster.ui.ScoringScreen
+import com.example.scorebroadcaster.ui.StreamSetupScreen
 import com.example.scorebroadcaster.ui.theme.ScoreBroadcasterTheme
+import com.example.scorebroadcaster.viewmodel.LiveStreamViewModel
 import com.example.scorebroadcaster.viewmodel.MatchViewModel
 
 class MainActivity : ComponentActivity() {
@@ -24,6 +26,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             ScoreBroadcasterTheme {
                 val matchViewModel: MatchViewModel = viewModel()
+                val liveStreamViewModel: LiveStreamViewModel = viewModel()
                 val navController = rememberNavController()
                 Scaffold(modifier = Modifier.fillMaxSize()) { _ ->
                     NavHost(navController = navController, startDestination = "home") {
@@ -31,6 +34,7 @@ class MainActivity : ComponentActivity() {
                             HomeScreen(
                                 onLivePreviewClick = { navController.navigate("live_preview") },
                                 onScoringOnlyClick = { navController.navigate("scoring_only") },
+                                onStreamSetupClick = { navController.navigate("stream_setup") },
                                 onResetMatchClick = { matchViewModel.resetMatch() }
                             )
                         }
@@ -39,6 +43,9 @@ class MainActivity : ComponentActivity() {
                         }
                         composable("scoring_only") {
                             ScoringScreen(matchViewModel = matchViewModel)
+                        }
+                        composable("stream_setup") {
+                            StreamSetupScreen(liveStreamViewModel = liveStreamViewModel)
                         }
                     }
                 }
