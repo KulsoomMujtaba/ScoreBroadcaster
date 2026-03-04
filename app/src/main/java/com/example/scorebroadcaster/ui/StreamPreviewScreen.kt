@@ -36,6 +36,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.scorebroadcaster.data.StreamingStatus
 import com.example.scorebroadcaster.viewmodel.LiveStreamViewModel
+import com.example.scorebroadcaster.viewmodel.MatchViewModel
 import com.pedro.library.view.OpenGlView
 
 private val STREAMING_PERMISSIONS = arrayOf(
@@ -55,6 +56,7 @@ private val STREAMING_PERMISSIONS = arrayOf(
 @Composable
 fun StreamPreviewScreen(
     liveStreamViewModel: LiveStreamViewModel = viewModel(),
+    matchViewModel: MatchViewModel = viewModel(),
     modifier: Modifier = Modifier
 ) {
     val streamingStatus by liveStreamViewModel.streamingStatus.collectAsStateWithLifecycle()
@@ -95,7 +97,7 @@ fun StreamPreviewScreen(
     if (permissionsGranted) {
         DisposableEffect(Unit) {
             openGlView.post {
-                liveStreamViewModel.startStreaming(openGlView)
+                liveStreamViewModel.startStreaming(openGlView, matchViewModel.state)
             }
             onDispose { liveStreamViewModel.stopStreaming() }
         }
