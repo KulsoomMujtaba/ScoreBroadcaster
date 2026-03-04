@@ -4,7 +4,7 @@ import android.util.Log
 import com.example.scorebroadcaster.data.StreamConfig
 import com.pedro.common.ConnectChecker
 import com.pedro.encoder.input.video.CameraHelper
-import com.pedro.library.rtmps.RtmpsCamera2
+import com.pedro.library.rtmp.RtmpCamera2
 import com.pedro.library.view.OpenGlView
 
 private const val TAG = "RtmpLiveStreamer"
@@ -30,7 +30,7 @@ interface StreamStatusCallback {
 }
 
 /**
- * Wraps [RtmpsCamera2] (pedroSG94/RootEncoder) and manages the camera + RTMPS session.
+ * Wraps [RtmpCamera2] (pedroSG94/RootEncoder) and manages the camera + RTMP/RTMPS session.
  *
  * Usage:
  * 1. Construct with an [OpenGlView] and a [StreamStatusCallback].
@@ -44,7 +44,7 @@ class RtmpLiveStreamer(
 ) {
     private var retryCount = 0
 
-    private val rtmpCamera = RtmpsCamera2(openGlView, object : ConnectChecker {
+    private val rtmpCamera = RtmpCamera2(openGlView, object : ConnectChecker {
         override fun onConnectionStarted(url: String) {
             Log.d(TAG, "RTMPS connecting to $url")
             callback.onConnecting()
