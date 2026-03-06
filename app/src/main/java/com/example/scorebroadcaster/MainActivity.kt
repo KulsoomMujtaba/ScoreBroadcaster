@@ -49,7 +49,14 @@ class MainActivity : ComponentActivity() {
                                     matchSessionViewModel.refresh()
                                     navController.navigate("my_matches")
                                 },
-                                onLiveScoringClick = { navController.navigate("live_preview") },
+                                onLiveScoringClick = {
+                                    if (activeMatch != null) navController.navigate("scoring_only")
+                                    else navController.navigate("create_match")
+                                },
+                                onCameraPreviewClick = {
+                                    if (activeMatch != null) navController.navigate("live_preview")
+                                    else navController.navigate("create_match")
+                                },
                                 onGoLiveClick = { navController.navigate("stream_setup") },
                                 onResetMatchClick = { matchViewModel.resetMatch() },
                                 activeMatch = activeMatch
@@ -72,7 +79,7 @@ class MainActivity : ComponentActivity() {
                                 matchSessionViewModel = matchSessionViewModel,
                                 matchViewModel = matchViewModel,
                                 onStartMatch = {
-                                    navController.navigate("live_preview") {
+                                    navController.navigate("scoring_only") {
                                         popUpTo("home")
                                     }
                                 }
@@ -84,7 +91,7 @@ class MainActivity : ComponentActivity() {
                                 onMatchClick = { match ->
                                     matchSessionViewModel.setActiveMatch(match)
                                     matchViewModel.initFromMatch(match)
-                                    navController.navigate("live_preview")
+                                    navController.navigate("scoring_only")
                                 },
                                 onCreateMatchClick = { navController.navigate("create_match") }
                             )

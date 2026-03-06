@@ -55,7 +55,7 @@ Phase 1 converts the existing **ScoreBroadcaster** prototype into the **Scored**
 - `HomeScreen` redesigned around four product-oriented primary actions:
   - **Create Match** – navigates to `CreateMatchScreen` (placeholder)
   - **My Matches** – navigates to `MyMatchesScreen` (placeholder)
-  - **Live Scoring** – navigates to `CameraPreviewScreen` (camera + scoring + overlay)
+  - **Live Scoring** – navigates to `ScoringScreen` (manual ball-by-ball scoring — primary flow)
   - **Go Live** – navigates to `StreamSetupScreen` → `StreamPreviewScreen` (RTMP streaming)
 - `CreateMatchScreen` and `MyMatchesScreen` added as clearly-labelled placeholder screens.
 - All existing scoring, camera, and streaming screens remain fully intact.
@@ -149,6 +149,30 @@ Scoring is modelled as an append-only event log:
 
 ## Development Log
 
+### 2026-03-06 – Flow Correction: Manual Scoring as Primary Match Entry Point
+
+**Feature:** Correct the post-match-creation navigation so the default flow lands in `ScoringScreen` (manual scoring), not `CameraPreviewScreen`. Camera preview is now a separate, secondary mode.
+
+**Files modified:**
+| File | Action |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/MainActivity.kt` | `match_summary` and `my_matches` routes navigate to `scoring_only`; `onLiveScoringClick` navigates to `scoring_only` (or `create_match` if no active match); new `onCameraPreviewClick` added navigating to `live_preview` |
+| `app/src/main/java/com/example/scorebroadcaster/ui/HomeScreen.kt` | Added `onCameraPreviewClick` parameter and a **"Camera Preview"** `OutlinedButton` as a secondary action |
+| `README.md` | Corrected Phase 2 descriptions; added this log entry |
+
+**What changed:**
+- "Start Match" on `MatchSummaryScreen` now navigates to `ScoringScreen` (`scoring_only` route), not `CameraPreviewScreen`.
+- Selecting a match from "My Matches" now opens `ScoringScreen`, not `CameraPreviewScreen`.
+- `HomeScreen` **"Live Scoring"** / **"Resume Scoring"** button opens `ScoringScreen`. If no active match exists, it redirects to "Create Match" so the user can start one.
+- A new **"Camera Preview"** button is added to `HomeScreen` as a secondary `OutlinedButton`. It opens `CameraPreviewScreen` when a match is active, or redirects to "Create Match" if none exists.
+- The `CameraPreviewScreen` itself is unchanged; it remains accessible and fully functional.
+- The Facebook Live / stream flow (`stream_setup` → `stream_preview`) is unchanged.
+- The scoring engine (`ScoreReducer`, `MatchState`, `ScoreEvent`, `MatchViewModel`) is unchanged.
+
+**Product rationale:** The primary scorer persona needs a fast, reliable manual scoring UI. The camera preview is an optional broadcast feature that should not be forced on every scorer. Defaulting to `ScoringScreen` keeps the app product-oriented: scoring first, camera second.
+
+---
+
 ### 2026-03-06 – Phase 2: Entity Layer and Local-First Match Flow
 
 **Feature:** Domain entities, local repository, match creation flow, player setup, pre-match summary, and My Matches list
@@ -195,9 +219,9 @@ Phase 2 turns Scored into a usable local-first MVP for real cricket match scorin
 **Create Match flow** (three screens):
 1. `CreateMatchScreen` — a scrollable form collecting match title (optional), Team A/B names, match format (T20/T10/ODI/Tape-ball/Custom), custom overs, toss winner, and toss decision. Toss-winner chips update reactively as team names are typed. The "Next" button is disabled until both team names are filled and overs are valid.
 2. `PlayerSetupScreen` — shows a resizable list of player-name text fields for each team (1–11 players). Players can be added or removed; blank rows are ignored on save. Tapping "Continue" updates the pending match in `MatchSessionViewModel` and navigates to the summary.
-3. `MatchSummaryScreen` — a read-only confirmation screen listing format, toss result, batting/bowling order, and player rosters. Tapping "Start Match" calls `MatchSessionViewModel.confirmMatch()`, calls `MatchViewModel.initFromMatch()` (seeds the scoring session with the correct team names), and navigates to `CameraPreviewScreen`, clearing the creation back-stack.
+3. `MatchSummaryScreen` — a read-only confirmation screen listing format, toss result, batting/bowling order, and player rosters. Tapping "Start Match" calls `MatchSessionViewModel.confirmMatch()`, calls `MatchViewModel.initFromMatch()` (seeds the scoring session with the correct team names), and navigates to `ScoringScreen`, clearing the creation back-stack.
 
-**My Matches screen**: Now shows the real in-memory match list from `MatchSessionViewModel.matches`. Displays each match's title, format, overs, and a status chip (Live / Not Started / Completed). A "● Live" indicator highlights the active match. Tapping an item switches the active match and opens it in `CameraPreviewScreen`. An empty-state with a "Create Match" shortcut is shown when no matches exist.
+**My Matches screen**: Now shows the real in-memory match list from `MatchSessionViewModel.matches`. Displays each match's title, format, overs, and a status chip (Live / Not Started / Completed). A "● Live" indicator highlights the active match. Tapping an item switches the active match and opens it in `ScoringScreen`. An empty-state with a "Create Match" shortcut is shown when no matches exist.
 
 **HomeScreen**: Shows a compact active-match banner (match title + format + live indicator) when a session is in progress. The "Live Scoring" button label changes to "Resume Scoring" when there is an active match.
 
