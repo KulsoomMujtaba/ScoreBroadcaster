@@ -203,7 +203,7 @@ private fun ActiveMatchDashboard(
     TextButton(
         onClick = onResetMatchClick,
         colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
-        modifier = Modifier.align(Alignment.CenterHorizontally)
+        modifier = Modifier.fillMaxWidth()
     ) {
         Text(text = "Reset Match")
     }
