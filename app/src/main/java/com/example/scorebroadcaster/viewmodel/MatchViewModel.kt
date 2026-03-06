@@ -3,6 +3,7 @@ package com.example.scorebroadcaster.viewmodel
 import androidx.lifecycle.ViewModel
 import com.example.scorebroadcaster.data.MatchState
 import com.example.scorebroadcaster.data.ScoreEvent
+import com.example.scorebroadcaster.data.entity.Match
 import com.example.scorebroadcaster.domain.reduce
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -30,5 +31,18 @@ class MatchViewModel : ViewModel() {
     fun resetMatch() {
         _events.value = emptyList()
         _state.value = MatchState()
+    }
+
+    /**
+     * Initialise the scoring session from a [Match] entity.
+     * Clears the current event log and seeds [MatchState] with the team names
+     * derived from the match's batting/bowling order.
+     */
+    fun initFromMatch(match: Match) {
+        _events.value = emptyList()
+        _state.value = MatchState(
+            teamAName = match.battingFirst.name,
+            teamBName = match.bowlingFirst.name
+        )
     }
 }
