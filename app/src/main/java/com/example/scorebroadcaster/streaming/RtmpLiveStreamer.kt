@@ -103,7 +103,7 @@ class RtmpLiveStreamer(
 
     /** Opens the back-facing camera and shows the feed on the attached [OpenGlView]. */
     fun startPreview() {
-        Log.d(TAG, "Opening back camera preview at ${'${'}VIDEO_WIDTH}{'${'}'${'}'}x${'${'}VIDEO_HEIGHT}{'${'}'${'}'}")
+        Log.d(TAG, "Opening back camera preview at "+VIDEO_WIDTH+"x"+VIDEO_HEIGHT)
         rtmpCamera.startPreview(CameraHelper.Facing.BACK, VIDEO_WIDTH, VIDEO_HEIGHT)
     }
 
@@ -134,7 +134,8 @@ class RtmpLiveStreamer(
 
         val url = buildStreamUrl(config)
         val scheme = if (url.startsWith("rtmps://", ignoreCase = true)) "RTMPS" else "RTMP"
-        Log.i(TAG, "Starting $scheme stream → $url (bitrate=${'${'}config.bitrateKbps}{'${'}'${'}'} kbps, ${'${'}VIDEO_WIDTH}{'${'}'${'}'}x${'${'}VIDEO_HEIGHT}{'${'}'${'}'}@${'${'}VIDEO_FPS}{'${'}'${'}'}fps)")
+        Log.i(TAG, "Starting $scheme stream → $url " +
+                "(Video: ${VIDEO_WIDTH}x${VIDEO_HEIGHT}@${VIDEO_FPS}fps, ")
         rtmpCamera.startStream(url)
         setupOverlay()
         return true
@@ -196,7 +197,7 @@ class RtmpLiveStreamer(
     private fun handleConnectionFailed(reason: String) {
         if (retryCount < MAX_RETRIES) {
             retryCount++
-            Log.w(TAG, "Scheduling retry $retryCount/$MAX_RETRIES in ${'${'}RECONNECT_DELAY_MS}{'${'}'${'}'}ms")
+            Log.w(TAG, "Scheduling retry $retryCount/$MAX_RETRIES in "+(RECONNECT_DELAY_MS/1000)+"s...")
             callback.onReconnecting()
             rtmpCamera.getStreamClient().reTry(RECONNECT_DELAY_MS, reason)
         } else {
@@ -229,7 +230,7 @@ class RtmpLiveStreamer(
             server.trimEnd('/')
         } else {
             // Append key to server base, ensuring exactly one "/" separator.
-            "${'${'}server.trimEnd('/')}{'${'}'${'}'}/${'${'}key.trimStart('/')}{'${'}'${'}'}"
+            "server.trimEnd('/')}/${key.trimStart('/')}"
         }
     }
 }
