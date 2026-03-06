@@ -743,7 +743,7 @@ private fun SelectPlayerDialog(
  * - Optional fielder involved (catcher, wicketkeeper, or run-out fielder)
  */
 @Composable
-private fun WicketDetailsDialog(
+internal fun WicketDetailsDialog(
     striker: Player?,
     nonStriker: Player?,
     bowlingTeamPlayers: List<Player>,
