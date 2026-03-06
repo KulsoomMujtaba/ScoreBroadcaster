@@ -10,6 +10,8 @@ enum class InningsPhase {
     SETUP,
     /** First innings is in progress. */
     FIRST_INNINGS,
+    /** Between innings: showing target before second innings starts. */
+    INNINGS_BREAK,
     /** Second innings is in progress. */
     SECOND_INNINGS,
     /** Match has been completed. */
@@ -52,6 +54,11 @@ data class ScoringConsoleState(
     // Full innings scorecard
     val allBattingEntries: List<BattingEntry> = emptyList(),
     val allBowlingEntries: List<BowlingEntry> = emptyList(),
+
+    // First-innings scorecard snapshot (saved when first innings ends)
+    val firstInningsBattingEntries: List<BattingEntry> = emptyList(),
+    val firstInningsBowlingEntries: List<BowlingEntry> = emptyList(),
+    val firstInningsExtras: Int = 0,
 
     // First-innings totals (populated at end of 1st innings; used for target in 2nd)
     val firstInningsRuns: Int = 0,
