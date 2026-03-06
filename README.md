@@ -30,6 +30,14 @@ The core promise is simple: open the app, start a match, score every ball, and s
 |---------|--------|--------|
 | Ball-by-ball scoring engine | ✅ Done | `ScoringScreen` |
 | Undo last ball | ✅ Done | `ScoringScreen` / `CameraPreviewScreen` |
+| Match-context header (title, format, innings, teams) | ✅ Done | `ScoringScreen` |
+| Batter / bowler tracking with live stats | ✅ Done | `ScoringScreen` |
+| Opening batters & bowler setup dialog | ✅ Done | `ScoringScreen` |
+| Wicket → select next batter dialog | ✅ Done | `ScoringScreen` |
+| Over-end → select new bowler dialog | ✅ Done | `ScoringScreen` |
+| Innings management (end 1st innings, start 2nd) | ✅ Done | `ScoringScreen` / `MatchViewModel` |
+| Target / chase info panel (2nd innings) | ✅ Done | `ScoringScreen` |
+| Match-complete result banner | ✅ Done | `ScoringScreen` |
 | Live camera preview + scoreboard overlay | ✅ Done | `CameraPreviewScreen` |
 | RTMPS streaming to Facebook Live | ✅ Done | `StreamPreviewScreen` |
 | Scoreboard burned into live stream | ✅ Done | `ScoreboardOverlayRenderer` |
@@ -148,6 +156,55 @@ Scoring is modelled as an append-only event log:
 ---
 
 ## Development Log
+
+### 2026-03-06 – Phase 3: Match-Scoring Console
+
+**Feature:** Turn `ScoringScreen` into a fully match-aware scoring console with batter/bowler tracking, innings management, and target/chase display.
+
+**Files created:**
+| File | Action |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/data/ScoringConsoleState.kt` | New — `InningsPhase` enum, `PendingAction` sealed class, `ScoringConsoleState` data class |
+
+**Files modified:**
+| File | Action |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/viewmodel/MatchViewModel.kt` | Added `activeMatch`, `consoleState`, player/innings management methods |
+| `app/src/main/java/com/example/scorebroadcaster/ui/ScoringScreen.kt` | Fully rewritten as match-scoring console |
+| `app/src/main/java/com/example/scorebroadcaster/MainActivity.kt` | `initFromMatch` guard on "Resume Scoring" navigation |
+| `README.md` | Updated feature table and added this log entry |
+
+**What was added:**
+
+**`ScoringConsoleState`** (`data/ScoringConsoleState.kt`) — a new data class that sits alongside `MatchState`. `MatchState` continues to hold raw cumulative totals produced by the pure `ScoreReducer`. `ScoringConsoleState` holds everything the scoring console needs on top: current innings phase (`SETUP` → `FIRST_INNINGS` → `SECOND_INNINGS` → `MATCH_COMPLETE`), striker/non-striker/bowler assignments with live `BattingEntry` and `BowlingEntry` stats, first-innings totals for target calculation, and a `pendingAction` slot for dialogs. `PendingAction` is a sealed class with two variants: `SelectNextBatter` (wicket fell) and `SelectBowler` (over ended).
+
+**`MatchViewModel` extensions:**
+- Stores the `Match` entity (via `initFromMatch`); exposes it as `activeMatch: StateFlow<Match?>`.
+- Exposes `consoleState: StateFlow<ScoringConsoleState>`.
+- `addEvent()` now preserves team names after each `reduce()` call and drives `updateConsoleAfterEvent()`, which updates live batter/bowler stats, detects over-end and wicket events, rotates strike correctly (including the double-rotation cancellation when odd runs are scored on the 6th ball), and sets `pendingAction`.
+- New public methods: `setOpeners(striker, nonStriker, bowler)`, `selectNextBatter(player)`, `changeBowler(player)`, `endFirstInnings()`, `endMatch()`.
+- `endFirstInnings()` saves first-innings totals, swaps batting/bowling teams, resets the event log for the second innings, and re-enters `SETUP` phase (or skips to `SECOND_INNINGS` if the teams have no players).
+
+**`ScoringScreen` rewrite:**
+- **Match header**: match title, format, overs limit, innings badge, batting/bowling team names.
+- **Score display**: batting team name, runs/wickets in large type, overs.balls.
+- **Chase panel** (2nd innings only): target, runs needed, balls remaining — all computed locally from `MatchState` + match overs limit.
+- **Last 6 balls row**: coloured chips (red = wicket, amber = wide/no-ball, primary = runs).
+- **Players card**: striker name* with runs(balls) + 4s/6s, non-striker, current bowler with overs–runs–wickets.
+- **Scoring buttons**: 0–6 run buttons, W (red), Wd+1, NB+1, Bye, LB, Undo — disabled while a dialog is pending.
+- **Innings controls**: "End 1st Innings" button during first innings; "End Match" button during second innings.
+- **Match-complete banner**: result string (won by wickets / won by runs) and both innings totals.
+- **Setup dialog**: `SetupOpenersDialog` — `ExposedDropdownMenuBox` pickers for striker, non-striker, opening bowler; shown automatically at the start of each innings when teams have players.
+- **Player-selection dialogs**: `SelectPlayerDialog` — non-dismissible list for mid-over actions.
+
+**Architecture notes:**
+- The existing `ScoreReducer` is completely unchanged.
+- `MatchState` is completely unchanged.
+- `ScoreEvent` is completely unchanged.
+- `ScoringConsoleState` is a separate state slice managed directly in `MatchViewModel`; no new ViewModel was introduced.
+- `CameraPreviewScreen` and the Facebook Live streaming flow are completely unchanged.
+
+---
 
 ### 2026-03-06 – Flow Correction: Manual Scoring as Primary Match Entry Point
 

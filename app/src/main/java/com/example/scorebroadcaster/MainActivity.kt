@@ -50,8 +50,15 @@ class MainActivity : ComponentActivity() {
                                     navController.navigate("my_matches")
                                 },
                                 onLiveScoringClick = {
-                                    if (activeMatch != null) navController.navigate("scoring_only")
-                                    else navController.navigate("create_match")
+                                    val match = activeMatch
+                                    if (match != null) {
+                                        if (matchViewModel.activeMatch.value == null) {
+                                            matchViewModel.initFromMatch(match)
+                                        }
+                                        navController.navigate("scoring_only")
+                                    } else {
+                                        navController.navigate("create_match")
+                                    }
                                 },
                                 onCameraPreviewClick = {
                                     if (activeMatch != null) navController.navigate("live_preview")

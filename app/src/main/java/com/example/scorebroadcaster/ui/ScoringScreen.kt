@@ -1,103 +1,693 @@
 package com.example.scorebroadcaster.ui
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MenuAnchorType
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.scorebroadcaster.data.InningsPhase
+import com.example.scorebroadcaster.data.MatchState
+import com.example.scorebroadcaster.data.PendingAction
 import com.example.scorebroadcaster.data.ScoreEvent
+import com.example.scorebroadcaster.data.ScoringConsoleState
+import com.example.scorebroadcaster.data.entity.BattingEntry
+import com.example.scorebroadcaster.data.entity.BowlingEntry
+import com.example.scorebroadcaster.data.entity.Match
+import com.example.scorebroadcaster.data.entity.Player
+import com.example.scorebroadcaster.data.entity.Team
 import com.example.scorebroadcaster.viewmodel.MatchViewModel
 
 @Composable
-fun ScoringScreen(matchViewModel: MatchViewModel = viewModel(), modifier: Modifier = Modifier) {
+fun ScoringScreen(
+    matchViewModel: MatchViewModel = viewModel(),
+    modifier: Modifier = Modifier
+) {
     val state by matchViewModel.state.collectAsState()
+    val console by matchViewModel.consoleState.collectAsState()
+    val match by matchViewModel.activeMatch.collectAsState()
+    // Capture a non-nullable snapshot so inner lambdas and blocks can smart-cast.
+    val activeMatch: Match? = match
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
+    // Show openers-setup dialog when the innings phase is SETUP
+    var setupDialogVisible by remember { mutableStateOf(false) }
+    LaunchedEffect(console.phase) {
+        if (console.phase == InningsPhase.SETUP && activeMatch != null) {
+            setupDialogVisible = true
+        }
+    }
+
+    Box(modifier = modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            // --- Match header ---
+            if (activeMatch != null) {
+                MatchHeaderSection(match = activeMatch, console = console)
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+
+            // --- Score display ---
+            ScoreDisplaySection(state = state)
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // --- Chase info (2nd innings only) ---
+            if (console.phase == InningsPhase.SECOND_INNINGS && activeMatch != null) {
+                ChaseInfoSection(
+                    runsScored = state.runs,
+                    target = console.target,
+                    overs = state.overs,
+                    balls = state.balls,
+                    oversLimit = activeMatch.overs
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+
+            // --- Last 6 balls ---
+            LastBallsRow(lastBalls = state.lastBalls)
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // --- Current players card ---
+            if (console.phase == InningsPhase.FIRST_INNINGS ||
+                console.phase == InningsPhase.SECOND_INNINGS
+            ) {
+                PlayersSection(console = console)
+                Spacer(modifier = Modifier.height(12.dp))
+            }
+
+            // --- Scoring buttons ---
+            val scoringEnabled = (console.phase == InningsPhase.FIRST_INNINGS ||
+                    console.phase == InningsPhase.SECOND_INNINGS) &&
+                    console.pendingAction == null
+            ScoringButtonsSection(
+                onEvent = { matchViewModel.addEvent(it) },
+                onUndo = { matchViewModel.undo() },
+                enabled = scoringEnabled
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // --- Innings / match control ---
+            if (activeMatch != null) {
+                InningsControlSection(
+                    console = console,
+                    onEndFirstInnings = { matchViewModel.endFirstInnings() },
+                    onEndMatch = { matchViewModel.endMatch() }
+                )
+            }
+
+            // --- Match complete banner ---
+            if (console.phase == InningsPhase.MATCH_COMPLETE) {
+                Spacer(modifier = Modifier.height(16.dp))
+                MatchCompleteSection(
+                    runsScored = state.runs,
+                    wickets = state.wickets,
+                    console = console,
+                    battingTeamName = state.teamAName,
+                    bowlingTeamName = state.teamBName
+                )
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // --- Extras (always visible during play) ---
+            if (console.phase == InningsPhase.FIRST_INNINGS ||
+                console.phase == InningsPhase.SECOND_INNINGS
+            ) {
+                Text(
+                    text = "Extras: ${state.extras}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                )
+            }
+        }
+
+        // --- Pending action dialogs (rendered on top of everything) ---
+        when (val action = console.pendingAction) {
+            is PendingAction.SelectNextBatter -> SelectPlayerDialog(
+                title = "Select Next Batter",
+                players = action.availablePlayers,
+                onPlayerSelected = { matchViewModel.selectNextBatter(it) }
+            )
+            is PendingAction.SelectBowler -> SelectPlayerDialog(
+                title = "Select Bowler",
+                players = action.availablePlayers,
+                onPlayerSelected = { matchViewModel.changeBowler(it) }
+            )
+            null -> Unit
+        }
+
+        // --- Openers setup dialog ---
+        if (setupDialogVisible && activeMatch != null && console.phase == InningsPhase.SETUP) {
+            val battingTeam = if (console.inningsNumber == 1) activeMatch.battingFirst
+                              else activeMatch.bowlingFirst
+            val bowlingTeam = if (console.inningsNumber == 1) activeMatch.bowlingFirst
+                              else activeMatch.battingFirst
+            SetupOpenersDialog(
+                inningsNumber = console.inningsNumber,
+                battingTeam = battingTeam,
+                bowlingTeam = bowlingTeam,
+                onConfirm = { striker, nonStriker, bowler ->
+                    matchViewModel.setOpeners(striker, nonStriker, bowler)
+                    setupDialogVisible = false
+                }
+            )
+        }
+    }
+}
+
+// =============================================================================
+// Match header
+// =============================================================================
+
+@Composable
+private fun MatchHeaderSection(match: Match, console: ScoringConsoleState) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
-            text = "${state.teamAName} vs ${state.teamBName}",
-            style = MaterialTheme.typography.titleLarge
+            text = match.displayTitle,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold
         )
-        Spacer(modifier = Modifier.height(8.dp))
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "${match.format.label.substringBefore(" (")} · ${match.overs} overs",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+            )
+            Surface(
+                color = MaterialTheme.colorScheme.primaryContainer,
+                shape = MaterialTheme.shapes.extraSmall
+            ) {
+                val inningsSuffix = if (console.inningsNumber == 1) "st" else "nd"
+                Text(
+                    text = "${console.inningsNumber}$inningsSuffix Innings",
+                    style = MaterialTheme.typography.labelSmall,
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                )
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            Text(
+                text = "Bat: ${console.battingTeamName}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Text(
+                text = "Bowl: ${console.bowlingTeamName}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.secondary
+            )
+        }
+    }
+}
+
+// =============================================================================
+// Score display
+// =============================================================================
+
+@Composable
+private fun ScoreDisplaySection(
+    state: MatchState
+) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(
+            text = state.teamAName,
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+        )
         Text(
             text = "${state.runs}/${state.wickets}",
-            style = MaterialTheme.typography.displayMedium
+            style = MaterialTheme.typography.displayMedium,
+            fontWeight = FontWeight.Bold
         )
         Text(
             text = "Overs: ${state.overs}.${state.balls}",
             style = MaterialTheme.typography.bodyLarge
         )
-        Text(
-            text = "Extras: ${state.extras}",
-            style = MaterialTheme.typography.bodyMedium
-        )
-        Spacer(modifier = Modifier.height(8.dp))
+    }
+}
 
-        // Last 6 deliveries
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            state.lastBalls.forEach { ball ->
-                Surface(
-                    color = MaterialTheme.colorScheme.primary,
-                    shape = MaterialTheme.shapes.small
-                ) {
-                    Text(
-                        text = ball,
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                        color = MaterialTheme.colorScheme.onPrimary,
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                }
-            }
-        }
-        Spacer(modifier = Modifier.height(16.dp))
+// =============================================================================
+// Chase / target info
+// =============================================================================
 
-        // Run buttons: 0 1 2 3 4 6
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf(0, 1, 2, 3, 4, 6).forEach { runs ->
-                Button(onClick = { matchViewModel.addEvent(ScoreEvent.Run(runs)) }) {
-                    Text("$runs")
-                }
-            }
-        }
-        Spacer(modifier = Modifier.height(8.dp))
+@Composable
+private fun ChaseInfoSection(
+    runsScored: Int,
+    target: Int,
+    overs: Int,
+    balls: Int,
+    oversLimit: Int
+) {
+    val runsNeeded = (target - runsScored).coerceAtLeast(0)
+    val ballsBowled = overs * 6 + balls
+    val totalBalls = oversLimit * 6
+    val ballsRemaining = (totalBalls - ballsBowled).coerceAtLeast(0)
 
-        // Wicket / Wide / NoBall
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = { matchViewModel.addEvent(ScoreEvent.Wicket) }) {
-                Text("Wicket")
-            }
-            Button(onClick = { matchViewModel.addEvent(ScoreEvent.Wide(0)) }) {
-                Text("Wide")
-            }
-            Button(onClick = { matchViewModel.addEvent(ScoreEvent.NoBall(0)) }) {
-                Text("No Ball")
-            }
-        }
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Button(
-            onClick = { matchViewModel.undo() },
-            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+    Surface(
+        color = MaterialTheme.colorScheme.tertiaryContainer,
+        shape = MaterialTheme.shapes.medium,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            horizontalArrangement = Arrangement.SpaceAround
         ) {
-            Text("Undo")
+            ChaseInfoItem(label = "Target", value = "$target")
+            ChaseInfoItem(
+                label = "Need",
+                value = if (runsScored >= target) "Won!" else "$runsNeeded"
+            )
+            ChaseInfoItem(label = "Balls left", value = "$ballsRemaining")
+        }
+    }
+}
+
+@Composable
+private fun ChaseInfoItem(label: String, value: String) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(
+            text = value,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.7f)
+        )
+    }
+}
+
+// =============================================================================
+// Last balls row
+// =============================================================================
+
+@Composable
+private fun LastBallsRow(lastBalls: List<String>) {
+    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        lastBalls.forEach { ball ->
+            val bgColor = when {
+                ball == "W" -> MaterialTheme.colorScheme.error
+                ball.startsWith("Wd") || ball.startsWith("NB") -> MaterialTheme.colorScheme.secondary
+                else -> MaterialTheme.colorScheme.primary
+            }
+            Surface(color = bgColor, shape = MaterialTheme.shapes.small) {
+                Text(
+                    text = ball,
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                    color = MaterialTheme.colorScheme.onPrimary,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+        }
+    }
+}
+
+// =============================================================================
+// Current players card
+// =============================================================================
+
+@Composable
+private fun PlayersSection(console: ScoringConsoleState) {
+    Surface(
+        tonalElevation = 2.dp,
+        shape = MaterialTheme.shapes.medium,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Text(
+                text = "At the Crease",
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold
+            )
+
+            // Striker
+            console.strikerEntry?.let { BatterRow(entry = it, isStriker = true) }
+                ?: console.striker?.let {
+                    Text("${it.name} *", style = MaterialTheme.typography.bodySmall)
+                }
+
+            // Non-striker
+            console.nonStrikerEntry?.let { BatterRow(entry = it, isStriker = false) }
+                ?: console.nonStriker?.let {
+                    Text(it.name, style = MaterialTheme.typography.bodySmall)
+                }
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp))
+
+            // Bowler
+            console.currentBowlerEntry?.let { BowlerRow(entry = it) }
+                ?: console.currentBowler?.let {
+                    Text("⚾ ${it.name}", style = MaterialTheme.typography.bodySmall)
+                }
+        }
+    }
+}
+
+@Composable
+private fun BatterRow(entry: BattingEntry, isStriker: Boolean) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = "${entry.player.name}${if (isStriker) " *" else ""}",
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = if (isStriker) FontWeight.Bold else FontWeight.Normal,
+            modifier = Modifier.weight(1f)
+        )
+        Text(
+            text = "${entry.runs} (${entry.balls})",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+        )
+        if (entry.fours > 0 || entry.sixes > 0) {
+            Text(
+                text = "  4s:${entry.fours} 6s:${entry.sixes}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+            )
+        }
+    }
+}
+
+@Composable
+private fun BowlerRow(entry: BowlingEntry) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = "⚾ ${entry.player.name}",
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.weight(1f)
+        )
+        Text(
+            text = "${entry.overs}.${entry.balls}  ${entry.runs} runs  ${entry.wickets}w",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+        )
+    }
+}
+
+// =============================================================================
+// Scoring buttons
+// =============================================================================
+
+@Composable
+private fun ScoringButtonsSection(
+    onEvent: (ScoreEvent) -> Unit,
+    onUndo: () -> Unit,
+    enabled: Boolean
+) {
+    // Run buttons: 0 1 2 3 4 6
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        listOf(0, 1, 2, 3, 4, 6).forEach { runs ->
+            Button(onClick = { onEvent(ScoreEvent.Run(runs)) }, enabled = enabled) {
+                Text("$runs")
+            }
+        }
+    }
+    Spacer(modifier = Modifier.height(8.dp))
+
+    // Wicket / Wide / No Ball / Bye / Leg Bye
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Button(
+            onClick = { onEvent(ScoreEvent.Wicket) },
+            enabled = enabled,
+            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+        ) { Text("W") }
+        Button(onClick = { onEvent(ScoreEvent.Wide(0)) }, enabled = enabled) { Text("Wd+1") }
+        Button(onClick = { onEvent(ScoreEvent.NoBall(0)) }, enabled = enabled) { Text("NB+1") }
+        Button(onClick = { onEvent(ScoreEvent.Bye(1)) }, enabled = enabled) { Text("Bye") }
+        Button(onClick = { onEvent(ScoreEvent.LegBye(1)) }, enabled = enabled) { Text("LB") }
+    }
+    Spacer(modifier = Modifier.height(8.dp))
+
+    OutlinedButton(
+        onClick = onUndo,
+        colors = ButtonDefaults.outlinedButtonColors(
+            contentColor = MaterialTheme.colorScheme.error
+        )
+    ) {
+        Text("Undo")
+    }
+}
+
+// =============================================================================
+// Innings / match controls
+// =============================================================================
+
+@Composable
+private fun InningsControlSection(
+    console: ScoringConsoleState,
+    onEndFirstInnings: () -> Unit,
+    onEndMatch: () -> Unit
+) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (console.phase == InningsPhase.FIRST_INNINGS) {
+            OutlinedButton(onClick = onEndFirstInnings) {
+                Text("End 1st Innings")
+            }
+        }
+        if (console.phase == InningsPhase.SECOND_INNINGS) {
+            OutlinedButton(
+                onClick = onEndMatch,
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = MaterialTheme.colorScheme.error
+                )
+            ) {
+                Text("End Match")
+            }
+        }
+    }
+}
+
+// =============================================================================
+// Match complete
+// =============================================================================
+
+@Composable
+private fun MatchCompleteSection(
+    runsScored: Int,
+    wickets: Int,
+    console: ScoringConsoleState,
+    battingTeamName: String,
+    bowlingTeamName: String
+) {
+    Surface(
+        color = MaterialTheme.colorScheme.primaryContainer,
+        shape = MaterialTheme.shapes.medium,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(
+                text = "Match Complete",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+            if (console.inningsNumber == 2) {
+                val runsNeeded = console.target - runsScored
+                val result = when {
+                    runsScored >= console.target ->
+                        "$battingTeamName won by ${10 - wickets} wickets!"
+                    wickets >= 10 ->
+                        // target = firstInningsRuns + 1, so margin = target - 1 - runsScored = runsNeeded - 1
+                        "$bowlingTeamName won by ${runsNeeded - 1} runs!"
+                    else -> "Match ended"
+                }
+                Text(result, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+                Text(
+                    text = "1st innings: ${console.firstInningsRuns}/${console.firstInningsWickets}" +
+                            "   |   2nd innings: $runsScored/$wickets",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                )
+            }
+        }
+    }
+}
+
+// =============================================================================
+// Player-selection dialog (wicket / bowler change)
+// =============================================================================
+
+@Composable
+private fun SelectPlayerDialog(
+    title: String,
+    players: List<Player>,
+    onPlayerSelected: (Player) -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = { /* must select */ },
+        title = { Text(title) },
+        text = {
+            if (players.isEmpty()) {
+                Text("No players available.")
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    players.forEach { player ->
+                        TextButton(
+                            onClick = { onPlayerSelected(player) },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = player.name,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {}
+    )
+}
+
+// =============================================================================
+// Opening batters + bowler setup dialog
+// =============================================================================
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SetupOpenersDialog(
+    inningsNumber: Int,
+    battingTeam: Team,
+    bowlingTeam: Team,
+    onConfirm: (striker: Player, nonStriker: Player, bowler: Player) -> Unit
+) {
+    var striker by remember { mutableStateOf<Player?>(null) }
+    var nonStriker by remember { mutableStateOf<Player?>(null) }
+    var bowler by remember { mutableStateOf<Player?>(null) }
+
+    val inningsSuffix = if (inningsNumber == 1) "st" else "nd"
+
+    AlertDialog(
+        onDismissRequest = { /* must complete setup */ },
+        title = { Text("$inningsNumber$inningsSuffix Innings Setup") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    text = "Batting: ${battingTeam.name}",
+                    style = MaterialTheme.typography.labelMedium
+                )
+                PlayerDropdown(
+                    label = "Striker",
+                    players = battingTeam.players.filter { it.id != nonStriker?.id },
+                    selected = striker,
+                    onSelected = { striker = it }
+                )
+                PlayerDropdown(
+                    label = "Non-striker",
+                    players = battingTeam.players.filter { it.id != striker?.id },
+                    selected = nonStriker,
+                    onSelected = { nonStriker = it }
+                )
+                HorizontalDivider()
+                Text(
+                    text = "Bowling: ${bowlingTeam.name}",
+                    style = MaterialTheme.typography.labelMedium
+                )
+                PlayerDropdown(
+                    label = "Opening bowler",
+                    players = bowlingTeam.players,
+                    selected = bowler,
+                    onSelected = { bowler = it }
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val s = striker; val ns = nonStriker; val b = bowler
+                    if (s != null && ns != null && b != null) onConfirm(s, ns, b)
+                },
+                enabled = striker != null && nonStriker != null && bowler != null
+            ) {
+                Text("Start")
+            }
+        }
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun PlayerDropdown(
+    label: String,
+    players: List<Player>,
+    selected: Player?,
+    onSelected: (Player) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
+        OutlinedTextField(
+            value = selected?.name ?: "— select —",
+            onValueChange = {},
+            readOnly = true,
+            label = { Text(label) },
+            modifier = Modifier
+                .menuAnchor(MenuAnchorType.PrimaryNotEditable)
+                .fillMaxWidth(),
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+            colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors()
+        )
+        ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            players.forEach { player ->
+                DropdownMenuItem(
+                    text = { Text(player.name) },
+                    onClick = { onSelected(player); expanded = false }
+                )
+            }
         }
     }
 }
