@@ -7,5 +7,5 @@ data class BattingEntry(
     val fours: Int = 0,
     val sixes: Int = 0,
     val isOut: Boolean = false,
-    val dismissalInfo: String = ""
+    val dismissal: DismissalDetail? = null
 )

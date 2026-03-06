@@ -163,7 +163,39 @@ Scoring is modelled as an append-only event log:
 
 ## Development Log
 
-### 2026-03-06 – Phase 5: Saved Teams Integration into Create Match Flow
+### 2026-03-06 – Wicket Dismissal Detail Support
+
+**Feature:** Proper wicket detail capture for realistic MVP scoring — dismissal type, fielder, and bowler credit.
+
+**Files created:**
+| File | Action |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/data/entity/DismissalType.kt` | Created — enum with Bowled, Caught, LBW, Run Out, Stumped, Other |
+| `app/src/main/java/com/example/scorebroadcaster/data/entity/DismissalDetail.kt` | Created — data class capturing batter, type, optional fielder, bowler, and scorecard string helper |
+
+**Files modified:**
+| File | Change |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/data/ScoreEvent.kt` | `Wicket` changed from `data object` to `data class Wicket(val dismissal: DismissalDetail)` |
+| `app/src/main/java/com/example/scorebroadcaster/data/entity/BattingEntry.kt` | Replaced `dismissalInfo: String` with `dismissal: DismissalDetail?` |
+| `app/src/main/java/com/example/scorebroadcaster/data/ScoringConsoleState.kt` | `SelectNextBatter` gains `replacingStriker: Boolean` to handle non-striker run outs |
+| `app/src/main/java/com/example/scorebroadcaster/viewmodel/MatchViewModel.kt` | Wicket handling now marks the correct player out; Run Out does not credit the bowler; non-striker run outs place new batter at non-striker's end |
+| `app/src/main/java/com/example/scorebroadcaster/ui/ScoringScreen.kt` | W button now opens `WicketDetailsDialog`; new `WicketDetailsDialog` composable for selecting who's out, dismissal type, and optional fielder; `SelectNextBatter` dialog title adapts (striker vs non-striker replacement) |
+| `app/src/main/java/com/example/scorebroadcaster/ui/ScorecardScreen.kt` | `BattingTableRow` now displays proper dismissal text (e.g., "c Smith b Jones", "run out (Brown)") |
+| `README.md` | Added this log entry |
+
+**What was added/refactored:**
+
+- **`DismissalType` enum** — six types: Bowled, Caught, LBW, Run Out, Stumped, Other.
+- **`DismissalDetail` data class** — stores the dismissed batter, dismissal type, optional fielder (catcher / wicketkeeper / run-out fielder), and the bowler at the time of the wicket. Provides a `toScorecardString()` helper that produces standard cricket scorecard notation (e.g., `"c Jones b Smith"`, `"lbw b Smith"`, `"run out (Brown)"`). The `bowlerCredited` computed property returns `false` only for Run Out.
+- **`ScoreEvent.Wicket` refactored** — carries a full `DismissalDetail` instead of being a singleton object, enabling the event log to record every dismissal.
+- **`BattingEntry.dismissal`** — replaces the old plain-string `dismissalInfo` field with the structured `DismissalDetail?`.
+- **Bowler credit** — `MatchViewModel` inspects `dismissal.bowlerCredited` when updating the bowler's `BowlingEntry`; Run Out deliveries increment the bowler's ball count but do **not** increment their wicket tally.
+- **Non-striker run out** — when the scorer selects the non-striker as out, `MatchViewModel` correctly marks the non-striker's `BattingEntry` as dismissed, leaves the striker in place, and sets `SelectNextBatter(replacingStriker = false)` so the incoming batter fills the non-striker's end.
+- **`WicketDetailsDialog`** — new Compose dialog shown when the W button is tapped. Step-by-step UI: (1) who got out (striker / non-striker filter chips); (2) dismissal type (6 filter chips); (3) fielder selector (shown only for Caught, Stumped, Run Out). After confirmation, dispatches `ScoreEvent.Wicket(dismissal)` and the existing next-batter selection dialog follows.
+- **Scorecard display** — `BattingTableRow` renders the full dismissal description underneath the batter's name instead of a plain "out".
+
+
 
 **Feature:** Make Saved Teams a first-class part of match creation — users can now choose between a saved team and a new team directly inside `CreateMatchScreen`, with an option to save newly created teams for later reuse.
 

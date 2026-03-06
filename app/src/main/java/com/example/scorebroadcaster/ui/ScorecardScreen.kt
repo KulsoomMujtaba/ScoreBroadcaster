@@ -335,8 +335,9 @@ private fun BattingTableRow(entry: BattingEntry) {
                 fontWeight = FontWeight.Medium
             )
             if (entry.isOut) {
+                val dismissalText = entry.dismissal?.toScorecardString() ?: "out"
                 Text(
-                    "out",
+                    dismissalText,
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.error
                 )
