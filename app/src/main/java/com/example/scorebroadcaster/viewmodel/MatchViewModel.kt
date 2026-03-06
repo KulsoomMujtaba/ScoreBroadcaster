@@ -1,5 +1,6 @@
 package com.example.scorebroadcaster.viewmodel
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import com.example.scorebroadcaster.data.InningsPhase
 import com.example.scorebroadcaster.data.MatchState
@@ -40,6 +41,9 @@ class MatchViewModel : ViewModel() {
     // ---------------------------------------------------------------------------
 
     fun addEvent(event: ScoreEvent) {
+        if (event is ScoreEvent.Wicket) {
+            Log.d("WicketFlow", "Wicket button tapped")
+        }
         val prevState = _state.value
         _events.value = _events.value + event
         val newState = reduce(_events.value)
@@ -137,8 +141,14 @@ class MatchViewModel : ViewModel() {
         // --- Determine pending action ---
         val (pendingAction, bowlerChangePending) = when {
             wicketFell -> {
-                val remaining = availableBatters()
-                if (remaining.isNotEmpty()) {
+                // All out when 10 wickets have fallen (only 1 batter left – can't form a partnership).
+                // Previously this used availableBatters().isEmpty() as the all-out guard, but that
+                // returned false whenever no players were pre-registered in the team, causing the
+                // SelectNextBatter dialog to never appear. Use the actual wickets count instead.
+                val allOut = newState.wickets >= 10
+                if (!allOut) {
+                    val remaining = availableBatters()
+                    Log.d("WicketFlow", "pendingAction set to SelectNextBatter (${remaining.size} available players)")
                     Pair(PendingAction.SelectNextBatter(remaining), overEnded)
                 } else {
                     // All out — no pending action; innings ends naturally
@@ -208,6 +218,7 @@ class MatchViewModel : ViewModel() {
 
     /** Called after a wicket when the scorer picks the incoming batter. */
     fun selectNextBatter(player: Player) {
+        Log.d("WicketFlow", "Next batter selected: ${player.name}")
         val console = _consoleState.value
         val newEntry = BattingEntry(player = player)
         val updatedAll = console.allBattingEntries + newEntry
@@ -222,6 +233,7 @@ class MatchViewModel : ViewModel() {
             pendingAction = nextPending,
             bowlerChangePending = false
         )
+        Log.d("WicketFlow", "pendingAction cleared after next batter selection (nextPending=${nextPending?.javaClass?.simpleName})")
     }
 
     /** Called at the end of each over when the scorer picks the new bowler. */

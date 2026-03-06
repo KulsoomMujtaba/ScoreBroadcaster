@@ -163,6 +163,37 @@ Scoring is modelled as an append-only event log:
 
 ## Development Log
 
+### 2026-03-06 – Bug Fix: Wicket-to-Next-Batter Flow
+
+**Bug:** The `SelectNextBatter` dialog was never shown after a wicket, so scoring could continue without a replacement batter being selected.
+
+**Root cause:**  
+`MatchViewModel.updateConsoleAfterEvent()` used `availableBatters().isEmpty()` as a proxy for "all out". `availableBatters()` returns an empty list whenever the batting team has no pre-registered players beyond the two openers (or when no active match is loaded). Because the list was empty, the code always fell into the `Pair(null, false)` "all-out" branch instead of setting `PendingAction.SelectNextBatter`. As a result, `pendingAction` was always `null`, the dialog was never triggered, and scoring buttons stayed enabled.
+
+**Files changed:**
+| File | Change |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/viewmodel/MatchViewModel.kt` | Fixed all-out guard; added `Log.d` debug points |
+| `app/src/main/java/com/example/scorebroadcaster/ui/ScoringScreen.kt` | Added `Log.d` when next-batter dialog is rendered |
+| `README.md` | Added this log entry |
+
+**What was corrected:**
+
+- **All-out check** — replaced `if (remaining.isNotEmpty())` with `val allOut = newState.wickets >= 10`. Ten wickets fallen is the only reliable all-out signal; it is independent of whether players are pre-registered in the team roster.
+- **Dialog always shown** — `PendingAction.SelectNextBatter(remaining)` is now set for every wicket that is not the 10th. `remaining` can be an empty list; when it is, the `SelectPlayerDialog` already shows an "Add new player" inline field so the scorer can create a batter on the fly.
+- **Scoring blocked** — no change needed here; `ScoringButtonsSection` was already gated on `console.pendingAction == null`, which now works correctly because `pendingAction` is properly set.
+
+**Debug logs added (tag `WicketFlow`):**
+1. `"Wicket button tapped"` — in `addEvent()` when `ScoreEvent.Wicket` is dispatched.
+2. `"pendingAction set to SelectNextBatter (N available players)"` — in `updateConsoleAfterEvent()` after the fix.
+3. `"Next batter dialog shown (N players available)"` — in `ScoringScreen` when the `SelectNextBatter` branch is entered.
+4. `"Next batter selected: <name>"` — at the start of `selectNextBatter()`.
+5. `"pendingAction cleared after next batter selection"` — after `_consoleState` is updated in `selectNextBatter()`.
+
+**Architecture unchanged:** `ScoreReducer`, `MatchState`, `ScoreEvent`, `ScoringConsoleState`, `PendingAction`, and `InningsPhase` are all unmodified.
+
+---
+
 ### 2026-03-06 – Phase 4: Wicket Replacement Flow, Add-Player After Start, and Saved Teams
 
 **Feature:** Improve scorer realism with mid-match player management and reusable saved teams.
