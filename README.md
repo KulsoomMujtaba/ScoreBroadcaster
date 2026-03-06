@@ -35,8 +35,13 @@ The core promise is simple: open the app, start a match, score every ball, and s
 | Scoreboard burned into live stream | ✅ Done | `ScoreboardOverlayRenderer` |
 | Stream setup (URL, key, bitrate) | ✅ Done | `StreamSetupScreen` |
 | Home screen with primary actions | ✅ Done | `HomeScreen` |
-| Create Match (placeholder) | 🔜 Placeholder | `CreateMatchScreen` |
-| My Matches (placeholder) | 🔜 Placeholder | `MyMatchesScreen` |
+| Create Match (real form) | ✅ Done | `CreateMatchScreen` |
+| Player setup | ✅ Done | `PlayerSetupScreen` |
+| Pre-match summary + Start Match | ✅ Done | `MatchSummaryScreen` |
+| My Matches (local in-memory list) | ✅ Done | `MyMatchesScreen` |
+| Domain entities (Team, Player, Match, …) | ✅ Done | `data/entity/` |
+| Local in-memory repository | ✅ Done | `repository/MatchRepository` |
+| Match session management | ✅ Done | `MatchSessionViewModel` |
 
 ---
 
@@ -95,21 +100,42 @@ The project follows the Model-View-ViewModel pattern:
 
 ```
 com.example.scorebroadcaster/
-├── data/             # Immutable models: MatchState, ScoreEvent, StreamConfig, StreamingStatus
+├── data/
+│   ├── MatchState.kt          # Scoring session state (runs, wickets, overs, …)
+│   ├── ScoreEvent.kt          # Sealed class of deliveries (Run, Wicket, Wide, …)
+│   ├── StreamConfig.kt
+│   ├── StreamingStatus.kt
+│   └── entity/                # ← Phase 2: domain entities
+│       ├── Player.kt
+│       ├── Team.kt
+│       ├── Match.kt
+│       ├── Innings.kt
+│       ├── MatchFormat.kt     # T20, ODI, T10, Tape-ball, Custom
+│       ├── MatchStatus.kt     # NOT_STARTED, IN_PROGRESS, INNINGS_BREAK, COMPLETED
+│       ├── TossDecision.kt    # BAT / BOWL
+│       ├── BattingEntry.kt
+│       └── BowlingEntry.kt
 ├── domain/           # Pure business logic: ScoreReducer
+├── repository/       # ← Phase 2: local in-memory repository
+│   └── MatchRepository.kt
 ├── streaming/        # RTMP streaming: RtmpLiveStreamer, ScoreboardOverlayRenderer
 ├── ui/               # Compose screens and theme
 │   ├── theme/        # Material3 theme (Color, Type, Theme)
-│   ├── HomeScreen.kt
-│   ├── CreateMatchScreen.kt   ← Phase 1 placeholder
-│   ├── MyMatchesScreen.kt     ← Phase 1 placeholder
+│   ├── HomeScreen.kt              ← Phase 2: active-match banner
+│   ├── CreateMatchScreen.kt       ← Phase 2: real form
+│   ├── PlayerSetupScreen.kt       ← Phase 2: new
+│   ├── MatchSummaryScreen.kt      ← Phase 2: new
+│   ├── MyMatchesScreen.kt         ← Phase 2: real in-memory list
 │   ├── CameraPreviewScreen.kt
 │   ├── ScoringScreen.kt
 │   ├── ScoreboardOverlay.kt
 │   ├── StreamSetupScreen.kt
 │   └── StreamPreviewScreen.kt
-├── viewmodel/        # MatchViewModel, LiveStreamViewModel
-└── MainActivity.kt
+├── viewmodel/
+│   ├── MatchViewModel.kt          ← Phase 2: initFromMatch() added
+│   ├── MatchSessionViewModel.kt   ← Phase 2: new
+│   └── LiveStreamViewModel.kt
+└── MainActivity.kt               ← Phase 2: new routes wired
 ```
 
 ### Event-based Scoring Engine (ScoreEvent Reducer Pattern)
@@ -122,6 +148,64 @@ Scoring is modelled as an append-only event log:
 ---
 
 ## Development Log
+
+### 2026-03-06 – Phase 2: Entity Layer and Local-First Match Flow
+
+**Feature:** Domain entities, local repository, match creation flow, player setup, pre-match summary, and My Matches list
+
+**Files created:**
+| File | Action |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/data/entity/Player.kt` | Created |
+| `app/src/main/java/com/example/scorebroadcaster/data/entity/Team.kt` | Created |
+| `app/src/main/java/com/example/scorebroadcaster/data/entity/Match.kt` | Created |
+| `app/src/main/java/com/example/scorebroadcaster/data/entity/Innings.kt` | Created |
+| `app/src/main/java/com/example/scorebroadcaster/data/entity/MatchFormat.kt` | Created |
+| `app/src/main/java/com/example/scorebroadcaster/data/entity/MatchStatus.kt` | Created |
+| `app/src/main/java/com/example/scorebroadcaster/data/entity/TossDecision.kt` | Created |
+| `app/src/main/java/com/example/scorebroadcaster/data/entity/BattingEntry.kt` | Created |
+| `app/src/main/java/com/example/scorebroadcaster/data/entity/BowlingEntry.kt` | Created |
+| `app/src/main/java/com/example/scorebroadcaster/repository/MatchRepository.kt` | Created |
+| `app/src/main/java/com/example/scorebroadcaster/viewmodel/MatchSessionViewModel.kt` | Created |
+| `app/src/main/java/com/example/scorebroadcaster/ui/PlayerSetupScreen.kt` | Created |
+| `app/src/main/java/com/example/scorebroadcaster/ui/MatchSummaryScreen.kt` | Created |
+
+**Files modified:**
+| File | Action |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/ui/CreateMatchScreen.kt` | Replaced placeholder with real form |
+| `app/src/main/java/com/example/scorebroadcaster/ui/MyMatchesScreen.kt` | Replaced placeholder with in-memory match list |
+| `app/src/main/java/com/example/scorebroadcaster/ui/HomeScreen.kt` | Added active-match banner and context-aware button labels |
+| `app/src/main/java/com/example/scorebroadcaster/viewmodel/MatchViewModel.kt` | Added `initFromMatch()` |
+| `app/src/main/java/com/example/scorebroadcaster/MainActivity.kt` | Added `MatchSessionViewModel` + new routes |
+| `gradle/libs.versions.toml` | Added `material-icons-core` |
+| `app/build.gradle.kts` | Added `material-icons-core` dependency |
+| `README.md` | Updated |
+
+**Explanation:**
+
+Phase 2 turns Scored into a usable local-first MVP for real cricket match scoring.
+
+**Entity layer** (`data/entity/`): Nine domain entities were introduced — `Player`, `Team`, `Match`, `Innings`, `MatchFormat`, `MatchStatus`, `TossDecision`, `BattingEntry`, and `BowlingEntry`. These model a real cricket match without coupling to any backend.
+
+**Local repository** (`repository/MatchRepository`): A singleton object that manages the in-memory list of created matches and the currently active match. It is intentionally thin and will be replaced by a backend-backed repository in Phase 3.
+
+**MatchSessionViewModel**: A new ViewModel that sits above `MatchViewModel` and manages the higher-level match lifecycle — creating matches, assembling the player-setup draft (stored as `pendingMatch`), confirming a match (which persists it to the repository and marks it active), and switching between matches in My Matches. It co-exists with the existing `MatchViewModel` which continues to manage ball-by-ball scoring.
+
+**Create Match flow** (three screens):
+1. `CreateMatchScreen` — a scrollable form collecting match title (optional), Team A/B names, match format (T20/T10/ODI/Tape-ball/Custom), custom overs, toss winner, and toss decision. Toss-winner chips update reactively as team names are typed. The "Next" button is disabled until both team names are filled and overs are valid.
+2. `PlayerSetupScreen` — shows a resizable list of player-name text fields for each team (1–11 players). Players can be added or removed; blank rows are ignored on save. Tapping "Continue" updates the pending match in `MatchSessionViewModel` and navigates to the summary.
+3. `MatchSummaryScreen` — a read-only confirmation screen listing format, toss result, batting/bowling order, and player rosters. Tapping "Start Match" calls `MatchSessionViewModel.confirmMatch()`, calls `MatchViewModel.initFromMatch()` (seeds the scoring session with the correct team names), and navigates to `CameraPreviewScreen`, clearing the creation back-stack.
+
+**My Matches screen**: Now shows the real in-memory match list from `MatchSessionViewModel.matches`. Displays each match's title, format, overs, and a status chip (Live / Not Started / Completed). A "● Live" indicator highlights the active match. Tapping an item switches the active match and opens it in `CameraPreviewScreen`. An empty-state with a "Create Match" shortcut is shown when no matches exist.
+
+**HomeScreen**: Shows a compact active-match banner (match title + format + live indicator) when a session is in progress. The "Live Scoring" button label changes to "Resume Scoring" when there is an active match.
+
+**Scoring engine unchanged**: `ScoreReducer`, `MatchState`, `ScoreEvent`, and `MatchViewModel`'s event-log approach are all preserved. The only addition to `MatchViewModel` is `initFromMatch(match)`, which resets the event log and seeds the initial `MatchState` with the batting/bowling team names from the `Match` entity.
+
+**Architecture direction**: The app is now local-first. All state lives in memory for this phase. `MatchRepository` is the single source of truth for created matches; `MatchSessionViewModel` is the UI-facing interface to that repository. The repository interface is intentionally narrow so it can be replaced by a Supabase-backed implementation in Phase 3 without touching the ViewModels.
+
+---
 
 ### 2026-03-06 – Phase 1: Scored Foundation
 

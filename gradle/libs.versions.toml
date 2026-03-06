@@ -37,6 +37,7 @@ androidx-camera-view = { group = "androidx.camera", name = "camera-view", versio
 androidx-navigation-compose = { group = "androidx.navigation", name = "navigation-compose", version.ref = "navigation" }
 androidx-security-crypto = { group = "androidx.security", name = "security-crypto", version.ref = "securityCrypto" }
 root-encoder = { group = "com.github.pedroSG94.RootEncoder", name = "library", version.ref = "rootEncoder" }
+androidx-compose-material-icons-core = { group = "androidx.compose.material", name = "material-icons-core" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

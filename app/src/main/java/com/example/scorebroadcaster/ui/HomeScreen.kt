@@ -11,12 +11,15 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.scorebroadcaster.data.entity.Match
 
 @Composable
 fun HomeScreen(
@@ -25,6 +28,7 @@ fun HomeScreen(
     onLiveScoringClick: () -> Unit,
     onGoLiveClick: () -> Unit,
     onResetMatchClick: () -> Unit,
+    activeMatch: Match? = null,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -43,7 +47,37 @@ fun HomeScreen(
             style = MaterialTheme.typography.titleSmall,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
         )
-        Spacer(modifier = Modifier.height(48.dp))
+        Spacer(modifier = Modifier.height(32.dp))
+
+        // Active match banner
+        if (activeMatch != null) {
+            Surface(
+                color = MaterialTheme.colorScheme.primaryContainer,
+                shape = MaterialTheme.shapes.medium,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Text(
+                        "● Live",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.error,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        activeMatch.displayTitle,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        "${activeMatch.format.label.substringBefore(" (")} • ${activeMatch.overs} overs",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+
         Button(
             onClick = onCreateMatchClick,
             modifier = Modifier.fillMaxWidth()
@@ -69,7 +103,7 @@ fun HomeScreen(
             modifier = Modifier.fillMaxWidth()
         ) {
             Text(
-                text = "Live Scoring",
+                text = if (activeMatch != null) "Resume Scoring" else "Live Scoring",
                 style = MaterialTheme.typography.titleMedium
             )
         }

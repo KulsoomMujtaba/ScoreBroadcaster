@@ -6,6 +6,8 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Scaffold
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
@@ -14,12 +16,15 @@ import androidx.navigation.compose.rememberNavController
 import com.example.scorebroadcaster.ui.CameraPreviewScreen
 import com.example.scorebroadcaster.ui.CreateMatchScreen
 import com.example.scorebroadcaster.ui.HomeScreen
+import com.example.scorebroadcaster.ui.MatchSummaryScreen
 import com.example.scorebroadcaster.ui.MyMatchesScreen
+import com.example.scorebroadcaster.ui.PlayerSetupScreen
 import com.example.scorebroadcaster.ui.ScoringScreen
 import com.example.scorebroadcaster.ui.StreamPreviewScreen
 import com.example.scorebroadcaster.ui.StreamSetupScreen
 import com.example.scorebroadcaster.ui.theme.ScoreBroadcasterTheme
 import com.example.scorebroadcaster.viewmodel.LiveStreamViewModel
+import com.example.scorebroadcaster.viewmodel.MatchSessionViewModel
 import com.example.scorebroadcaster.viewmodel.MatchViewModel
 
 class MainActivity : ComponentActivity() {
@@ -30,23 +35,59 @@ class MainActivity : ComponentActivity() {
             ScoreBroadcasterTheme {
                 val matchViewModel: MatchViewModel = viewModel()
                 val liveStreamViewModel: LiveStreamViewModel = viewModel()
+                val matchSessionViewModel: MatchSessionViewModel = viewModel()
                 val navController = rememberNavController()
+
+                val activeMatch by matchSessionViewModel.activeMatch.collectAsState()
+
                 Scaffold(modifier = Modifier.fillMaxSize()) { _ ->
                     NavHost(navController = navController, startDestination = "home") {
                         composable("home") {
                             HomeScreen(
                                 onCreateMatchClick = { navController.navigate("create_match") },
-                                onMyMatchesClick = { navController.navigate("my_matches") },
+                                onMyMatchesClick = {
+                                    matchSessionViewModel.refresh()
+                                    navController.navigate("my_matches")
+                                },
                                 onLiveScoringClick = { navController.navigate("live_preview") },
                                 onGoLiveClick = { navController.navigate("stream_setup") },
-                                onResetMatchClick = { matchViewModel.resetMatch() }
+                                onResetMatchClick = { matchViewModel.resetMatch() },
+                                activeMatch = activeMatch
                             )
                         }
                         composable("create_match") {
-                            CreateMatchScreen()
+                            CreateMatchScreen(
+                                matchSessionViewModel = matchSessionViewModel,
+                                onNavigateToPlayers = { navController.navigate("player_setup") }
+                            )
+                        }
+                        composable("player_setup") {
+                            PlayerSetupScreen(
+                                matchSessionViewModel = matchSessionViewModel,
+                                onNavigateToSummary = { navController.navigate("match_summary") }
+                            )
+                        }
+                        composable("match_summary") {
+                            MatchSummaryScreen(
+                                matchSessionViewModel = matchSessionViewModel,
+                                matchViewModel = matchViewModel,
+                                onStartMatch = {
+                                    navController.navigate("live_preview") {
+                                        popUpTo("home")
+                                    }
+                                }
+                            )
                         }
                         composable("my_matches") {
-                            MyMatchesScreen()
+                            MyMatchesScreen(
+                                matchSessionViewModel = matchSessionViewModel,
+                                onMatchClick = { match ->
+                                    matchSessionViewModel.setActiveMatch(match)
+                                    matchViewModel.initFromMatch(match)
+                                    navController.navigate("live_preview")
+                                },
+                                onCreateMatchClick = { navController.navigate("create_match") }
+                            )
                         }
                         composable("live_preview") {
                             CameraPreviewScreen(matchViewModel = matchViewModel)
@@ -69,3 +110,4 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
+

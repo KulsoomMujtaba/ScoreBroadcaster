@@ -1,40 +1,150 @@
 package com.example.scorebroadcaster.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.Button
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.scorebroadcaster.data.entity.Match
+import com.example.scorebroadcaster.data.entity.MatchStatus
+import com.example.scorebroadcaster.viewmodel.MatchSessionViewModel
 
-/**
- * Placeholder screen for the My Matches list.
- * Will display past and in-progress matches synced via backend in a future phase.
- */
 @Composable
-fun MyMatchesScreen(modifier: Modifier = Modifier) {
+fun MyMatchesScreen(
+    matchSessionViewModel: MatchSessionViewModel,
+    onMatchClick: (Match) -> Unit,
+    onCreateMatchClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val matches by matchSessionViewModel.matches.collectAsState()
+    val activeMatch by matchSessionViewModel.activeMatch.collectAsState()
+
     Column(
         modifier = modifier
             .fillMaxSize()
-            .padding(32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+            .padding(24.dp)
+    ) {
+        Text("My Matches", style = MaterialTheme.typography.headlineMedium)
+        Spacer(modifier = Modifier.height(16.dp))
+
+        if (matches.isEmpty()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    "No matches yet.",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    "Create your first match to get started.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+                )
+                Spacer(modifier = Modifier.height(24.dp))
+                Button(onClick = onCreateMatchClick) {
+                    Text("Create Match")
+                }
+            }
+        } else {
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(matches, key = { it.id }) { match ->
+                    MatchListItem(
+                        match = match,
+                        isActive = activeMatch?.id == match.id,
+                        onClick = { onMatchClick(match) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MatchListItem(
+    match: Match,
+    isActive: Boolean,
+    onClick: () -> Unit
+) {
+    Surface(
+        tonalElevation = if (isActive) 6.dp else 2.dp,
+        shape = MaterialTheme.shapes.medium,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
+            ) {
+                Text(
+                    match.displayTitle,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f)
+                )
+                StatusChip(status = match.status, isActive = isActive)
+            }
+            Spacer(modifier = Modifier.height(4.dp))
+            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+            Text(
+                "${match.format.label.substringBefore(" (")} • ${match.overs} overs",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+            )
+            if (match.status == MatchStatus.IN_PROGRESS) {
+                Text(
+                    "Scoring in progress — tap to resume",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun StatusChip(status: MatchStatus, isActive: Boolean) {
+    val label = if (isActive && status == MatchStatus.IN_PROGRESS) "● Live" else status.label
+    val color = when {
+        isActive && status == MatchStatus.IN_PROGRESS -> MaterialTheme.colorScheme.error
+        status == MatchStatus.COMPLETED -> MaterialTheme.colorScheme.outline
+        else -> MaterialTheme.colorScheme.primary
+    }
+    Surface(
+        color = color.copy(alpha = 0.12f),
+        shape = MaterialTheme.shapes.extraSmall
     ) {
         Text(
-            text = "My Matches",
-            style = MaterialTheme.typography.headlineMedium
-        )
-        Spacer(modifier = Modifier.height(16.dp))
-        Text(
-            text = "Coming soon — browse and resume your saved matches.",
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+            label,
+            style = MaterialTheme.typography.labelSmall,
+            color = color,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
         )
     }
 }
