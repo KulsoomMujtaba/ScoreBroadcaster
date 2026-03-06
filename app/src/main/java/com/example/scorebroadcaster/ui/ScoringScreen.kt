@@ -1,5 +1,6 @@
 package com.example.scorebroadcaster.ui
 
+import android.util.Log
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -217,16 +218,19 @@ fun ScoringScreen(
 
         // --- Pending action dialogs (rendered on top of everything) ---
         when (val action = console.pendingAction) {
-            is PendingAction.SelectNextBatter -> SelectPlayerDialog(
-                title = "Select Next Batter",
-                players = action.availablePlayers,
-                onPlayerSelected = { matchViewModel.selectNextBatter(it) },
-                onAddNewPlayer = { name ->
-                    val newPlayer = Player(name = name)
-                    matchViewModel.addPlayerToTeam(newPlayer, addToBattingTeam = true)
-                    matchViewModel.selectNextBatter(newPlayer)
-                }
-            )
+            is PendingAction.SelectNextBatter -> {
+                Log.d("WicketFlow", "Next batter dialog shown (${action.availablePlayers.size} players available)")
+                SelectPlayerDialog(
+                    title = "Select Next Batter",
+                    players = action.availablePlayers,
+                    onPlayerSelected = { matchViewModel.selectNextBatter(it) },
+                    onAddNewPlayer = { name ->
+                        val newPlayer = Player(name = name)
+                        matchViewModel.addPlayerToTeam(newPlayer, addToBattingTeam = true)
+                        matchViewModel.selectNextBatter(newPlayer)
+                    }
+                )
+            }
             is PendingAction.SelectBowler -> SelectPlayerDialog(
                 title = "Select Bowler",
                 players = action.availablePlayers,
