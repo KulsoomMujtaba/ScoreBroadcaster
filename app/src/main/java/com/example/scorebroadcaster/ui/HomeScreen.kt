@@ -26,6 +26,7 @@ fun HomeScreen(
     onCreateMatchClick: () -> Unit,
     onMyMatchesClick: () -> Unit,
     onLiveScoringClick: () -> Unit,
+    onCameraPreviewClick: () -> Unit,
     onGoLiveClick: () -> Unit,
     onResetMatchClick: () -> Unit,
     activeMatch: Match? = null,
@@ -104,6 +105,16 @@ fun HomeScreen(
         ) {
             Text(
                 text = if (activeMatch != null) "Resume Scoring" else "Live Scoring",
+                style = MaterialTheme.typography.titleMedium
+            )
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+        OutlinedButton(
+            onClick = onCameraPreviewClick,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(
+                text = "Camera Preview",
                 style = MaterialTheme.typography.titleMedium
             )
         }
