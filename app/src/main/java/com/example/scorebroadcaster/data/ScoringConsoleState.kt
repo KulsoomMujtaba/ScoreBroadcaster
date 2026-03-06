@@ -23,8 +23,16 @@ sealed class PendingAction {
     /** Prompt the scorer to pick the next bowler (triggered at end of each over). */
     data class SelectBowler(val availablePlayers: List<Player>) : PendingAction()
 
-    /** Prompt the scorer to pick the next batter (triggered after a wicket). */
-    data class SelectNextBatter(val availablePlayers: List<Player>) : PendingAction()
+    /**
+     * Prompt the scorer to pick the next batter (triggered after a wicket).
+     *
+     * @param replacingStriker true when the striker was dismissed (new batter comes in at
+     *   striker's end); false when the non-striker was dismissed (e.g. run out).
+     */
+    data class SelectNextBatter(
+        val availablePlayers: List<Player>,
+        val replacingStriker: Boolean = true
+    ) : PendingAction()
 }
 
 /**

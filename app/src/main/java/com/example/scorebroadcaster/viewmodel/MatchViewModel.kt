@@ -42,7 +42,7 @@ class MatchViewModel : ViewModel() {
 
     fun addEvent(event: ScoreEvent) {
         if (event is ScoreEvent.Wicket) {
-            Log.d("WicketFlow", "Wicket button tapped")
+            Log.d("WicketFlow", "Wicket recorded: ${event.dismissal.dismissalType} — ${event.dismissal.batter.name}")
         }
         val prevState = _state.value
         _events.value = _events.value + event
@@ -62,6 +62,10 @@ class MatchViewModel : ViewModel() {
         val striker = console.striker ?: return
 
         // --- Update striker batting entry ---
+        // For Wicket: determine if the striker or non-striker was dismissed.
+        val strikerIsOut = event is ScoreEvent.Wicket &&
+                event.dismissal.batter.id == striker.id
+
         val updatedStrikerEntry = console.strikerEntry?.let { entry ->
             when (event) {
                 is ScoreEvent.Run -> entry.copy(
@@ -70,12 +74,24 @@ class MatchViewModel : ViewModel() {
                     fours = if (event.runs == 4) entry.fours + 1 else entry.fours,
                     sixes = if (event.runs == 6) entry.sixes + 1 else entry.sixes
                 )
-                is ScoreEvent.Wicket -> entry.copy(balls = entry.balls + 1, isOut = true)
+                is ScoreEvent.Wicket -> if (strikerIsOut) {
+                    // Striker is out — increment balls, mark dismissed
+                    entry.copy(balls = entry.balls + 1, isOut = true, dismissal = event.dismissal)
+                } else {
+                    // Non-striker is out on a run out — striker still faced the ball
+                    entry.copy(balls = entry.balls + 1)
+                }
                 is ScoreEvent.NoBall -> entry.copy(runs = entry.runs + event.runs)
                 is ScoreEvent.Bye, is ScoreEvent.LegBye -> entry.copy(balls = entry.balls + 1)
                 else -> entry // Wide: no batter-ball count change
             }
         }
+
+        // --- Update non-striker batting entry when non-striker is out (run out) ---
+        // Only computed (non-null) when the non-striker was actually dismissed.
+        val updatedNonStrikerEntry: BattingEntry? = if (event is ScoreEvent.Wicket && !strikerIsOut) {
+            console.nonStrikerEntry?.copy(isOut = true, dismissal = event.dismissal)
+        } else null
 
         // --- Update current bowler entry ---
         val updatedBowlerEntry = console.currentBowlerEntry?.let { entry ->
@@ -88,7 +104,12 @@ class MatchViewModel : ViewModel() {
                 }
                 is ScoreEvent.Wicket -> {
                     val (o, b) = incrementBall(entry.overs, entry.balls)
-                    entry.copy(wickets = entry.wickets + 1, overs = o, balls = b)
+                    // Only credit the bowler with a wicket if the dismissal type warrants it
+                    if (event.dismissal.bowlerCredited) {
+                        entry.copy(wickets = entry.wickets + 1, overs = o, balls = b)
+                    } else {
+                        entry.copy(overs = o, balls = b)
+                    }
                 }
                 is ScoreEvent.Bye -> {
                     val (o, b) = incrementBall(entry.overs, entry.balls)
@@ -102,11 +123,20 @@ class MatchViewModel : ViewModel() {
         }
 
         // --- Propagate to aggregate lists ---
-        val updatedAllBatting = if (updatedStrikerEntry != null) {
-            console.allBattingEntries.map {
-                if (it.player.id == striker.id) updatedStrikerEntry else it
-            }
-        } else console.allBattingEntries
+        // Update the striker entry, then also update the non-striker entry if they were run out.
+        val updatedAllBatting = run {
+            val withStriker = if (updatedStrikerEntry != null) {
+                console.allBattingEntries.map {
+                    if (it.player.id == striker.id) updatedStrikerEntry else it
+                }
+            } else console.allBattingEntries
+
+            if (updatedNonStrikerEntry != null && console.nonStriker != null) {
+                withStriker.map {
+                    if (it.player.id == console.nonStriker.id) updatedNonStrikerEntry else it
+                }
+            } else withStriker
+        }
 
         val updatedAllBowling = if (updatedBowlerEntry != null && console.currentBowler != null) {
             console.allBowlingEntries.map {
@@ -128,11 +158,13 @@ class MatchViewModel : ViewModel() {
             else -> false
         }
         // Strike rotation rules:
-        //  - Wicket: new batter always comes in at striker's position (null = waiting for selection).
+        //  - Striker wicket: new batter comes in at striker's end (striker = null).
+        //  - Non-striker wicket (e.g. run out): new batter comes in at non-striker's end.
         //  - Over end + odd runs: rotations cancel each other out (no net change).
         //  - Over end OR odd runs (not both): rotate striker and non-striker.
         val (rotatedStriker, rotatedNonStriker) = when {
-            wicketFell -> Pair(null, console.nonStriker)
+            wicketFell && strikerIsOut -> Pair(null, console.nonStriker)
+            wicketFell && !strikerIsOut -> Pair(console.striker, null)
             overEnded && oddRuns -> Pair(console.striker, console.nonStriker)
             overEnded || oddRuns -> Pair(console.nonStriker, console.striker)
             else -> Pair(console.striker, console.nonStriker)
@@ -142,14 +174,11 @@ class MatchViewModel : ViewModel() {
         val (pendingAction, bowlerChangePending) = when {
             wicketFell -> {
                 // All out when 10 wickets have fallen (only 1 batter left – can't form a partnership).
-                // Previously this used availableBatters().isEmpty() as the all-out guard, but that
-                // returned false whenever no players were pre-registered in the team, causing the
-                // SelectNextBatter dialog to never appear. Use the actual wickets count instead.
                 val allOut = newState.wickets >= 10
                 if (!allOut) {
                     val remaining = availableBatters()
-                    Log.d("WicketFlow", "pendingAction set to SelectNextBatter (${remaining.size} available players)")
-                    Pair(PendingAction.SelectNextBatter(remaining), overEnded)
+                    Log.d("WicketFlow", "pendingAction set to SelectNextBatter (${remaining.size} available players, replacingStriker=$strikerIsOut)")
+                    Pair(PendingAction.SelectNextBatter(remaining, replacingStriker = strikerIsOut), overEnded)
                 } else {
                     // All out — no pending action; innings ends naturally
                     Pair(null, false)
@@ -220,6 +249,8 @@ class MatchViewModel : ViewModel() {
     fun selectNextBatter(player: Player) {
         Log.d("WicketFlow", "Next batter selected: ${player.name}")
         val console = _consoleState.value
+        val pendingSelect = console.pendingAction as? PendingAction.SelectNextBatter
+        val replacingStriker = pendingSelect?.replacingStriker ?: true
         val newEntry = BattingEntry(player = player)
         val updatedAll = console.allBattingEntries + newEntry
         // If the over also ended when the wicket fell, chain into a bowler-change dialog.
@@ -227,8 +258,10 @@ class MatchViewModel : ViewModel() {
             PendingAction.SelectBowler(availableBowlers())
         } else null
         _consoleState.value = console.copy(
-            striker = player,
-            strikerEntry = newEntry,
+            striker = if (replacingStriker) player else console.striker,
+            nonStriker = if (replacingStriker) console.nonStriker else player,
+            strikerEntry = if (replacingStriker) newEntry else console.strikerEntry,
+            nonStrikerEntry = if (replacingStriker) console.nonStrikerEntry else newEntry,
             allBattingEntries = updatedAll,
             pendingAction = nextPending,
             bowlerChangePending = false

@@ -47,6 +47,8 @@ import com.example.scorebroadcaster.data.ScoreEvent
 import com.example.scorebroadcaster.data.ScoringConsoleState
 import com.example.scorebroadcaster.data.entity.BattingEntry
 import com.example.scorebroadcaster.data.entity.BowlingEntry
+import com.example.scorebroadcaster.data.entity.DismissalDetail
+import com.example.scorebroadcaster.data.entity.DismissalType
 import com.example.scorebroadcaster.data.entity.Match
 import com.example.scorebroadcaster.data.entity.Player
 import com.example.scorebroadcaster.data.entity.Team
@@ -143,11 +145,32 @@ fun ScoringScreen(
             val scoringEnabled = (console.phase == InningsPhase.FIRST_INNINGS ||
                     console.phase == InningsPhase.SECOND_INNINGS) &&
                     console.pendingAction == null
+            // Wicket details dialog state — shown before dispatching the Wicket event
+            var showWicketDialog by remember { mutableStateOf(false) }
             ScoringButtonsSection(
                 onEvent = { matchViewModel.addEvent(it) },
                 onUndo = { matchViewModel.undo() },
+                onWicket = { showWicketDialog = true },
                 enabled = scoringEnabled
             )
+            if (showWicketDialog) {
+                val bowlingTeamPlayers = when {
+                    activeMatch == null -> emptyList()
+                    console.inningsNumber == 1 -> activeMatch.bowlingFirst.players
+                    else -> activeMatch.battingFirst.players
+                }
+                WicketDetailsDialog(
+                    striker = console.striker,
+                    nonStriker = console.nonStriker,
+                    bowlingTeamPlayers = bowlingTeamPlayers,
+                    currentBowler = console.currentBowler,
+                    onConfirm = { dismissal ->
+                        showWicketDialog = false
+                        matchViewModel.addEvent(ScoreEvent.Wicket(dismissal))
+                    },
+                    onDismiss = { showWicketDialog = false }
+                )
+            }
             Spacer(modifier = Modifier.height(8.dp))
 
             // --- Innings / match control ---
@@ -219,9 +242,10 @@ fun ScoringScreen(
         // --- Pending action dialogs (rendered on top of everything) ---
         when (val action = console.pendingAction) {
             is PendingAction.SelectNextBatter -> {
-                Log.d("WicketFlow", "Next batter dialog shown (${action.availablePlayers.size} players available)")
+                val title = if (action.replacingStriker) "Select Next Batter" else "Select Next Non-Striker"
+                Log.d("WicketFlow", "Next batter dialog shown (${action.availablePlayers.size} players available, replacingStriker=${action.replacingStriker})")
                 SelectPlayerDialog(
-                    title = "Select Next Batter",
+                    title = title,
                     players = action.availablePlayers,
                     onPlayerSelected = { matchViewModel.selectNextBatter(it) },
                     onAddNewPlayer = { name ->
@@ -516,6 +540,7 @@ private fun BowlerRow(entry: BowlingEntry) {
 private fun ScoringButtonsSection(
     onEvent: (ScoreEvent) -> Unit,
     onUndo: () -> Unit,
+    onWicket: () -> Unit,
     enabled: Boolean
 ) {
     // Run buttons: 0 1 2 3 4 6
@@ -531,7 +556,7 @@ private fun ScoringButtonsSection(
     // Wicket / Wide / No Ball / Bye / Leg Bye
     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         Button(
-            onClick = { onEvent(ScoreEvent.Wicket) },
+            onClick = onWicket,
             enabled = enabled,
             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
         ) { Text("W") }
@@ -702,6 +727,149 @@ private fun SelectPlayerDialog(
             }
         },
         confirmButton = {}
+    )
+}
+
+// =============================================================================
+// Wicket details dialog
+// =============================================================================
+
+/**
+ * Dialog shown when the scorer taps the W (Wicket) button.
+ *
+ * Lets the scorer specify:
+ * - Who got out (striker or non-striker)
+ * - How they were dismissed (dismissal type)
+ * - Optional fielder involved (catcher, wicketkeeper, or run-out fielder)
+ */
+@Composable
+private fun WicketDetailsDialog(
+    striker: Player?,
+    nonStriker: Player?,
+    bowlingTeamPlayers: List<Player>,
+    currentBowler: Player?,
+    onConfirm: (DismissalDetail) -> Unit,
+    onDismiss: () -> Unit
+) {
+    // Default to striker out (the most common case)
+    var batterOut by remember { mutableStateOf(striker ?: nonStriker) }
+    var selectedType by remember { mutableStateOf(DismissalType.BOWLED) }
+    var selectedFielder by remember { mutableStateOf<Player?>(null) }
+
+    // Fielder is relevant for Caught, Stumped, and Run Out dismissals.
+    val requiresFielder = selectedType in listOf(
+        DismissalType.CAUGHT, DismissalType.STUMPED, DismissalType.RUN_OUT
+    )
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Wicket Details") },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.verticalScroll(rememberScrollState())
+            ) {
+                // --- Who got out ---
+                Text("Who got out?", style = MaterialTheme.typography.labelMedium)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (striker != null) {
+                        FilterChip(
+                            selected = batterOut?.id == striker.id,
+                            onClick = { batterOut = striker },
+                            label = { Text("${striker.name} (striker)") }
+                        )
+                    }
+                    if (nonStriker != null) {
+                        FilterChip(
+                            selected = batterOut?.id == nonStriker.id,
+                            onClick = { batterOut = nonStriker },
+                            label = { Text("${nonStriker.name} (non-striker)") }
+                        )
+                    }
+                }
+
+                HorizontalDivider()
+
+                // --- Dismissal type ---
+                Text("How?", style = MaterialTheme.typography.labelMedium)
+                // Two rows of chips for the 6 dismissal types
+                val types = DismissalType.entries
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        types.take(3).forEach { type ->
+                            FilterChip(
+                                selected = selectedType == type,
+                                onClick = {
+                                    selectedType = type
+                                    selectedFielder = null
+                                },
+                                label = { Text(type.label) }
+                            )
+                        }
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        types.drop(3).forEach { type ->
+                            FilterChip(
+                                selected = selectedType == type,
+                                onClick = {
+                                    selectedType = type
+                                    selectedFielder = null
+                                },
+                                label = { Text(type.label) }
+                            )
+                        }
+                    }
+                }
+
+                // --- Fielder selection (for Caught / Stumped / Run Out) ---
+                if (requiresFielder) {
+                    HorizontalDivider()
+                    val fielderLabel = when (selectedType) {
+                        DismissalType.CAUGHT -> "Catcher"
+                        DismissalType.STUMPED -> "Wicketkeeper"
+                        DismissalType.RUN_OUT -> "Fielder (optional)"
+                        else -> "Fielder"
+                    }
+                    Text(fielderLabel, style = MaterialTheme.typography.labelMedium)
+                    if (bowlingTeamPlayers.isEmpty()) {
+                        Text(
+                            "No fielding team players registered.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        )
+                    } else {
+                        bowlingTeamPlayers.forEach { player ->
+                            FilterChip(
+                                selected = selectedFielder?.id == player.id,
+                                onClick = {
+                                    selectedFielder = if (selectedFielder?.id == player.id) null else player
+                                },
+                                label = { Text(player.name) }
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val out = batterOut ?: return@Button
+                    onConfirm(
+                        DismissalDetail(
+                            batter = out,
+                            dismissalType = selectedType,
+                            fielder = if (requiresFielder) selectedFielder else null,
+                            bowler = currentBowler
+                        )
+                    )
+                },
+                enabled = batterOut != null
+            ) { Text("Confirm") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
     )
 }
 
