@@ -40,6 +40,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.scorebroadcaster.data.ScoreEvent
 import com.example.scorebroadcaster.viewmodel.MatchViewModel
+import com.example.scorebroadcaster.data.entity.DismissalDetail
 
 /**
  * A full-screen camera preview with a [ScoreboardOverlay] anchored to the bottom and a live
@@ -61,6 +62,8 @@ fun CameraPreviewScreen(
     modifier: Modifier = Modifier
 ) {
     val state by matchViewModel.state.collectAsStateWithLifecycle()
+    val console by matchViewModel.consoleState.collectAsStateWithLifecycle()
+    val activeMatch by matchViewModel.activeMatch.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
 
@@ -145,11 +148,31 @@ fun CameraPreviewScreen(
         )
 
         // Scoring controls panel overlaid at the top of the camera preview
+        var showWicketDialog by remember { mutableStateOf(false) }
         ScoringControlsPanel(
             onEvent = { matchViewModel.addEvent(it) },
+            onWicket = { showWicketDialog = true },
             onUndo = { matchViewModel.undo() },
             modifier = Modifier.align(Alignment.TopCenter)
         )
+        if (showWicketDialog) {
+            val bowlingTeamPlayers = if (console.inningsNumber == 1) {
+                activeMatch?.bowlingFirst?.players.orEmpty()
+            } else {
+                activeMatch?.battingFirst?.players.orEmpty()
+            }
+            WicketDetailsDialog(
+                striker = console.striker,
+                nonStriker = console.nonStriker,
+                bowlingTeamPlayers = bowlingTeamPlayers,
+                currentBowler = console.currentBowler,
+                onConfirm = { dismissal: DismissalDetail ->
+                    showWicketDialog = false
+                    matchViewModel.addEvent(ScoreEvent.Wicket(dismissal))
+                },
+                onDismiss = { showWicketDialog = false }
+            )
+        }
     }
 }
 
@@ -163,6 +186,7 @@ fun CameraPreviewScreen(
 @Composable
 private fun ScoringControlsPanel(
     onEvent: (ScoreEvent) -> Unit,
+    onWicket: () -> Unit,
     onUndo: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -183,7 +207,7 @@ private fun ScoringControlsPanel(
             }
         }
         Button(
-            onClick = { onEvent(ScoreEvent.Wicket) },
+            onClick = onWicket,
             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFCC0000)),
             contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 4.dp)
         ) {

@@ -207,8 +207,7 @@ class MainActivity : ComponentActivity() {
                         composable("scorecard") {
                             ScorecardScreen(
                                 matchViewModel = matchViewModel,
-                                matchSessionViewModel = matchSessionViewModel,
-                                onBack = { navController.popBackStack() }
+                                matchSessionViewModel = matchSessionViewModel
                             )
                         }
 

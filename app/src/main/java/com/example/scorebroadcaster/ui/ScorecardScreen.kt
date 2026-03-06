@@ -10,11 +10,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -38,7 +34,6 @@ import com.example.scorebroadcaster.viewmodel.MatchViewModel
 fun ScorecardScreen(
     matchViewModel: MatchViewModel,
     matchSessionViewModel: MatchSessionViewModel,
-    onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val activeMatch by matchSessionViewModel.activeMatch.collectAsState()
@@ -51,24 +46,6 @@ fun ScorecardScreen(
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
     ) {
-        // --- Top bar ---
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-            }
-            Text(
-                text = "Scorecard",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(start = 4.dp)
-            )
-        }
-
         val match = activeMatch ?: scoringMatch
         if (match == null || console.phase == InningsPhase.SETUP) {
             Column(
