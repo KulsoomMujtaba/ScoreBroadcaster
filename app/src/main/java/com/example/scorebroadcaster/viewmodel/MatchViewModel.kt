@@ -10,7 +10,8 @@ import com.example.scorebroadcaster.data.entity.BattingEntry
 import com.example.scorebroadcaster.data.entity.BowlingEntry
 import com.example.scorebroadcaster.data.entity.Match
 import com.example.scorebroadcaster.data.entity.Player
-import com.example.scorebroadcaster.domain.reduce
+import com.example.scorebroadcaster.data.entity.Team
+import com.example.scorebroadcaster.repository.MatchRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -238,6 +239,31 @@ class MatchViewModel : ViewModel() {
     }
 
     // ---------------------------------------------------------------------------
+    // Player management — add during active match
+    // ---------------------------------------------------------------------------
+
+    /**
+     * Add a [player] to a team in the active match after the match has already started.
+     *
+     * @param player The new player to add.
+     * @param addToBattingTeam If true, adds to the currently batting team; otherwise to the bowling team.
+     *
+     * Both [_activeMatch] (the in-memory ViewModel state) and [MatchRepository] are updated so
+     * that the live scoring session and the match list remain consistent.
+     */
+    fun addPlayerToTeam(player: Player, addToBattingTeam: Boolean) {
+        val match = _activeMatch.value ?: return
+        val console = _consoleState.value
+        val battingTeam = if (console.inningsNumber == 1) match.battingFirst else match.bowlingFirst
+        val bowlingTeam = if (console.inningsNumber == 1) match.bowlingFirst else match.battingFirst
+        val targetTeam = if (addToBattingTeam) battingTeam else bowlingTeam
+        val updatedTeam = targetTeam.copy(players = targetTeam.players + player)
+        val updatedMatch = match.updateTeamRef(targetTeam, updatedTeam)
+        _activeMatch.value = updatedMatch
+        MatchRepository.updateMatch(updatedMatch)
+    }
+
+    // ---------------------------------------------------------------------------
     // Innings management
     // ---------------------------------------------------------------------------
 
@@ -352,4 +378,13 @@ class MatchViewModel : ViewModel() {
 
     private fun incrementBall(overs: Int, balls: Int): Pair<Int, Int> =
         if (balls + 1 >= 6) Pair(overs + 1, 0) else Pair(overs, balls + 1)
+
+    /** Replace all references to [old] team with [updated] inside the match. */
+    private fun Match.updateTeamRef(old: Team, updated: Team): Match = copy(
+        teamA = if (teamA.id == old.id) updated else teamA,
+        teamB = if (teamB.id == old.id) updated else teamB,
+        battingFirst = if (battingFirst.id == old.id) updated else battingFirst,
+        bowlingFirst = if (bowlingFirst.id == old.id) updated else bowlingFirst,
+        tossWinner = if (tossWinner.id == old.id) updated else tossWinner
+    )
 }

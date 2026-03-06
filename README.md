@@ -33,8 +33,8 @@ The core promise is simple: open the app, start a match, score every ball, and s
 | Match-context header (title, format, innings, teams) | ✅ Done | `ScoringScreen` |
 | Batter / bowler tracking with live stats | ✅ Done | `ScoringScreen` |
 | Opening batters & bowler setup dialog | ✅ Done | `ScoringScreen` |
-| Wicket → select next batter dialog | ✅ Done | `ScoringScreen` |
-| Over-end → select new bowler dialog | ✅ Done | `ScoringScreen` |
+| Wicket → select next batter dialog (+ add new player inline) | ✅ Done | `ScoringScreen` |
+| Over-end → select new bowler dialog (+ add new player inline) | ✅ Done | `ScoringScreen` |
 | Innings management (end 1st innings, start 2nd) | ✅ Done | `ScoringScreen` / `MatchViewModel` |
 | Target / chase info panel (2nd innings) | ✅ Done | `ScoringScreen` |
 | Match-complete result banner | ✅ Done | `ScoringScreen` |
@@ -47,6 +47,8 @@ The core promise is simple: open the app, start a match, score every ball, and s
 | Player setup | ✅ Done | `PlayerSetupScreen` |
 | Pre-match summary + Start Match | ✅ Done | `MatchSummaryScreen` |
 | My Matches (local in-memory list) | ✅ Done | `MyMatchesScreen` |
+| Add player after match start | ✅ Done | `ScoringScreen`, `MatchDetailsScreen` |
+| Saved teams (create, view, reuse) | ✅ Done | `SavedTeamsScreen`, `CreateMatchScreen` |
 | Domain entities (Team, Player, Match, …) | ✅ Done | `data/entity/` |
 | Local in-memory repository | ✅ Done | `repository/MatchRepository` |
 | Match session management | ✅ Done | `MatchSessionViewModel` |
@@ -122,28 +124,32 @@ com.example.scorebroadcaster/
 │       ├── MatchStatus.kt     # NOT_STARTED, IN_PROGRESS, INNINGS_BREAK, COMPLETED
 │       ├── TossDecision.kt    # BAT / BOWL
 │       ├── BattingEntry.kt
-│       └── BowlingEntry.kt
+│       ├── BowlingEntry.kt
+│       └── SavedTeam.kt       # ← Phase 4: reusable team template
 ├── domain/           # Pure business logic: ScoreReducer
 ├── repository/       # ← Phase 2: local in-memory repository
-│   └── MatchRepository.kt
+│   ├── MatchRepository.kt
+│   └── SavedTeamRepository.kt # ← Phase 4
 ├── streaming/        # RTMP streaming: RtmpLiveStreamer, ScoreboardOverlayRenderer
 ├── ui/               # Compose screens and theme
 │   ├── theme/        # Material3 theme (Color, Type, Theme)
 │   ├── HomeScreen.kt              ← Phase 2: active-match banner
-│   ├── CreateMatchScreen.kt       ← Phase 2: real form
+│   ├── CreateMatchScreen.kt       ← Phase 4: saved-team picker added
 │   ├── PlayerSetupScreen.kt       ← Phase 2: new
 │   ├── MatchSummaryScreen.kt      ← Phase 2: new
 │   ├── MyMatchesScreen.kt         ← Phase 2: real in-memory list
+│   ├── MatchDetailsScreen.kt      ← Phase 4: add-player button
+│   ├── SavedTeamsScreen.kt        ← Phase 4: new
 │   ├── CameraPreviewScreen.kt
-│   ├── ScoringScreen.kt
+│   ├── ScoringScreen.kt           ← Phase 4: wicket/bowler add-new-player + add-player button
 │   ├── ScoreboardOverlay.kt
 │   ├── StreamSetupScreen.kt
 │   └── StreamPreviewScreen.kt
 ├── viewmodel/
-│   ├── MatchViewModel.kt          ← Phase 2: initFromMatch() added
-│   ├── MatchSessionViewModel.kt   ← Phase 2: new
+│   ├── MatchViewModel.kt          ← Phase 4: addPlayerToTeam() added
+│   ├── MatchSessionViewModel.kt   ← Phase 4: savedTeams CRUD added
 │   └── LiveStreamViewModel.kt
-└── MainActivity.kt               ← Phase 2: new routes wired
+└── MainActivity.kt               ← Phase 4: saved_teams route added
 ```
 
 ### Event-based Scoring Engine (ScoreEvent Reducer Pattern)
@@ -156,6 +162,59 @@ Scoring is modelled as an append-only event log:
 ---
 
 ## Development Log
+
+### 2026-03-06 – Phase 4: Wicket Replacement Flow, Add-Player After Start, and Saved Teams
+
+**Feature:** Improve scorer realism with mid-match player management and reusable saved teams.
+
+**Files created:**
+| File | Action |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/data/entity/SavedTeam.kt` | New — `SavedTeam` data class (id, name, players list) |
+| `app/src/main/java/com/example/scorebroadcaster/repository/SavedTeamRepository.kt` | New — in-memory repository for saved teams |
+| `app/src/main/java/com/example/scorebroadcaster/ui/SavedTeamsScreen.kt` | New — list/create saved teams UI; also exports `CreateSavedTeamDialog` and `SavedTeamPickerDialog` |
+
+**Files modified:**
+| File | Action |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/viewmodel/MatchViewModel.kt` | Added `addPlayerToTeam(player, addToBattingTeam)` and private `Match.updateTeamRef()` helper |
+| `app/src/main/java/com/example/scorebroadcaster/viewmodel/MatchSessionViewModel.kt` | Added saved-team CRUD (`addSavedTeam`, `removeSavedTeam`, `savedTeams: StateFlow`) |
+| `app/src/main/java/com/example/scorebroadcaster/ui/ScoringScreen.kt` | `SelectPlayerDialog` extended with optional `onAddNewPlayer` callback; new `AddPlayerToMatchDialog`; "＋ Add player to team" `TextButton` shown during innings |
+| `app/src/main/java/com/example/scorebroadcaster/ui/CreateMatchScreen.kt` | Added optional "Saved" button next to each team name field; `SavedTeamPickerDialog` wired up; players pre-filled when a saved team is selected |
+| `app/src/main/java/com/example/scorebroadcaster/ui/MatchDetailsScreen.kt` | Added `onAddPlayer` parameter to `MatchActionButtons`; "＋ Add Player to Team" outlined button; `AddPlayerToTeamDialog` composable |
+| `app/src/main/java/com/example/scorebroadcaster/ui/AppShell.kt` | Added "Saved Teams" navigation drawer item; `topBarTitle` mapping for `saved_teams` route |
+| `app/src/main/java/com/example/scorebroadcaster/MainActivity.kt` | Added `saved_teams` composable route |
+| `README.md` | Updated feature table; added this log entry |
+
+**What was added:**
+
+**Wicket replacement flow improvement:**
+- `SelectPlayerDialog` (used for both wicket-replacement and bowler-change) now accepts an optional `onAddNewPlayer: ((String) -> Unit)?` callback.
+- When the callback is supplied, a divider and "Add new player" inline section appear at the bottom of the dialog: a text field + "Add" button.
+- For the wicket dialog: tapping "Add" calls `MatchViewModel.addPlayerToTeam(newPlayer, addToBattingTeam = true)` to register the player in the team, then immediately calls `selectNextBatter(newPlayer)` to resolve the pending action.
+- For the bowler-change dialog: same pattern, but `addToBattingTeam = false`.
+- No new pending-action variants were introduced; the existing `SelectNextBatter` and `SelectBowler` sealed classes are unchanged.
+
+**Add players after match start:**
+- `MatchViewModel.addPlayerToTeam(player, addToBattingTeam)` — new public method. Determines the correct batting/bowling team for the current innings, appends the player, and updates all `Match` references (teamA, teamB, battingFirst, bowlingFirst, tossWinner) atomically via the private `Match.updateTeamRef()` extension. Also persists via `MatchRepository.updateMatch()`.
+- `ScoringScreen` — a "＋ Add player to team" `TextButton` is shown during `FIRST_INNINGS` and `SECOND_INNINGS`. Tapping it opens `AddPlayerToMatchDialog`, which lets the scorer type a name and pick which team (batting or bowling) via `FilterChip` selectors.
+- `MatchDetailsScreen` — the `MatchActionButtons` section gains an optional "＋ Add Player to Team" `OutlinedButton` wired to `AddPlayerToTeamDialog`.
+
+**Saved teams:**
+- `SavedTeam` entity (`data/entity/SavedTeam.kt`) — a lightweight template holding an id, team name, and player list.
+- `SavedTeamRepository` (`repository/SavedTeamRepository.kt`) — in-memory singleton with `addTeam`, `removeTeam`, `updateTeam`.
+- `MatchSessionViewModel` — new `savedTeams: StateFlow<List<SavedTeam>>`, `addSavedTeam()`, `removeSavedTeam()`.
+- `SavedTeamsScreen` — full-page list of saved teams with delete buttons. A "New Team" button opens `CreateSavedTeamDialog` (name field + dynamic player list, up to 11). Accessible via the navigation drawer.
+- `CreateMatchScreen` — when saved teams exist, a compact "Saved" `OutlinedButton` appears next to each team name field. Tapping it opens `SavedTeamPickerDialog` (a dismissible alert listing saved team names with player count). Selecting a team pre-fills the team name field and copies its players into `teamAPlayers`/`teamBPlayers` local state. Players are deep-copied so the match remains independent of the saved team template.
+
+**Architecture notes:**
+- `ScoreReducer`, `MatchState`, `ScoreEvent` — completely unchanged.
+- `ScoringConsoleState`, `PendingAction`, `InningsPhase` — completely unchanged.
+- `CameraPreviewScreen`, Facebook Live streaming flow — completely unchanged.
+- Create Match flow (3-screen wizard) — unchanged except for the optional saved-team picker added to `CreateMatchScreen`.
+- No Room or backend integration was added in this phase.
+
+---
 
 ### 2026-03-06 – Phase 3: Match-Scoring Console
 
