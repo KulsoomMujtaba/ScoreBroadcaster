@@ -243,13 +243,32 @@ class MatchViewModel : ViewModel() {
 
     /**
      * End the first innings manually.
-     * Saves the first-innings totals, swaps batting/bowling sides, and
-     * resets the event log ready for the second innings.
+     * Saves the first-innings totals and scorecard snapshot, then enters the
+     * [InningsPhase.INNINGS_BREAK] state so the UI can display the target
+     * before the scorer explicitly starts the second innings.
      */
     fun endFirstInnings() {
-        val match = _activeMatch.value ?: return
         val state = _state.value
-        val target = state.runs + 1
+        val console = _consoleState.value
+        _consoleState.value = console.copy(
+            phase = InningsPhase.INNINGS_BREAK,
+            firstInningsRuns = state.runs,
+            firstInningsWickets = state.wickets,
+            firstInningsExtras = state.extras,
+            firstInningsBattingEntries = console.allBattingEntries,
+            firstInningsBowlingEntries = console.allBowlingEntries,
+            target = state.runs + 1
+        )
+    }
+
+    /**
+     * Start the second innings after the innings break.
+     * Swaps batting/bowling sides, resets the event log, and transitions to
+     * [InningsPhase.SETUP] (or [InningsPhase.SECOND_INNINGS] if no players are set).
+     */
+    fun startSecondInnings() {
+        val match = _activeMatch.value ?: return
+        val console = _consoleState.value
 
         currentTeamAName = match.bowlingFirst.name
         currentTeamBName = match.battingFirst.name
@@ -266,9 +285,12 @@ class MatchViewModel : ViewModel() {
             phase = if (hasPlayers) InningsPhase.SETUP else InningsPhase.SECOND_INNINGS,
             battingTeamName = match.bowlingFirst.name,
             bowlingTeamName = match.battingFirst.name,
-            firstInningsRuns = state.runs,
-            firstInningsWickets = state.wickets,
-            target = target
+            firstInningsRuns = console.firstInningsRuns,
+            firstInningsWickets = console.firstInningsWickets,
+            firstInningsExtras = console.firstInningsExtras,
+            firstInningsBattingEntries = console.firstInningsBattingEntries,
+            firstInningsBowlingEntries = console.firstInningsBowlingEntries,
+            target = console.target
         )
     }
 

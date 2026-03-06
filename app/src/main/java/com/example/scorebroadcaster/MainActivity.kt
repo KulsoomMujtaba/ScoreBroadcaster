@@ -16,9 +16,11 @@ import androidx.navigation.compose.rememberNavController
 import com.example.scorebroadcaster.ui.CameraPreviewScreen
 import com.example.scorebroadcaster.ui.CreateMatchScreen
 import com.example.scorebroadcaster.ui.HomeScreen
+import com.example.scorebroadcaster.ui.MatchDetailsScreen
 import com.example.scorebroadcaster.ui.MatchSummaryScreen
 import com.example.scorebroadcaster.ui.MyMatchesScreen
 import com.example.scorebroadcaster.ui.PlayerSetupScreen
+import com.example.scorebroadcaster.ui.ScorecardScreen
 import com.example.scorebroadcaster.ui.ScoringScreen
 import com.example.scorebroadcaster.ui.StreamPreviewScreen
 import com.example.scorebroadcaster.ui.StreamSetupScreen
@@ -95,19 +97,50 @@ class MainActivity : ComponentActivity() {
                         composable("my_matches") {
                             MyMatchesScreen(
                                 matchSessionViewModel = matchSessionViewModel,
+                                matchViewModel = matchViewModel,
                                 onMatchClick = { match ->
                                     matchSessionViewModel.setActiveMatch(match)
-                                    matchViewModel.initFromMatch(match)
-                                    navController.navigate("scoring_only")
+                                    navController.navigate("match_details")
                                 },
                                 onCreateMatchClick = { navController.navigate("create_match") }
+                            )
+                        }
+                        composable("match_details") {
+                            MatchDetailsScreen(
+                                matchSessionViewModel = matchSessionViewModel,
+                                matchViewModel = matchViewModel,
+                                onStartScoring = {
+                                    val match = matchSessionViewModel.activeMatch.value
+                                    if (match != null &&
+                                        matchViewModel.activeMatch.value?.id != match.id
+                                    ) {
+                                        matchViewModel.initFromMatch(match)
+                                    }
+                                    navController.navigate("scoring_only")
+                                },
+                                onCameraPreview = { navController.navigate("live_preview") },
+                                onGoLive = { navController.navigate("stream_setup") },
+                                onViewScorecard = { navController.navigate("scorecard") },
+                                onBack = { navController.popBackStack() }
+                            )
+                        }
+                        composable("scorecard") {
+                            ScorecardScreen(
+                                matchViewModel = matchViewModel,
+                                matchSessionViewModel = matchSessionViewModel,
+                                onBack = { navController.popBackStack() }
                             )
                         }
                         composable("live_preview") {
                             CameraPreviewScreen(matchViewModel = matchViewModel)
                         }
                         composable("scoring_only") {
-                            ScoringScreen(matchViewModel = matchViewModel)
+                            ScoringScreen(
+                                matchViewModel = matchViewModel,
+                                onMatchDetails = { navController.navigate("match_details") },
+                                onViewScorecard = { navController.navigate("scorecard") },
+                                onCameraPreview = { navController.navigate("live_preview") }
+                            )
                         }
                         composable("stream_setup") {
                             StreamSetupScreen(

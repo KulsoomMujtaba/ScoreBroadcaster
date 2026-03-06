@@ -53,6 +53,9 @@ import com.example.scorebroadcaster.viewmodel.MatchViewModel
 @Composable
 fun ScoringScreen(
     matchViewModel: MatchViewModel = viewModel(),
+    onMatchDetails: () -> Unit = {},
+    onViewScorecard: () -> Unit = {},
+    onCameraPreview: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val state by matchViewModel.state.collectAsState()
@@ -77,6 +80,16 @@ fun ScoringScreen(
                 .padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            // --- Quick navigation bar ---
+            if (activeMatch != null) {
+                QuickNavBar(
+                    onMatchDetails = onMatchDetails,
+                    onViewScorecard = onViewScorecard,
+                    onCameraPreview = onCameraPreview
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+
             // --- Match header ---
             if (activeMatch != null) {
                 MatchHeaderSection(match = activeMatch, console = console)
@@ -95,6 +108,19 @@ fun ScoringScreen(
                     overs = state.overs,
                     balls = state.balls,
                     oversLimit = activeMatch.overs
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+
+            // --- Innings break ---
+            if (console.phase == InningsPhase.INNINGS_BREAK && activeMatch != null) {
+                InningsBreakSection(
+                    battingFirstTeam = activeMatch.battingFirst.name,
+                    firstInningsRuns = console.firstInningsRuns,
+                    firstInningsWickets = console.firstInningsWickets,
+                    target = console.target,
+                    onStartSecondInnings = { matchViewModel.startSecondInnings() },
+                    onViewScorecard = onViewScorecard
                 )
                 Spacer(modifier = Modifier.height(8.dp))
             }
@@ -141,6 +167,11 @@ fun ScoringScreen(
                     battingTeamName = state.teamAName,
                     bowlingTeamName = state.teamBName
                 )
+                Spacer(modifier = Modifier.height(12.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = onViewScorecard) { Text("View Scorecard") }
+                    OutlinedButton(onClick = onMatchDetails) { Text("Match Hub") }
+                }
             }
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -687,6 +718,92 @@ private fun PlayerDropdown(
                     text = { Text(player.name) },
                     onClick = { onSelected(player); expanded = false }
                 )
+            }
+        }
+    }
+}
+
+// =============================================================================
+// Quick navigation bar
+// =============================================================================
+
+@Composable
+private fun QuickNavBar(
+    onMatchDetails: () -> Unit,
+    onViewScorecard: () -> Unit,
+    onCameraPreview: () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        OutlinedButton(
+            onClick = onMatchDetails,
+            modifier = Modifier.weight(1f)
+        ) { Text("Match Hub", style = MaterialTheme.typography.labelSmall) }
+        OutlinedButton(
+            onClick = onViewScorecard,
+            modifier = Modifier.weight(1f)
+        ) { Text("Scorecard", style = MaterialTheme.typography.labelSmall) }
+        OutlinedButton(
+            onClick = onCameraPreview,
+            modifier = Modifier.weight(1f)
+        ) { Text("Camera", style = MaterialTheme.typography.labelSmall) }
+    }
+}
+
+// =============================================================================
+// Innings break section
+// =============================================================================
+
+@Composable
+private fun InningsBreakSection(
+    battingFirstTeam: String,
+    firstInningsRuns: Int,
+    firstInningsWickets: Int,
+    target: Int,
+    onStartSecondInnings: () -> Unit,
+    onViewScorecard: () -> Unit
+) {
+    Surface(
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        shape = MaterialTheme.shapes.medium,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = "Innings Break",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = "$battingFirstTeam: $firstInningsRuns/$firstInningsWickets",
+                style = MaterialTheme.typography.bodyLarge
+            )
+            Surface(
+                color = MaterialTheme.colorScheme.primary,
+                shape = MaterialTheme.shapes.small
+            ) {
+                Text(
+                    text = "Target: $target",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onPrimary,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
+                )
+            }
+            Spacer(modifier = Modifier.height(4.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = onStartSecondInnings) {
+                    Text("Start 2nd Innings")
+                }
+                OutlinedButton(onClick = onViewScorecard) {
+                    Text("Scorecard")
+                }
             }
         }
     }

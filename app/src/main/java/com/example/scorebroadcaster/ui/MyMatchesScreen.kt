@@ -23,19 +23,25 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.scorebroadcaster.data.InningsPhase
 import com.example.scorebroadcaster.data.entity.Match
 import com.example.scorebroadcaster.data.entity.MatchStatus
 import com.example.scorebroadcaster.viewmodel.MatchSessionViewModel
+import com.example.scorebroadcaster.viewmodel.MatchViewModel
 
 @Composable
 fun MyMatchesScreen(
     matchSessionViewModel: MatchSessionViewModel,
+    matchViewModel: MatchViewModel,
     onMatchClick: (Match) -> Unit,
     onCreateMatchClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val matches by matchSessionViewModel.matches.collectAsState()
     val activeMatch by matchSessionViewModel.activeMatch.collectAsState()
+    val scoringMatch by matchViewModel.activeMatch.collectAsState()
+    val scoringState by matchViewModel.state.collectAsState()
+    val scoringConsole by matchViewModel.consoleState.collectAsState()
 
     Column(
         modifier = modifier
@@ -72,9 +78,21 @@ fun MyMatchesScreen(
         } else {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(matches, key = { it.id }) { match ->
+                    val isActive = activeMatch?.id == match.id
+                    val isScoringMatch = scoringMatch?.id == match.id
+                    val liveScore: String? = if (isScoringMatch &&
+                        scoringConsole.phase != InningsPhase.SETUP
+                    ) {
+                        val inningsPart = if (scoringConsole.phase == InningsPhase.SECOND_INNINGS ||
+                            scoringConsole.phase == InningsPhase.MATCH_COMPLETE
+                        ) "2nd inn" else "1st inn"
+                        "${scoringState.runs}/${scoringState.wickets}  (${scoringState.overs}.${scoringState.balls})  $inningsPart"
+                    } else null
+
                     MatchListItem(
                         match = match,
-                        isActive = activeMatch?.id == match.id,
+                        isActive = isActive,
+                        liveScore = liveScore,
                         onClick = { onMatchClick(match) }
                     )
                 }
@@ -87,6 +105,7 @@ fun MyMatchesScreen(
 private fun MatchListItem(
     match: Match,
     isActive: Boolean,
+    liveScore: String?,
     onClick: () -> Unit
 ) {
     Surface(
@@ -117,9 +136,22 @@ private fun MatchListItem(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
             )
-            if (match.status == MatchStatus.IN_PROGRESS) {
+            if (liveScore != null) {
+                Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    "Scoring in progress — tap to resume",
+                    liveScore,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Text(
+                    "Tap to open match hub",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
+                )
+            } else if (match.status == MatchStatus.IN_PROGRESS) {
+                Text(
+                    "Tap to open match hub",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.primary
                 )
