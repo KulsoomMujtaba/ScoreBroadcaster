@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -19,9 +20,10 @@ import androidx.compose.ui.unit.dp
 
 @Composable
 fun HomeScreen(
-    onLivePreviewClick: () -> Unit,
-    onScoringOnlyClick: () -> Unit,
-    onStreamSetupClick: () -> Unit,
+    onCreateMatchClick: () -> Unit,
+    onMyMatchesClick: () -> Unit,
+    onLiveScoringClick: () -> Unit,
+    onGoLiveClick: () -> Unit,
     onResetMatchClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -33,36 +35,54 @@ fun HomeScreen(
         verticalArrangement = Arrangement.Center
     ) {
         Text(
-            text = "ScoreBroadcaster",
+            text = "Scored",
             style = MaterialTheme.typography.headlineLarge
+        )
+        Text(
+            text = "Cricket Scoring",
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
         )
         Spacer(modifier = Modifier.height(48.dp))
         Button(
-            onClick = onLivePreviewClick,
+            onClick = onCreateMatchClick,
             modifier = Modifier.fillMaxWidth()
         ) {
             Text(
-                text = "Live Scoring Preview",
+                text = "Create Match",
+                style = MaterialTheme.typography.titleMedium
+            )
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+        OutlinedButton(
+            onClick = onMyMatchesClick,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(
+                text = "My Matches",
                 style = MaterialTheme.typography.titleMedium
             )
         }
         Spacer(modifier = Modifier.height(16.dp))
         Button(
-            onClick = onScoringOnlyClick,
+            onClick = onLiveScoringClick,
             modifier = Modifier.fillMaxWidth()
         ) {
             Text(
-                text = "Scoring Only",
+                text = "Live Scoring",
                 style = MaterialTheme.typography.titleMedium
             )
         }
         Spacer(modifier = Modifier.height(16.dp))
         Button(
-            onClick = onStreamSetupClick,
-            modifier = Modifier.fillMaxWidth()
+            onClick = onGoLiveClick,
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.tertiary
+            )
         ) {
             Text(
-                text = "Stream Setup",
+                text = "Go Live",
                 style = MaterialTheme.typography.titleMedium
             )
         }

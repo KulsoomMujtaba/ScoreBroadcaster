@@ -12,7 +12,9 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.example.scorebroadcaster.ui.CameraPreviewScreen
+import com.example.scorebroadcaster.ui.CreateMatchScreen
 import com.example.scorebroadcaster.ui.HomeScreen
+import com.example.scorebroadcaster.ui.MyMatchesScreen
 import com.example.scorebroadcaster.ui.ScoringScreen
 import com.example.scorebroadcaster.ui.StreamPreviewScreen
 import com.example.scorebroadcaster.ui.StreamSetupScreen
@@ -33,11 +35,18 @@ class MainActivity : ComponentActivity() {
                     NavHost(navController = navController, startDestination = "home") {
                         composable("home") {
                             HomeScreen(
-                                onLivePreviewClick = { navController.navigate("live_preview") },
-                                onScoringOnlyClick = { navController.navigate("scoring_only") },
-                                onStreamSetupClick = { navController.navigate("stream_setup") },
+                                onCreateMatchClick = { navController.navigate("create_match") },
+                                onMyMatchesClick = { navController.navigate("my_matches") },
+                                onLiveScoringClick = { navController.navigate("live_preview") },
+                                onGoLiveClick = { navController.navigate("stream_setup") },
                                 onResetMatchClick = { matchViewModel.resetMatch() }
                             )
+                        }
+                        composable("create_match") {
+                            CreateMatchScreen()
+                        }
+                        composable("my_matches") {
+                            MyMatchesScreen()
                         }
                         composable("live_preview") {
                             CameraPreviewScreen(matchViewModel = matchViewModel)
