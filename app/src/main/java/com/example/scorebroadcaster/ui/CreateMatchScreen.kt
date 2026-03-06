@@ -13,15 +13,18 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -30,6 +33,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -50,11 +54,21 @@ fun CreateMatchScreen(
     modifier: Modifier = Modifier
 ) {
     var title by remember { mutableStateOf("") }
+
+    // Team A state
+    var teamAUseSaved by remember { mutableStateOf(false) }
     var teamAName by remember { mutableStateOf("") }
-    var teamBName by remember { mutableStateOf("") }
-    // Players pre-filled from a saved team (may be empty if user types manually)
+    var teamASelectedSaved by remember { mutableStateOf<SavedTeam?>(null) }
+    // Players pre-filled from a saved team (empty when typing a new team name)
     var teamAPlayers by remember { mutableStateOf<List<Player>>(emptyList()) }
+    var saveTeamA by remember { mutableStateOf(false) }
+
+    // Team B state
+    var teamBUseSaved by remember { mutableStateOf(false) }
+    var teamBName by remember { mutableStateOf("") }
+    var teamBSelectedSaved by remember { mutableStateOf<SavedTeam?>(null) }
     var teamBPlayers by remember { mutableStateOf<List<Player>>(emptyList()) }
+    var saveTeamB by remember { mutableStateOf(false) }
 
     var selectedFormat by remember { mutableStateOf(MatchFormat.T20) }
     var customOvers by remember { mutableStateOf("") }
@@ -67,11 +81,14 @@ fun CreateMatchScreen(
     var showSavedTeamPickerForB by remember { mutableStateOf(false) }
     val savedTeams by matchSessionViewModel.savedTeams.collectAsState()
 
-    val teamALabel = teamAName.ifBlank { "Team A" }
-    val teamBLabel = teamBName.ifBlank { "Team B" }
+    // Derived names used for toss labels and match creation
+    val finalTeamAName = if (teamAUseSaved) teamASelectedSaved?.name.orEmpty() else teamAName.trim()
+    val finalTeamBName = if (teamBUseSaved) teamBSelectedSaved?.name.orEmpty() else teamBName.trim()
+    val teamALabel = finalTeamAName.ifBlank { "Team A" }
+    val teamBLabel = finalTeamBName.ifBlank { "Team B" }
 
-    val teamAError = teamAName.isBlank()
-    val teamBError = teamBName.isBlank()
+    val teamAReady = if (teamAUseSaved) teamASelectedSaved != null else teamAName.isNotBlank()
+    val teamBReady = if (teamBUseSaved) teamBSelectedSaved != null else teamBName.isNotBlank()
     val oversValue = if (selectedFormat == MatchFormat.CUSTOM) {
         customOvers.toIntOrNull() ?: 0
     } else {
@@ -98,43 +115,137 @@ fun CreateMatchScreen(
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next)
         )
 
-        // Team A
+        // ── Team A ────────────────────────────────────────────────────────────
+        HorizontalDivider()
+        Text("Team A", style = MaterialTheme.typography.titleMedium)
+
+        // Mode selector: New Team | Use Saved Team
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(
+                selected = !teamAUseSaved,
+                onClick = {
+                    teamAUseSaved = false
+                    teamASelectedSaved = null
+                    teamAPlayers = emptyList()
+                },
+                label = { Text("New Team") }
+            )
+            FilterChip(
+                selected = teamAUseSaved,
+                onClick = { teamAUseSaved = true },
+                label = { Text("Use Saved Team") }
+            )
+        }
+
+        if (!teamAUseSaved) {
             OutlinedTextField(
                 value = teamAName,
                 onValueChange = { teamAName = it },
                 label = { Text("Team A name *") },
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
-                isError = teamAError && teamAName.isNotEmpty().not(),
+                isError = teamAName.isEmpty(),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next)
             )
-            if (savedTeams.isNotEmpty()) {
-                OutlinedButton(
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Checkbox(
+                    checked = saveTeamA,
+                    onCheckedChange = { saveTeamA = it }
+                )
+                Text(
+                    "Save this team for future matches",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+        } else {
+            when {
+                savedTeams.isEmpty() -> Text(
+                    "No saved teams yet. Create one from Saved Teams in the menu.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                )
+                teamASelectedSaved == null -> OutlinedButton(
                     onClick = { showSavedTeamPickerForA = true },
-                    modifier = Modifier.padding(top = 4.dp)
-                ) { Text("Saved") }
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("Select a saved team…") }
+                else -> teamASelectedSaved?.let { selected ->
+                    SavedTeamChip(
+                        team = selected,
+                        onChangeTap = { showSavedTeamPickerForA = true }
+                    )
+                }
             }
         }
 
-        // Team B
+        // ── Team B ────────────────────────────────────────────────────────────
+        HorizontalDivider()
+        Text("Team B", style = MaterialTheme.typography.titleMedium)
+
+        // Mode selector: New Team | Use Saved Team
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(
+                selected = !teamBUseSaved,
+                onClick = {
+                    teamBUseSaved = false
+                    teamBSelectedSaved = null
+                    teamBPlayers = emptyList()
+                },
+                label = { Text("New Team") }
+            )
+            FilterChip(
+                selected = teamBUseSaved,
+                onClick = { teamBUseSaved = true },
+                label = { Text("Use Saved Team") }
+            )
+        }
+
+        if (!teamBUseSaved) {
             OutlinedTextField(
                 value = teamBName,
                 onValueChange = { teamBName = it },
                 label = { Text("Team B name *") },
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
-                isError = teamBError && teamBName.isNotEmpty().not(),
+                isError = teamBName.isEmpty(),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next)
             )
-            if (savedTeams.isNotEmpty()) {
-                OutlinedButton(
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Checkbox(
+                    checked = saveTeamB,
+                    onCheckedChange = { saveTeamB = it }
+                )
+                Text(
+                    "Save this team for future matches",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+        } else {
+            when {
+                savedTeams.isEmpty() -> Text(
+                    "No saved teams yet. Create one from Saved Teams in the menu.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                )
+                teamBSelectedSaved == null -> OutlinedButton(
                     onClick = { showSavedTeamPickerForB = true },
-                    modifier = Modifier.padding(top = 4.dp)
-                ) { Text("Saved") }
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("Select a saved team…") }
+                else -> teamBSelectedSaved?.let { selected ->
+                    SavedTeamChip(
+                        team = selected,
+                        onChangeTap = { showSavedTeamPickerForB = true }
+                    )
+                }
             }
         }
+
+        HorizontalDivider()
 
         // Match format
         ExposedDropdownMenuBox(
@@ -214,12 +325,14 @@ fun CreateMatchScreen(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        val canProceed = teamAName.isNotBlank() && teamBName.isNotBlank() && !customOversError
+        val canProceed = teamAReady && teamBReady && !customOversError
 
         Button(
             onClick = {
-                val teamA = Team(name = teamAName.trim(), players = teamAPlayers)
-                val teamB = Team(name = teamBName.trim(), players = teamBPlayers)
+                val aPlayers = if (teamAUseSaved) teamAPlayers else emptyList()
+                val bPlayers = if (teamBUseSaved) teamBPlayers else emptyList()
+                val teamA = Team(name = finalTeamAName, players = aPlayers)
+                val teamB = Team(name = finalTeamBName, players = bPlayers)
                 val tossWinner = if (tossWinnerIsA) teamA else teamB
                 val battingFirst = when {
                     tossDecision == TossDecision.BAT -> tossWinner
@@ -238,6 +351,13 @@ fun CreateMatchScreen(
                     battingFirst = battingFirst,
                     bowlingFirst = bowlingFirst
                 )
+                // Persist any newly created teams that the user marked for saving
+                if (!teamAUseSaved && saveTeamA && teamAName.isNotBlank()) {
+                    matchSessionViewModel.addSavedTeam(SavedTeam(name = teamAName.trim()))
+                }
+                if (!teamBUseSaved && saveTeamB && teamBName.isNotBlank()) {
+                    matchSessionViewModel.addSavedTeam(SavedTeam(name = teamBName.trim()))
+                }
                 matchSessionViewModel.setPendingMatch(match)
                 onNavigateToPlayers()
             },
@@ -254,8 +374,8 @@ fun CreateMatchScreen(
             savedTeams = savedTeams,
             onDismiss = { showSavedTeamPickerForA = false },
             onSelect = { saved ->
-                teamAName = saved.name
-                // Copy players so the match is independent of the saved team
+                teamASelectedSaved = saved
+                // Copy players so the match is independent of the saved team template
                 teamAPlayers = saved.players.map { it.copy() }
                 showSavedTeamPickerForA = false
             }
@@ -266,11 +386,49 @@ fun CreateMatchScreen(
             savedTeams = savedTeams,
             onDismiss = { showSavedTeamPickerForB = false },
             onSelect = { saved ->
-                teamBName = saved.name
+                teamBSelectedSaved = saved
                 teamBPlayers = saved.players.map { it.copy() }
                 showSavedTeamPickerForB = false
             }
         )
+    }
+}
+
+// =============================================================================
+// Selected saved-team chip – shown after a saved team has been chosen
+// =============================================================================
+
+@Composable
+private fun SavedTeamChip(
+    team: SavedTeam,
+    onChangeTap: () -> Unit
+) {
+    Surface(
+        tonalElevation = 2.dp,
+        shape = MaterialTheme.shapes.medium,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(team.name, style = MaterialTheme.typography.bodyMedium)
+                if (team.players.isNotEmpty()) {
+                    val preview = team.players.take(3).joinToString(", ") { it.name }
+                    val suffix = if (team.players.size > 3) ", …" else ""
+                    Text(
+                        "${team.players.size} players · $preview$suffix",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
+                }
+            }
+            TextButton(onClick = onChangeTap) { Text("Change") }
+        }
     }
 }
 

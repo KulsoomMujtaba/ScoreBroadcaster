@@ -163,6 +163,52 @@ Scoring is modelled as an append-only event log:
 
 ## Development Log
 
+### 2026-03-06 – Phase 5: Saved Teams Integration into Create Match Flow
+
+**Feature:** Make Saved Teams a first-class part of match creation — users can now choose between a saved team and a new team directly inside `CreateMatchScreen`, with an option to save newly created teams for later reuse.
+
+**Files modified:**
+| File | Action |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/ui/CreateMatchScreen.kt` | Updated — explicit mode selectors, save-team checkbox, selected-team chip |
+| `README.md` | Updated — added this log entry |
+
+**What was corrected / added:**
+
+Previously, `CreateMatchScreen` showed a small **"Saved"** `OutlinedButton` next to each team name field, but only when at least one saved team already existed. First-time users saw no hint that the feature existed, and the button was easy to overlook even for returning users.
+
+**Changes in `CreateMatchScreen.kt`:**
+
+1. **Explicit mode selector per team** — each team section now shows two `FilterChip`s labelled **"New Team"** and **"Use Saved Team"**. These are always visible, regardless of whether any saved teams exist, so the choice is obvious at first glance.
+
+2. **"Use Saved Team" path:**
+   - When no saved teams exist: an informational note is shown directing the user to the Saved Teams section in the menu.
+   - When saved teams exist and none is selected yet: a full-width **"Select a saved team…"** `OutlinedButton` opens `SavedTeamPickerDialog`.
+   - Once a team is selected: a `SavedTeamChip` surface card shows the team name, player count, and a **"Change"** `TextButton` to reopen the picker.
+   - Players are deep-copied from the saved team template into local match state so the match remains fully independent of the template.
+   - `PlayerSetupScreen` is pre-filled with those copied players and the user can still edit/add/remove them for this specific match.
+
+3. **"New Team" path (updated):**
+   - The existing name text field is shown as before.
+   - A new **"Save this team for future matches"** `Checkbox` row appears below the name field.
+   - When the user taps **"Next: Add Players →"** with the checkbox checked, `MatchSessionViewModel.addSavedTeam()` is called with the team name, persisting it to `SavedTeamRepository`. Players are not yet included in the saved template at this stage (they are set up match-specifically in `PlayerSetupScreen`).
+
+4. **Visual separators** — `HorizontalDivider`s are added between the "Team A", "Team B", and format sections to clearly delineate the form layout.
+
+5. **Derived team names** — `finalTeamAName` / `finalTeamBName` are resolved from either the saved-team selection or the typed name, and used consistently for toss chip labels and match object construction.
+
+6. **`canProceed` guard** — now checks `teamAReady && teamBReady` where readiness is mode-aware: "New Team" requires a non-blank name; "Use Saved Team" requires a selection.
+
+**What was NOT changed:**
+- `PlayerSetupScreen` — unchanged; it already reads players from the pending match.
+- `MatchSummaryScreen` — unchanged.
+- `ScoringScreen` — unchanged.
+- `SavedTeamsScreen` / `SavedTeamRepository` / `MatchSessionViewModel` — unchanged.
+- All navigation routes — unchanged.
+- `ScoreReducer`, `MatchState`, `ScoreEvent` — unchanged.
+
+---
+
 ### 2026-03-06 – Bug Fix: Wicket-to-Next-Batter Flow
 
 **Bug:** The `SelectNextBatter` dialog was never shown after a wicket, so scoring could continue without a replacement batter being selected.
