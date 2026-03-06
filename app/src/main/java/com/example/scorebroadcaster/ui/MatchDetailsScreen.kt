@@ -12,18 +12,25 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -33,6 +40,7 @@ import com.example.scorebroadcaster.data.MatchState
 import com.example.scorebroadcaster.data.ScoringConsoleState
 import com.example.scorebroadcaster.data.entity.Match
 import com.example.scorebroadcaster.data.entity.MatchStatus
+import com.example.scorebroadcaster.data.entity.Player
 import com.example.scorebroadcaster.viewmodel.MatchSessionViewModel
 import com.example.scorebroadcaster.viewmodel.MatchViewModel
 
@@ -118,14 +126,30 @@ fun MatchDetailsScreen(
             HorizontalDivider()
 
             // --- Action buttons ---
+            var showAddPlayerDialog by remember { mutableStateOf(false) }
             MatchActionButtons(
                 match = match,
                 console = if (isThisMatch) console else null,
                 onStartScoring = onStartScoring,
                 onCameraPreview = onCameraPreview,
                 onGoLive = onGoLive,
-                onViewScorecard = onViewScorecard
+                onViewScorecard = onViewScorecard,
+                onAddPlayer = if (isThisMatch) { { showAddPlayerDialog = true } } else null
             )
+
+            if (showAddPlayerDialog && isThisMatch) {
+                val battingTeamName = console.battingTeamName
+                val bowlingTeamName = console.bowlingTeamName
+                AddPlayerToTeamDialog(
+                    battingTeamName = battingTeamName,
+                    bowlingTeamName = bowlingTeamName,
+                    onDismiss = { showAddPlayerDialog = false },
+                    onConfirm = { name, toBatting ->
+                        matchViewModel.addPlayerToTeam(Player(name = name), toBatting)
+                        showAddPlayerDialog = false
+                    }
+                )
+            }
 
             Spacer(modifier = Modifier.height(24.dp))
         }
@@ -345,7 +369,8 @@ private fun MatchActionButtons(
     onStartScoring: () -> Unit,
     onCameraPreview: () -> Unit,
     onGoLive: () -> Unit,
-    onViewScorecard: () -> Unit
+    onViewScorecard: () -> Unit,
+    onAddPlayer: (() -> Unit)? = null
 ) {
     val isComplete = console?.phase == InningsPhase.MATCH_COMPLETE ||
             match.status == MatchStatus.COMPLETED
@@ -371,6 +396,15 @@ private fun MatchActionButtons(
             Text("View Scorecard", style = MaterialTheme.typography.titleSmall)
         }
 
+        if (onAddPlayer != null && !isComplete) {
+            OutlinedButton(
+                onClick = onAddPlayer,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("＋ Add Player to Team", style = MaterialTheme.typography.titleSmall)
+            }
+        }
+
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -392,4 +426,57 @@ private fun MatchActionButtons(
             }
         }
     }
+}
+
+// =============================================================================
+// Add player to team dialog (shown from Match Details)
+// =============================================================================
+
+@Composable
+private fun AddPlayerToTeamDialog(
+    battingTeamName: String,
+    bowlingTeamName: String,
+    onDismiss: () -> Unit,
+    onConfirm: (name: String, addToBattingTeam: Boolean) -> Unit
+) {
+    var playerName by remember { mutableStateOf("") }
+    var addToBatting by remember { mutableStateOf(true) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Add Player") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedTextField(
+                    value = playerName,
+                    onValueChange = { playerName = it },
+                    label = { Text("Player name *") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Text("Add to", style = MaterialTheme.typography.labelMedium)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(
+                        selected = addToBatting,
+                        onClick = { addToBatting = true },
+                        label = { Text(battingTeamName) }
+                    )
+                    FilterChip(
+                        selected = !addToBatting,
+                        onClick = { addToBatting = false },
+                        label = { Text(bowlingTeamName) }
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { onConfirm(playerName.trim(), addToBatting) },
+                enabled = playerName.isNotBlank()
+            ) { Text("Add") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
 }

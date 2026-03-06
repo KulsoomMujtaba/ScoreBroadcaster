@@ -18,6 +18,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuAnchorType
@@ -157,6 +158,32 @@ fun ScoringScreen(
                 )
             }
 
+            // --- Add player during match ---
+            var showAddPlayerDialog by remember { mutableStateOf(false) }
+            if (activeMatch != null &&
+                (console.phase == InningsPhase.FIRST_INNINGS ||
+                        console.phase == InningsPhase.SECOND_INNINGS)
+            ) {
+                TextButton(onClick = { showAddPlayerDialog = true }) {
+                    Text(
+                        "＋ Add player to team",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+                if (showAddPlayerDialog) {
+                    AddPlayerToMatchDialog(
+                        battingTeamName = console.battingTeamName,
+                        bowlingTeamName = console.bowlingTeamName,
+                        onDismiss = { showAddPlayerDialog = false },
+                        onConfirm = { name, toBatting ->
+                            matchViewModel.addPlayerToTeam(Player(name = name), toBatting)
+                            showAddPlayerDialog = false
+                        }
+                    )
+                }
+            }
+
             // --- Match complete banner ---
             if (console.phase == InningsPhase.MATCH_COMPLETE) {
                 Spacer(modifier = Modifier.height(16.dp))
@@ -193,12 +220,22 @@ fun ScoringScreen(
             is PendingAction.SelectNextBatter -> SelectPlayerDialog(
                 title = "Select Next Batter",
                 players = action.availablePlayers,
-                onPlayerSelected = { matchViewModel.selectNextBatter(it) }
+                onPlayerSelected = { matchViewModel.selectNextBatter(it) },
+                onAddNewPlayer = { name ->
+                    val newPlayer = Player(name = name)
+                    matchViewModel.addPlayerToTeam(newPlayer, addToBattingTeam = true)
+                    matchViewModel.selectNextBatter(newPlayer)
+                }
             )
             is PendingAction.SelectBowler -> SelectPlayerDialog(
                 title = "Select Bowler",
                 players = action.availablePlayers,
-                onPlayerSelected = { matchViewModel.changeBowler(it) }
+                onPlayerSelected = { matchViewModel.changeBowler(it) },
+                onAddNewPlayer = { name ->
+                    val newPlayer = Player(name = name)
+                    matchViewModel.addPlayerToTeam(newPlayer, addToBattingTeam = false)
+                    matchViewModel.changeBowler(newPlayer)
+                }
             )
             null -> Unit
         }
@@ -593,35 +630,127 @@ private fun MatchCompleteSection(
 // Player-selection dialog (wicket / bowler change)
 // =============================================================================
 
+/**
+ * Non-dismissible player list dialog.
+ *
+ * @param onAddNewPlayer Optional callback: when non-null, an "Add new player" inline field
+ *   is shown so the scorer can create a player on the fly without closing this dialog.
+ *   The callback receives the trimmed player name.
+ */
 @Composable
 private fun SelectPlayerDialog(
     title: String,
     players: List<Player>,
-    onPlayerSelected: (Player) -> Unit
+    onPlayerSelected: (Player) -> Unit,
+    onAddNewPlayer: ((String) -> Unit)? = null
 ) {
+    var newPlayerName by remember { mutableStateOf("") }
+
     AlertDialog(
         onDismissRequest = { /* must select */ },
         title = { Text(title) },
         text = {
-            if (players.isEmpty()) {
-                Text("No players available.")
-            } else {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    players.forEach { player ->
-                        TextButton(
-                            onClick = { onPlayerSelected(player) },
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (players.isEmpty() && onAddNewPlayer == null) {
+                    Text("No players available.")
+                }
+                players.forEach { player ->
+                    TextButton(
+                        onClick = { onPlayerSelected(player) },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = player.name,
                             modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(
-                                text = player.name,
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                        }
+                        )
+                    }
+                }
+                if (onAddNewPlayer != null) {
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                    Text(
+                        text = "Add new player",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        OutlinedTextField(
+                            value = newPlayerName,
+                            onValueChange = { newPlayerName = it },
+                            label = { Text("Player name") },
+                            singleLine = true,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Button(
+                            onClick = {
+                                val name = newPlayerName.trim()
+                                if (name.isNotEmpty()) {
+                                    onAddNewPlayer(name)
+                                    newPlayerName = ""
+                                }
+                            },
+                            enabled = newPlayerName.isNotBlank()
+                        ) { Text("Add") }
                     }
                 }
             }
         },
         confirmButton = {}
+    )
+}
+
+// =============================================================================
+// Add player during an active match
+// =============================================================================
+
+@Composable
+private fun AddPlayerToMatchDialog(
+    battingTeamName: String,
+    bowlingTeamName: String,
+    onDismiss: () -> Unit,
+    onConfirm: (name: String, addToBattingTeam: Boolean) -> Unit
+) {
+    var playerName by remember { mutableStateOf("") }
+    var addToBatting by remember { mutableStateOf(true) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Add Player") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedTextField(
+                    value = playerName,
+                    onValueChange = { playerName = it },
+                    label = { Text("Player name *") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Text("Add to", style = MaterialTheme.typography.labelMedium)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(
+                        selected = addToBatting,
+                        onClick = { addToBatting = true },
+                        label = { Text(battingTeamName) }
+                    )
+                    FilterChip(
+                        selected = !addToBatting,
+                        onClick = { addToBatting = false },
+                        label = { Text(bowlingTeamName) }
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { onConfirm(playerName.trim(), addToBatting) },
+                enabled = playerName.isNotBlank()
+            ) { Text("Add") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
     )
 }
 

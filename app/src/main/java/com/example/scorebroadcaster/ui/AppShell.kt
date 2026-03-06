@@ -68,7 +68,6 @@ enum class BottomNavTab(
     LIVE("live_hub", "Live", Icons.Default.PlayArrow)
 }
 
-/** Maps the current back-stack route to its owning bottom-nav tab (for highlight state). */
 private fun selectedTab(route: String?): BottomNavTab? = when (route) {
     "home" -> BottomNavTab.HOME
     "my_matches", "create_match", "player_setup", "match_summary", "match_details"
@@ -78,7 +77,6 @@ private fun selectedTab(route: String?): BottomNavTab? = when (route) {
     else -> null
 }
 
-/** Human-readable title shown in the top app bar for each route. */
 private fun topBarTitle(route: String?): String = when (route) {
     "home" -> "Scored"
     "my_matches" -> "My Matches"
@@ -92,6 +90,7 @@ private fun topBarTitle(route: String?): String = when (route) {
     "live_preview" -> "Camera Preview"
     "stream_setup" -> "Stream Setup"
     "stream_preview" -> "Go Live"
+    "saved_teams" -> "Saved Teams"
     else -> "Scored"
 }
 
@@ -230,6 +229,12 @@ fun AppDrawer(
             label = "Create Match",
             selected = currentRoute == "create_match",
             onClick = { onNavigate("create_match") }
+        )
+        DrawerNavItem(
+            icon = Icons.Default.Star,
+            label = "Saved Teams",
+            selected = currentRoute == "saved_teams",
+            onClick = { onNavigate("saved_teams") }
         )
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
