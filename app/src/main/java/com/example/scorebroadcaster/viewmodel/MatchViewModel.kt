@@ -9,6 +9,7 @@ import com.example.scorebroadcaster.data.ScoreEvent
 import com.example.scorebroadcaster.data.ScoringConsoleState
 import com.example.scorebroadcaster.data.entity.BattingEntry
 import com.example.scorebroadcaster.data.entity.BowlingEntry
+import com.example.scorebroadcaster.data.entity.FallOfWicket
 import com.example.scorebroadcaster.data.entity.Match
 import com.example.scorebroadcaster.data.entity.Player
 import com.example.scorebroadcaster.data.entity.Team
@@ -46,6 +47,10 @@ class MatchViewModel : ViewModel() {
     private val _consoleState = MutableStateFlow(ScoringConsoleState())
     val consoleState: StateFlow<ScoringConsoleState> = _consoleState.asStateFlow()
 
+    /** Fall-of-wickets list for the current innings, in chronological order. */
+    private val _fallOfWickets = MutableStateFlow<List<FallOfWicket>>(emptyList())
+    val fallOfWickets: StateFlow<List<FallOfWicket>> = _fallOfWickets.asStateFlow()
+
     // Preserved team names so they survive repeated reduce() calls
     private var currentTeamAName = "Team A"
     private var currentTeamBName = "Team B"
@@ -79,6 +84,9 @@ class MatchViewModel : ViewModel() {
         val newState = reduce(_events.value)
             .copy(teamAName = currentTeamAName, teamBName = currentTeamBName)
         _state.value = newState
+        if (ballEvent.wicket) {
+            _fallOfWickets.value = computeFallOfWickets(_events.value)
+        }
         updateConsoleAfterEvent(ballEvent, prevState, newState)
     }
 
@@ -248,6 +256,7 @@ class MatchViewModel : ViewModel() {
             _events.value = _events.value.dropLast(1)
             _state.value = reduce(_events.value)
                 .copy(teamAName = currentTeamAName, teamBName = currentTeamBName)
+            _fallOfWickets.value = computeFallOfWickets(_events.value)
             // Console state is not rolled back for simplicity; scorer can re-select if needed.
         }
     }
@@ -277,6 +286,7 @@ class MatchViewModel : ViewModel() {
             _events.value = current.toMutableList().apply { set(globalIndex, updatedEvent) }
             _state.value = reduce(_events.value)
                 .copy(teamAName = currentTeamAName, teamBName = currentTeamBName)
+            _fallOfWickets.value = computeFallOfWickets(_events.value)
         }
     }
 
@@ -304,6 +314,7 @@ class MatchViewModel : ViewModel() {
             _events.value = _events.value.filterIndexed { index, _ -> index != globalIndex }
             _state.value = reduce(_events.value)
                 .copy(teamAName = currentTeamAName, teamBName = currentTeamBName)
+            _fallOfWickets.value = computeFallOfWickets(_events.value)
         }
     }
 
@@ -335,6 +346,7 @@ class MatchViewModel : ViewModel() {
         _events.value = emptyList()
         _state.value = MatchState()
         _consoleState.value = ScoringConsoleState()
+        _fallOfWickets.value = emptyList()
         _activeMatch.value = null
         currentTeamAName = "Team A"
         currentTeamBName = "Team B"
@@ -475,6 +487,7 @@ class MatchViewModel : ViewModel() {
         currentTeamAName = match.bowlingFirst.name
         currentTeamBName = match.battingFirst.name
         _events.value = emptyList()
+        _fallOfWickets.value = emptyList()
         _state.value = MatchState(
             teamAName = currentTeamAName,
             teamBName = currentTeamBName
@@ -543,6 +556,7 @@ class MatchViewModel : ViewModel() {
         currentTeamBName = match.bowlingFirst.name
         _events.value = emptyList()
         _firstInningsEvents.value = emptyList()
+        _fallOfWickets.value = emptyList()
         _state.value = MatchState(
             teamAName = currentTeamAName,
             teamBName = currentTeamBName
@@ -593,6 +607,44 @@ class MatchViewModel : ViewModel() {
 
     private fun incrementBall(overs: Int, balls: Int): Pair<Int, Int> =
         if (balls + 1 >= 6) Pair(overs + 1, 0) else Pair(overs, balls + 1)
+
+    /**
+     * Computes the fall-of-wickets list from a sequence of [BallEvent]s.
+     *
+     * Scans through [events] in order, maintaining running totals for runs, overs, and balls.
+     * Each time a wicket is encountered a [FallOfWicket] entry is appended with the score and
+     * over at which the wicket fell.
+     */
+    private fun computeFallOfWickets(events: List<BallEvent>): List<FallOfWicket> {
+        val result = mutableListOf<FallOfWicket>()
+        var wicketCount = 0
+        var runs = 0
+        var overs = 0
+        var balls = 0
+        for (event in events) {
+            runs += event.runsOffBat + event.extras.total
+            if (event.countsAsBall) {
+                balls++
+                if (balls >= 6) {
+                    overs++
+                    balls = 0
+                }
+            }
+            if (event.wicket && event.dismissalDetail != null) {
+                wicketCount++
+                result.add(
+                    FallOfWicket(
+                        wicketNumber = wicketCount,
+                        batterName = event.dismissalDetail.batter.name,
+                        teamScore = runs,
+                        overs = "$overs.$balls",
+                        dismissal = event.dismissalDetail.toScorecardString()
+                    )
+                )
+            }
+        }
+        return result
+    }
 
     /** Replace all references to [old] team with [updated] inside the match. */
     private fun Match.updateTeamRef(old: Team, updated: Team): Match = copy(
