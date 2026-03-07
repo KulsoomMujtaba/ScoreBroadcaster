@@ -218,8 +218,8 @@ class MatchViewModel : ViewModel() {
                 // All out when 10 wickets have fallen (only 1 batter left – can't form a partnership).
                 val allOut = newState.wickets >= 10
                 if (!allOut) {
-                    val remaining = availableBatters()
-                    Log.d("WicketFlow", "pendingAction set to SelectNextBatter (${remaining.size} available players, replacingStriker=$strikerIsOut)")
+                    val remaining = eligibleNextBatters()
+                    Log.d("WicketFlow", "pendingAction set to SelectNextBatter (${remaining.size} eligible team players, replacingStriker=$strikerIsOut)")
                     Pair(PendingAction.SelectNextBatter(remaining, replacingStriker = strikerIsOut), overEnded)
                 } else {
                     // All out — no pending action; innings ends naturally
@@ -561,7 +561,18 @@ class MatchViewModel : ViewModel() {
     // Private helpers
     // ---------------------------------------------------------------------------
 
-    private fun availableBatters(): List<Player> {
+    /**
+     * Returns batting-team players that are eligible to be the next incoming batter.
+     *
+     * A player is excluded when they are:
+     * - the current striker
+     * - the current non-striker
+     * - already dismissed (has a batting entry with [BattingEntry.isOut] == true)
+     *
+     * The list is derived entirely from the team roster stored in [_activeMatch], so it
+     * correctly reflects players added mid-match via [addPlayerToTeam].
+     */
+    fun eligibleNextBatters(): List<Player> {
         val match = _activeMatch.value ?: return emptyList()
         val console = _consoleState.value
         val battingTeam = if (console.inningsNumber == 1) match.battingFirst else match.bowlingFirst

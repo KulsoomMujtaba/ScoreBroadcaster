@@ -309,10 +309,12 @@ fun ScoringScreen(
         when (val action = console.pendingAction) {
             is PendingAction.SelectNextBatter -> {
                 val title = if (action.replacingStriker) "Select Next Batter" else "Select Next Non-Striker"
-                Log.d("WicketFlow", "Next batter dialog shown (${action.availablePlayers.size} players available, replacingStriker=${action.replacingStriker})")
+                Log.d("WicketFlow", "Next batter dialog shown (${action.teamPlayers.size} eligible team players, replacingStriker=${action.replacingStriker})")
                 SelectPlayerDialog(
                     title = title,
-                    players = action.availablePlayers,
+                    players = action.teamPlayers,
+                    teamSectionLabel = "Select from team",
+                    emptyTeamMessage = "No unused players left in the batting team",
                     onPlayerSelected = { matchViewModel.selectNextBatter(it) },
                     onAddNewPlayer = { name ->
                         val newPlayer = Player(name = name)
@@ -736,6 +738,11 @@ private fun MatchCompleteSection(
 /**
  * Non-dismissible player list dialog.
  *
+ * @param teamSectionLabel When non-null, a section header is displayed above the player list
+ *   to visually identify that these players are from the batting/bowling team. This makes the
+ *   team-player path visually primary.
+ * @param emptyTeamMessage When non-null and [players] is empty, this message is shown instead
+ *   of the player list, explaining why there are no team players to choose from.
  * @param onAddNewPlayer Optional callback: when non-null, an "Add new player" inline field
  *   is shown so the scorer can create a player on the fly without closing this dialog.
  *   The callback receives the trimmed player name.
@@ -747,6 +754,8 @@ private fun SelectPlayerDialog(
     title: String,
     players: List<Player>,
     onPlayerSelected: (Player) -> Unit,
+    teamSectionLabel: String? = null,
+    emptyTeamMessage: String? = null,
     onAddNewPlayer: ((String) -> Unit)? = null,
     onAllOut: (() -> Unit)? = null
 ) {
@@ -757,8 +766,24 @@ private fun SelectPlayerDialog(
         title = { Text(title) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                if (players.isEmpty() && onAddNewPlayer == null) {
-                    Text("No players available.")
+                // --- Team player list (primary path) ---
+                if (teamSectionLabel != null) {
+                    Text(
+                        text = teamSectionLabel,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
+                }
+                if (players.isEmpty()) {
+                    if (emptyTeamMessage != null) {
+                        Text(
+                            text = emptyTeamMessage,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                        )
+                    } else if (onAddNewPlayer == null) {
+                        Text("No players available.")
+                    }
                 }
                 players.forEach { player ->
                     TextButton(
@@ -771,6 +796,7 @@ private fun SelectPlayerDialog(
                         )
                     }
                 }
+                // --- Add new player (secondary path) ---
                 if (onAddNewPlayer != null) {
                     HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
                     Text(

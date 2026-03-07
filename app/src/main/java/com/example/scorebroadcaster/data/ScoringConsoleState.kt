@@ -26,11 +26,17 @@ sealed class PendingAction {
     /**
      * Prompt the scorer to pick the next batter (triggered after a wicket).
      *
+     * @param teamPlayers   Eligible batting-team players the scorer should choose from first.
+     *   Excludes the current striker, current non-striker, already dismissed batters, and any
+     *   player already active at the crease.  Computed by
+     *   [com.example.scorebroadcaster.viewmodel.MatchViewModel.eligibleNextBatters].
+     *   May be empty when all team players have already batted — the scorer can then add a new
+     *   player inline or declare all out.
      * @param replacingStriker true when the striker was dismissed (new batter comes in at
      *   striker's end); false when the non-striker was dismissed (e.g. run out).
      */
     data class SelectNextBatter(
-        val availablePlayers: List<Player>,
+        val teamPlayers: List<Player>,
         val replacingStriker: Boolean = true
     ) : PendingAction()
 }
