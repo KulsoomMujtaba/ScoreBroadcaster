@@ -141,6 +141,37 @@ fun ScoringScreen(
                 Spacer(modifier = Modifier.height(12.dp))
             }
 
+            // --- Innings setup required banner ---
+            if (console.phase == InningsPhase.SETUP && !setupDialogVisible && activeMatch != null) {
+                Surface(
+                    color = MaterialTheme.colorScheme.errorContainer,
+                    shape = MaterialTheme.shapes.medium,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Innings setup required before scoring can begin.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            modifier = Modifier.weight(1f)
+                        )
+                        TextButton(onClick = { setupDialogVisible = true }) {
+                            Text(
+                                "Setup",
+                                color = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+
             // --- Scoring buttons ---
             val scoringEnabled = (console.phase == InningsPhase.FIRST_INNINGS ||
                     console.phase == InningsPhase.SECOND_INNINGS) &&
@@ -282,6 +313,13 @@ fun ScoringScreen(
                 onConfirm = { striker, nonStriker, bowler ->
                     matchViewModel.setOpeners(striker, nonStriker, bowler)
                     setupDialogVisible = false
+                },
+                onDismiss = { setupDialogVisible = false },
+                onAddPlayerToBattingTeam = { name ->
+                    matchViewModel.addPlayerToTeam(Player(name = name), addToBattingTeam = true)
+                },
+                onAddPlayerToBowlingTeam = { name ->
+                    matchViewModel.addPlayerToTeam(Player(name = name), addToBattingTeam = false)
                 }
             )
         }
@@ -953,23 +991,40 @@ private fun SetupOpenersDialog(
     inningsNumber: Int,
     battingTeam: Team,
     bowlingTeam: Team,
-    onConfirm: (striker: Player, nonStriker: Player, bowler: Player) -> Unit
+    onConfirm: (striker: Player, nonStriker: Player, bowler: Player) -> Unit,
+    onDismiss: () -> Unit,
+    onAddPlayerToBattingTeam: (name: String) -> Unit,
+    onAddPlayerToBowlingTeam: (name: String) -> Unit
 ) {
     var striker by remember { mutableStateOf<Player?>(null) }
     var nonStriker by remember { mutableStateOf<Player?>(null) }
     var bowler by remember { mutableStateOf<Player?>(null) }
+    var newBatterName by remember { mutableStateOf("") }
+    var newBowlerName by remember { mutableStateOf("") }
 
     val inningsSuffix = if (inningsNumber == 1) "st" else "nd"
+    val needsMoreBatters = battingTeam.players.size < 2
+    val needsMoreBowlers = bowlingTeam.players.isEmpty()
 
     AlertDialog(
-        onDismissRequest = { /* must complete setup */ },
+        onDismissRequest = onDismiss,
         title = { Text("$inningsNumber$inningsSuffix Innings Setup") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.verticalScroll(rememberScrollState())
+            ) {
                 Text(
                     text = "Batting: ${battingTeam.name}",
                     style = MaterialTheme.typography.labelMedium
                 )
+                if (needsMoreBatters) {
+                    Text(
+                        text = "You need at least 2 batters to start the innings.",
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
                 PlayerDropdown(
                     label = "Striker",
                     players = battingTeam.players.filter { it.id != nonStriker?.id },
@@ -982,17 +1037,68 @@ private fun SetupOpenersDialog(
                     selected = nonStriker,
                     onSelected = { nonStriker = it }
                 )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedTextField(
+                        value = newBatterName,
+                        onValueChange = { newBatterName = it },
+                        label = { Text("Add batter") },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Button(
+                        onClick = {
+                            val name = newBatterName.trim()
+                            if (name.isNotBlank()) {
+                                onAddPlayerToBattingTeam(name)
+                                newBatterName = ""
+                            }
+                        },
+                        enabled = newBatterName.isNotBlank()
+                    ) { Text("Add") }
+                }
                 HorizontalDivider()
                 Text(
                     text = "Bowling: ${bowlingTeam.name}",
                     style = MaterialTheme.typography.labelMedium
                 )
+                if (needsMoreBowlers) {
+                    Text(
+                        text = "You need at least 1 bowler to start the innings.",
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
                 PlayerDropdown(
                     label = "Opening bowler",
                     players = bowlingTeam.players,
                     selected = bowler,
                     onSelected = { bowler = it }
                 )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedTextField(
+                        value = newBowlerName,
+                        onValueChange = { newBowlerName = it },
+                        label = { Text("Add bowler") },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Button(
+                        onClick = {
+                            val name = newBowlerName.trim()
+                            if (name.isNotBlank()) {
+                                onAddPlayerToBowlingTeam(name)
+                                newBowlerName = ""
+                            }
+                        },
+                        enabled = newBowlerName.isNotBlank()
+                    ) { Text("Add") }
+                }
             }
         },
         confirmButton = {
@@ -1005,6 +1111,9 @@ private fun SetupOpenersDialog(
             ) {
                 Text("Start")
             }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Later") }
         }
     )
 }
