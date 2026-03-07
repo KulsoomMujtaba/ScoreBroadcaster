@@ -39,7 +39,6 @@ fun MatchSummaryScreen(
             .padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Text("Match Summary", style = MaterialTheme.typography.headlineMedium)
         Text(
             "Review your match setup before starting.",
             style = MaterialTheme.typography.bodyMedium,

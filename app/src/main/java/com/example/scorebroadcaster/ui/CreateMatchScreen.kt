@@ -88,8 +88,6 @@ fun CreateMatchScreen(
             .padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Text("Create Match", style = MaterialTheme.typography.headlineMedium)
-
         // Match title (optional)
         OutlinedTextField(
             value = title,
