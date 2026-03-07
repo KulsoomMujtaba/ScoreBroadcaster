@@ -11,6 +11,7 @@ import com.example.scorebroadcaster.data.entity.BattingEntry
 import com.example.scorebroadcaster.data.entity.BowlingEntry
 import com.example.scorebroadcaster.data.entity.FallOfWicket
 import com.example.scorebroadcaster.data.entity.Match
+import com.example.scorebroadcaster.data.entity.Partnership
 import com.example.scorebroadcaster.data.entity.Player
 import com.example.scorebroadcaster.data.entity.Team
 import com.example.scorebroadcaster.data.toBallEvent
@@ -50,6 +51,21 @@ class MatchViewModel : ViewModel() {
     /** Fall-of-wickets list for the current innings, in chronological order. */
     private val _fallOfWickets = MutableStateFlow<List<FallOfWicket>>(emptyList())
     val fallOfWickets: StateFlow<List<FallOfWicket>> = _fallOfWickets.asStateFlow()
+
+    /** The live batting partnership currently in progress. Null before openers are set. */
+    private val _currentPartnership = MutableStateFlow<Partnership?>(null)
+    val currentPartnership: StateFlow<Partnership?> = _currentPartnership.asStateFlow()
+
+    /** Completed partnerships for the current innings, in chronological order. */
+    private val _completedPartnerships = MutableStateFlow<List<Partnership>>(emptyList())
+    val completedPartnerships: StateFlow<List<Partnership>> = _completedPartnerships.asStateFlow()
+
+    /**
+     * Completed partnerships from the first innings.
+     * Populated when the first innings ends; stays empty until then.
+     */
+    private val _firstInningsCompletedPartnerships = MutableStateFlow<List<Partnership>>(emptyList())
+    val firstInningsCompletedPartnerships: StateFlow<List<Partnership>> = _firstInningsCompletedPartnerships.asStateFlow()
 
     // Preserved team names so they survive repeated reduce() calls
     private var currentTeamAName = "Team A"
@@ -249,6 +265,26 @@ class MatchViewModel : ViewModel() {
             pendingAction = pendingAction,
             bowlerChangePending = bowlerChangePending
         )
+
+        // --- Update current partnership ---
+        val partnershipRuns = event.runsOffBat + event.extras.total
+        val partnershipBalls = if (event.countsAsBall) 1 else 0
+        val updatedPartnership = _currentPartnership.value?.let { p ->
+            p.copy(
+                runs = p.runs + partnershipRuns,
+                balls = p.balls + partnershipBalls
+            )
+        }
+        if (wicketFell) {
+            // Finalize the current partnership and move it to completed list.
+            updatedPartnership?.let { p ->
+                _completedPartnerships.value = _completedPartnerships.value +
+                        p.copy(endScore = newState.runs, isCurrent = false)
+            }
+            _currentPartnership.value = null
+        } else {
+            _currentPartnership.value = updatedPartnership
+        }
     }
 
     fun undo() {
@@ -348,6 +384,9 @@ class MatchViewModel : ViewModel() {
         _consoleState.value = ScoringConsoleState()
         _fallOfWickets.value = emptyList()
         _activeMatch.value = null
+        _currentPartnership.value = null
+        _completedPartnerships.value = emptyList()
+        _firstInningsCompletedPartnerships.value = emptyList()
         currentTeamAName = "Team A"
         currentTeamBName = "Team B"
     }
@@ -376,6 +415,16 @@ class MatchViewModel : ViewModel() {
             pendingAction = null,
             bowlerChangePending = false
         )
+        _currentPartnership.value = Partnership(
+            strikerName = striker.name,
+            nonStrikerName = nonStriker.name,
+            runs = 0,
+            balls = 0,
+            startScore = _state.value.runs,
+            endScore = 0,
+            isCurrent = true
+        )
+        _completedPartnerships.value = emptyList()
     }
 
     /** Called after a wicket when the scorer picks the incoming batter. */
@@ -400,6 +449,21 @@ class MatchViewModel : ViewModel() {
             bowlerChangePending = false
         )
         Log.d("WicketFlow", "pendingAction cleared after next batter selection (nextPending=${nextPending?.javaClass?.simpleName})")
+        // Start a new partnership with the incoming batter and the remaining batter.
+        val remainingName = if (replacingStriker) console.nonStriker?.name else console.striker?.name
+        if (remainingName != null) {
+            val newStriker = if (replacingStriker) player.name else remainingName
+            val newNonStriker = if (replacingStriker) remainingName else player.name
+            _currentPartnership.value = Partnership(
+                strikerName = newStriker,
+                nonStrikerName = newNonStriker,
+                runs = 0,
+                balls = 0,
+                startScore = _state.value.runs,
+                endScore = 0,
+                isCurrent = true
+            )
+        }
     }
 
     /** Called at the end of each over when the scorer picks the new bowler. */
@@ -473,6 +537,12 @@ class MatchViewModel : ViewModel() {
             firstInningsBowlingEntries = console.allBowlingEntries,
             target = state.runs + 1
         )
+        // Snapshot completed partnerships; also finalize any ongoing partnership.
+        val ongoing = _currentPartnership.value?.copy(endScore = state.runs, isCurrent = false)
+        _firstInningsCompletedPartnerships.value =
+            _completedPartnerships.value + listOfNotNull(ongoing)
+        _currentPartnership.value = null
+        _completedPartnerships.value = emptyList()
     }
 
     /**
@@ -557,6 +627,9 @@ class MatchViewModel : ViewModel() {
         _events.value = emptyList()
         _firstInningsEvents.value = emptyList()
         _fallOfWickets.value = emptyList()
+        _currentPartnership.value = null
+        _completedPartnerships.value = emptyList()
+        _firstInningsCompletedPartnerships.value = emptyList()
         _state.value = MatchState(
             teamAName = currentTeamAName,
             teamBName = currentTeamBName
