@@ -38,6 +38,7 @@ The core promise is simple: open the app, start a match, score every ball, and s
 | Innings management (end 1st innings, start 2nd) | ✅ Done | `ScoringScreen` / `MatchViewModel` |
 | Target / chase info panel (2nd innings) | ✅ Done | `ScoringScreen` |
 | Match-complete result banner | ✅ Done | `ScoringScreen` |
+| Extras entry dialog (variable runs, wicket/run-out on extras) | ✅ Done | `ScoringScreen` |
 | Live camera preview + scoreboard overlay | ✅ Done | `CameraPreviewScreen` |
 | RTMPS streaming to Facebook Live | ✅ Done | `StreamPreviewScreen` |
 | Scoreboard burned into live stream | ✅ Done | `ScoreboardOverlayRenderer` |
@@ -165,6 +166,50 @@ Scoring is modelled as an append-only event log:
 ---
 
 ## Development Log
+
+### 2026-03-07 – Phase 6: Extras Entry Dialog
+
+**What changed:**
+Replaced the four fixed extra buttons (`Wd+1`, `NB+1`, `Bye`, `LB`) with a proper extras-entry workflow. Tapping any extras button now opens an `ExtrasEntryDialog` that lets the scorer specify variable runs, choose the correct extra type, and optionally record a run-out wicket on the same delivery.
+
+**Extras entry dialog:**
+- Scorer taps **Wide**, **No Ball**, **Bye**, or **Leg Bye** in the scoring panel.
+- `ExtrasEntryDialog` opens with the tapped type pre-selected.
+- Scorer can change the type, select runs (1 / 2 / 3 / 4 / 5+), and optionally tick "Wicket on this ball (Run Out only)".
+- If a wicket is selected, the scorer chooses which batter was run out (striker or non-striker) and optionally which fielder was involved.
+- Confirmation builds the correct `BallEvent` directly and dispatches it via `MatchViewModel.addBallEvent()`.
+
+**Variable extras support:**
+- Runs from 1 up to 4 are selectable as chips; a "5+" option reveals a free-text numeric input.
+- Wide: all runs go to `ExtrasBreakdown.wides` (no ball face counted).
+- No Ball: 1-run penalty in `noBalls`; remaining runs go to `runsOffBat`.
+- Bye / Leg Bye: all runs go to `byes` / `legByes` respectively and count as a legal ball.
+
+**Wicket on extras:**
+- Only Run Out is allowed on extras deliveries, matching real-world cricket rules.
+- The `DismissalDetail` is created with `bowler = null` so the bowler is not credited.
+- The existing `MatchViewModel.updateConsoleAfterEvent` correctly handles the wicket flag on a `BallEvent`, so next-batter selection, strike rotation, and all-out detection all work without modification.
+
+**New `addBallEvent` method:**
+`MatchViewModel` now exposes `addBallEvent(BallEvent)` as a public entry point for cases where the full delivery cannot be expressed as a single `ScoreEvent`. The existing `addEvent(ScoreEvent)` delegates to this method, keeping behaviour identical.
+
+**Files changed:**
+
+| File | Action |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/ui/ScoringScreen.kt` | Updated – `ExtraType` enum added; `ExtrasEntryDialog` and `buildExtrasEvent` added; `ScoringButtonsSection` extras buttons replaced with dialog-opening buttons; extras dialog state wired in `ScoringScreen` |
+| `app/src/main/java/com/example/scorebroadcaster/viewmodel/MatchViewModel.kt` | Updated – `addBallEvent(BallEvent)` method added; `addEvent` delegates to it |
+| `README.md` | Updated |
+
+**What did NOT change:**
+- `0`, `1`, `2`, `3`, `4`, `6`, `W`, and `Undo` scoring buttons — untouched.
+- Normal wicket dialog (`WicketDetailsDialog`) — untouched.
+- Innings / match control flow — untouched.
+- Camera preview and Facebook Live streaming — untouched.
+- Scorecard screen — untouched.
+- `BallEvent`, `ScoreEvent`, `ScoreReducer`, `ExtrasBreakdown` — untouched.
+
+---
 
 ### 2026-03-07 – Phase 5: Flexible Ball Event Model
 
