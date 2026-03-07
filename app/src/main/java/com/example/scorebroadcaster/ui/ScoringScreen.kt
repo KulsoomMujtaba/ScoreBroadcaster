@@ -71,6 +71,7 @@ fun ScoringScreen(
     onMatchDetails: () -> Unit = {},
     onViewScorecard: () -> Unit = {},
     onCameraPreview: () -> Unit = {},
+    onViewTimeline: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val state by matchViewModel.state.collectAsState()
@@ -100,7 +101,8 @@ fun ScoringScreen(
                 QuickNavBar(
                     onMatchDetails = onMatchDetails,
                     onViewScorecard = onViewScorecard,
-                    onCameraPreview = onCameraPreview
+                    onCameraPreview = onCameraPreview,
+                    onViewTimeline = onViewTimeline
                 )
                 Spacer(modifier = Modifier.height(8.dp))
             }
@@ -1414,7 +1416,8 @@ private fun PlayerDropdown(
 private fun QuickNavBar(
     onMatchDetails: () -> Unit,
     onViewScorecard: () -> Unit,
-    onCameraPreview: () -> Unit
+    onCameraPreview: () -> Unit,
+    onViewTimeline: () -> Unit
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -1432,6 +1435,10 @@ private fun QuickNavBar(
             onClick = onCameraPreview,
             modifier = Modifier.weight(1f)
         ) { Text("Camera", style = MaterialTheme.typography.labelSmall) }
+        OutlinedButton(
+            onClick = onViewTimeline,
+            modifier = Modifier.weight(1f)
+        ) { Text("Timeline", style = MaterialTheme.typography.labelSmall) }
     }
 }
 

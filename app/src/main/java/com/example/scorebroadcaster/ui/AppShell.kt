@@ -72,7 +72,7 @@ private fun selectedTab(route: String?): BottomNavTab? = when (route) {
     "home" -> BottomNavTab.HOME
     "my_matches", "create_match", "player_setup", "match_summary", "match_details"
         -> BottomNavTab.MATCHES
-    "score_tab", "scoring_only", "scorecard" -> BottomNavTab.SCORE
+    "score_tab", "scoring_only", "scorecard", "ball_timeline" -> BottomNavTab.SCORE
     "live_hub", "live_preview", "stream_setup", "stream_preview" -> BottomNavTab.LIVE
     else -> null
 }
@@ -87,6 +87,7 @@ private fun topBarTitle(route: String?): String = when (route) {
     "match_summary" -> "Match Summary"
     "match_details" -> "Match Details"
     "scorecard" -> "Scorecard"
+    "ball_timeline" -> "Over History"
     "live_preview" -> "Camera Preview"
     "stream_setup" -> "Stream Setup"
     "stream_preview" -> "Go Live"
@@ -241,6 +242,12 @@ fun AppDrawer(
             label = "Scorecard",
             selected = currentRoute == "scorecard",
             onClick = { onNavigate("scorecard") }
+        )
+        DrawerNavItem(
+            icon = Icons.Default.Info,
+            label = "Ball Timeline",
+            selected = currentRoute == "ball_timeline",
+            onClick = { onNavigate("ball_timeline") }
         )
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
