@@ -168,6 +168,34 @@ Scoring is modelled as an append-only event log:
 
 ## Development Log
 
+### 2026-03-07 – Phase 8: Ball Editing / Correction
+
+**What changed:**
+Added the ability to tap any ball in the timeline and edit or delete it. Correcting a delivery updates the event log and replays all remaining events through the existing pure reducer to rebuild the innings aggregate state — no aggregate score is mutated directly. The edit flow supports all delivery outcomes: normal runs (dot / 1 / 2 / 3 / 4 / 6 / custom), extras (Wide, No Ball, Bye, Leg Bye) with variable runs, wickets with full dismissal details (type, batter out, fielder, bowler), and extras with run-outs. Deleting a ball requires a confirmation step showing the over/ball number and current label.
+
+**Files created/modified:**
+| File | Action |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/viewmodel/MatchViewModel.kt` | Updated |
+| `app/src/main/java/com/example/scorebroadcaster/ui/EditBallDialog.kt` | Created |
+| `app/src/main/java/com/example/scorebroadcaster/ui/BallTimelineScreen.kt` | Updated |
+| `README.md` | Updated |
+
+**Architecture — replay-based correction:**
+1. `MatchViewModel.replaceBallEvent(globalIndex, updatedEvent, inFirstInnings)` — replaces the event at `globalIndex` in the target event log (current innings or first-innings archive) and re-reduces all events to produce the new `MatchState`.
+2. `MatchViewModel.deleteBallEvent(globalIndex, inFirstInnings)` — removes the event at `globalIndex` and re-reduces. Requires a confirmation step in the UI.
+3. `rebuildFirstInningsSnapshot(events)` (private) — after any first-innings edit, re-reduces the first-innings events and updates the aggregate snapshot fields in `ScoringConsoleState` (runs, wickets, extras breakdown, overs, target). Per-player batting/bowling entries are not rebuilt on edit (same simplification as `undo()`).
+4. The `IndexedBall.globalIndex` field (already present from Phase 7) is used as the stable identifier to locate the event.
+
+**UX:**
+- Each `BallChip` in the timeline is now tappable (accessible with `Role.Button`).
+- Tapping opens `EditBallDialog` pre-populated with the existing delivery's values.
+- The dialog title shows the over number, ball-in-over position, and the original label ("was: …") for context.
+- The dialog has three sections: delivery type/runs, wicket details, and a "Delete this ball" danger button.
+- Deleting shows a nested `AlertDialog` with the ball coordinates, requiring explicit confirmation before removal.
+
+---
+
 ### 2026-03-07 – Phase 7: Ball Timeline / Over History
 
 **What changed:**

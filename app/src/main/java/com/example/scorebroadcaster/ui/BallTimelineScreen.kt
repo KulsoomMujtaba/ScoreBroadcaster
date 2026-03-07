@@ -1,5 +1,6 @@
 package com.example.scorebroadcaster.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -23,10 +24,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -82,6 +85,43 @@ fun BallTimelineScreen(
     val firstInningsTeam  = match?.battingFirst?.name  ?: console.battingTeamName
     val secondInningsTeam = match?.bowlingFirst?.name  ?: ""
 
+    // --- Edit-ball dialog state ---
+    var editingBall by remember { mutableStateOf<IndexedBall?>(null) }
+    val editingInFirstInnings = selectedInnings == 0 && hasSecondInnings
+
+    // Derive player lists for the edit dialog
+    val activeMatch = match
+    val battingPlayers = when {
+        activeMatch == null -> emptyList()
+        // When viewing 1st innings: batting team is battingFirst
+        editingInFirstInnings || !hasSecondInnings -> activeMatch.battingFirst.players
+        // When viewing 2nd innings: batting team is bowlingFirst (sides swapped)
+        else -> activeMatch.bowlingFirst.players
+    }
+    val bowlingPlayers = when {
+        activeMatch == null -> emptyList()
+        editingInFirstInnings || !hasSecondInnings -> activeMatch.bowlingFirst.players
+        else -> activeMatch.battingFirst.players
+    }
+
+    // Show the edit dialog when a ball is selected
+    editingBall?.let { ball ->
+        EditBallDialog(
+            ball           = ball,
+            battingPlayers = battingPlayers,
+            bowlingPlayers = bowlingPlayers,
+            onConfirm      = { updatedEvent ->
+                matchViewModel.replaceBallEvent(ball.globalIndex, updatedEvent, editingInFirstInnings)
+                editingBall = null
+            },
+            onDelete       = {
+                matchViewModel.deleteBallEvent(ball.globalIndex, editingInFirstInnings)
+                editingBall = null
+            },
+            onDismiss      = { editingBall = null }
+        )
+    }
+
     if (match == null || console.phase == InningsPhase.SETUP) {
         EmptyTimelineState(modifier = modifier)
         return
@@ -121,7 +161,7 @@ fun BallTimelineScreen(
             }
         } else {
             items(items = overs, key = { it.overNumber }) { over ->
-                OverCard(over = over)
+                OverCard(over = over, onBallTap = { ball -> editingBall = ball })
             }
         }
 
@@ -159,7 +199,7 @@ private fun InningsTabRow(
 // =============================================================================
 
 @Composable
-private fun OverCard(over: OverSummary) {
+private fun OverCard(over: OverSummary, onBallTap: (IndexedBall) -> Unit) {
     Card(
         modifier  = Modifier.fillMaxWidth(),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
@@ -180,7 +220,7 @@ private fun OverCard(over: OverSummary) {
             )
 
             // Ball chips in a wrapping row
-            BallChipsRow(balls = over.balls)
+            BallChipsRow(balls = over.balls, onBallTap = onBallTap)
         }
     }
 }
@@ -191,13 +231,13 @@ private fun OverCard(over: OverSummary) {
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun BallChipsRow(balls: List<IndexedBall>) {
+private fun BallChipsRow(balls: List<IndexedBall>, onBallTap: (IndexedBall) -> Unit) {
     FlowRow(
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalArrangement   = Arrangement.spacedBy(6.dp)
     ) {
         balls.forEach { ball ->
-            BallChip(ball = ball)
+            BallChip(ball = ball, onClick = { onBallTap(ball) })
         }
     }
 }
@@ -209,12 +249,13 @@ private fun BallChipsRow(balls: List<IndexedBall>) {
 /**
  * Compact chip representing a single delivery.
  *
- * The chip is currently display-only, but its [ball] parameter carries a stable
- * [IndexedBall.globalIndex] so that a future "tap to edit" gesture can be wired here
- * without any structural change to the surrounding data model.
+ * Tapping the chip opens the Edit Ball flow — the [onClick] lambda is wired through
+ * from [BallTimelineScreen] to [EditBallDialog].  The chip carries a stable
+ * [IndexedBall.globalIndex] so [MatchViewModel.replaceBallEvent] /
+ * [MatchViewModel.deleteBallEvent] can locate the correct position in the event log.
  */
 @Composable
-private fun BallChip(ball: IndexedBall) {
+private fun BallChip(ball: IndexedBall, onClick: () -> Unit) {
     val isWicket     = ball.event.wicket
     val isExtra      = ball.event.extras.wides > 0 || ball.event.extras.noBalls > 0 ||
             ball.event.extras.byes > 0 || ball.event.extras.legByes > 0
@@ -234,12 +275,14 @@ private fun BallChip(ball: IndexedBall) {
     }
 
     Surface(
-        shape = MaterialTheme.shapes.small,
-        color = containerColor,
-        modifier = Modifier.size(width = 40.dp, height = 36.dp)
+        shape    = MaterialTheme.shapes.small,
+        color    = containerColor,
+        modifier = Modifier
+            .size(width = 40.dp, height = 36.dp)
+            .clickable(role = Role.Button, onClick = onClick)
     ) {
         Column(
-            modifier           = Modifier.fillMaxSize(),
+            modifier            = Modifier.fillMaxSize(),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
