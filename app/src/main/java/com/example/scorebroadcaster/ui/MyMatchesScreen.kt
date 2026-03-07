@@ -46,11 +46,8 @@ fun MyMatchesScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .padding(24.dp)
+            .padding(horizontal = 24.dp, vertical = 16.dp)
     ) {
-        Text("My Matches", style = MaterialTheme.typography.headlineMedium)
-        Spacer(modifier = Modifier.height(16.dp))
-
         if (matches.isEmpty()) {
             Column(
                 modifier = Modifier

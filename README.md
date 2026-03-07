@@ -164,6 +164,28 @@ Scoring is modelled as an append-only event log:
 
 ## Development Log
 
+### 2026-03-07 – UI Cleanup: Remove Duplicate Screen Titles
+
+**Change:** Removed duplicate page-title headings from three screens that already display the same title in the `TopAppBar` provided by `AppShell`.
+
+**Screens modified:**
+| Screen | Duplicate removed |
+|--------|-------------------|
+| `MyMatchesScreen` | `Text("My Matches", headlineMedium)` — title already shown in TopAppBar |
+| `SavedTeamsScreen` | `Text("Saved Teams", headlineSmall)` — title already shown in TopAppBar; "New Team" button retained |
+| `MatchDetailsScreen` | Custom in-content top-bar `Row` containing back icon + `Text("Match Details")` — both already provided by `AppShell`'s `TopAppBar` |
+
+**What changed:**
+- `MyMatchesScreen`: Removed the `Text("My Matches")` heading and the `Spacer(height(16.dp))` that followed it. Adjusted top padding to `vertical = 16.dp` so content remains well-spaced below the `TopAppBar`.
+- `SavedTeamsScreen`: Removed the `Text("Saved Teams")` from the header `Row`. Changed the row's `horizontalArrangement` from `SpaceBetween` to `End` so the "New Team" button stays right-aligned without a blank label on the left.
+- `MatchDetailsScreen`: Removed the entire custom top-bar `Row` (back `IconButton` + `Text("Match Details")`). Added `vertical = 12.dp` padding to the content `Column` to preserve breathing room below the `TopAppBar`. Removed the now-unused `Icons`, `Icon`, `IconButton`, and `ArrowBack` imports.
+
+**What did NOT change:**
+- Navigation routes, screen composable signatures, and `onBack` / navigation callbacks are untouched.
+- Section headers inside screen content (`"Batting"`, `"Bowling"`, `"1st Innings — …"`, etc.) are preserved.
+- View models and scoring logic are unaffected.
+- `ScorecardScreen` was audited and found to be clean: its `ScorecardMatchHeader` displays the actual match title (e.g. "Team A vs Team B"), which is distinct from the TopAppBar label "Scorecard".
+
 ### 2026-03-07 – Innings Setup Popup Flow Fix
 
 **Fix:** Innings setup dialog (opening batters + bowler) is now safe, dismissible, and handles missing players gracefully.
