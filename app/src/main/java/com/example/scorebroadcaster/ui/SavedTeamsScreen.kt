@@ -60,10 +60,9 @@ fun SavedTeamsScreen(
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            horizontalArrangement = Arrangement.End,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("Saved Teams", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
             Button(onClick = { showCreateDialog = true }) {
                 Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
                 Text("  New Team")
