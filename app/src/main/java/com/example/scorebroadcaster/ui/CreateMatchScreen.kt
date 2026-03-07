@@ -74,6 +74,8 @@ fun CreateMatchScreen(
 
     val teamAReady = teamAName.isNotBlank()
     val teamBReady = teamBName.isNotBlank()
+    val sameTeamError = teamAReady && teamBReady &&
+            finalTeamAName.equals(finalTeamBName, ignoreCase = true)
     val oversValue = if (selectedFormat == MatchFormat.CUSTOM) {
         customOvers.toIntOrNull() ?: 0
     } else {
@@ -137,6 +139,14 @@ fun CreateMatchScreen(
                 teamBPlayers = team.players.map { it.copy() }
             }
         )
+
+        if (sameTeamError) {
+            Text(
+                text = "Both teams cannot be the same.",
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall
+            )
+        }
 
         HorizontalDivider()
 
@@ -218,7 +228,7 @@ fun CreateMatchScreen(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        val canProceed = teamAReady && teamBReady && !customOversError
+        val canProceed = teamAReady && teamBReady && !customOversError && !sameTeamError
 
         Button(
             onClick = {
