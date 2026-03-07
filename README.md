@@ -447,6 +447,34 @@ Previously, `CreateMatchScreen` showed a small **"Saved"** `OutlinedButton` next
 
 ---
 
+### 2026-03-07 – Improvement: Team-First Next-Batter Flow
+
+**Goal:** Make the post-wicket batter-selection flow realistic by prioritising existing batting-team players before allowing a new player to be added.
+
+**Files changed:**
+| File | Change |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/viewmodel/MatchViewModel.kt` | Renamed `availableBatters()` to `eligibleNextBatters()` (public); updated call site and log message |
+| `app/src/main/java/com/example/scorebroadcaster/data/ScoringConsoleState.kt` | Renamed `availablePlayers` field to `teamPlayers` in `PendingAction.SelectNextBatter`; updated KDoc |
+| `app/src/main/java/com/example/scorebroadcaster/ui/ScoringScreen.kt` | Updated `SelectPlayerDialog` with `teamSectionLabel` and `emptyTeamMessage` params; updated `SelectNextBatter` call site to pass team-first labels |
+| `README.md` | Added this log entry |
+
+**What was corrected:**
+
+- **`eligibleNextBatters()` in `MatchViewModel`** — renamed from the private `availableBatters()` to the public `eligibleNextBatters()` to match the naming convention requested in the problem statement. The filtering logic is unchanged: excludes current striker, current non-striker, and already-dismissed batters. Derived entirely from the batting-team roster in `_activeMatch`, so mid-match additions via `addPlayerToTeam` are automatically reflected.
+- **`PendingAction.SelectNextBatter.teamPlayers`** — the field was renamed from `availablePlayers` to `teamPlayers` to clarify that these are pre-existing batting-team players, not a generic "available" list.
+- **`SelectPlayerDialog` — team-first UX** — two new optional parameters added:
+  - `teamSectionLabel: String?` — when provided, a labelled section header ("Select from team") appears above the player list so the scorer immediately sees the team path is primary.
+  - `emptyTeamMessage: String?` — when provided and the player list is empty, a descriptive message ("No unused players left in the batting team") is shown instead of a blank space. The scorer then sees only the secondary "Add new player" section and the "No more players / All out" button.
+- **Call site** — the `SelectNextBatter` dialog now passes `teamSectionLabel = "Select from team"` and `emptyTeamMessage = "No unused players left in the batting team"`. The `SelectBowler` dialog is unaffected (uses the existing defaults).
+
+**Architecture:**
+
+- Eligibility logic remains entirely in `MatchViewModel.eligibleNextBatters()` — nothing pushed into the composable.
+- `ScoreReducer`, `MatchState`, `ScoreEvent`, `InningsPhase`, the bowler-change flow, the wicket-details flow, innings transitions, scorecard, ball editing, and the streaming/camera/Facebook Live path are all unmodified.
+
+---
+
 ### 2026-03-07 – Bug Fix: All Out option in wicket replacement flow
 
 **Bug:** After a wicket, the next-batter dialog only allowed selecting an existing player or adding a new one. There was no way to declare "no more players", so the innings never ended via all-out unless exactly 10 wickets had fallen. The scorer could keep adding phantom players forever.
