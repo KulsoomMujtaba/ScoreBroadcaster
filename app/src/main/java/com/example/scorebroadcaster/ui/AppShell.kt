@@ -236,6 +236,12 @@ fun AppDrawer(
             selected = currentRoute == "saved_teams",
             onClick = { onNavigate("saved_teams") }
         )
+        DrawerNavItem(
+            icon = Icons.Default.List,
+            label = "Scorecard",
+            selected = currentRoute == "scorecard",
+            onClick = { onNavigate("scorecard") }
+        )
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 

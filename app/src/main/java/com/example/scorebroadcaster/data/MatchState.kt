@@ -8,5 +8,9 @@ data class MatchState(
     val overs: Int = 0,
     val balls: Int = 0,
     val lastBalls: List<String> = emptyList(),
-    val extras: Int = 0
+    val extras: Int = 0,
+    val wides: Int = 0,
+    val noBalls: Int = 0,
+    val byes: Int = 0,
+    val legByes: Int = 0
 )

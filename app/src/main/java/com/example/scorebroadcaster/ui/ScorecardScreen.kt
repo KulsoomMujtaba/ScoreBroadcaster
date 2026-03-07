@@ -8,8 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -41,79 +40,106 @@ fun ScorecardScreen(
     val state by matchViewModel.state.collectAsState()
     val console by matchViewModel.consoleState.collectAsState()
 
-    Column(
+    val match = activeMatch ?: scoringMatch
+
+    if (match == null || console.phase == InningsPhase.SETUP) {
+        Column(
+            modifier = modifier
+                .fillMaxSize()
+                .padding(32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(
+                "Scorecard will be available once scoring starts.",
+                style = MaterialTheme.typography.bodyLarge,
+                textAlign = TextAlign.Center,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+            )
+        }
+        return
+    }
+
+    // Resolve 1st innings data
+    val firstBatting: List<BattingEntry>
+    val firstBowling: List<BowlingEntry>
+    val firstExtras: Int
+    val firstWides: Int
+    val firstNoBalls: Int
+    val firstByes: Int
+    val firstLegByes: Int
+    val firstRuns: Int
+    val firstWickets: Int
+    val firstOvers: Int
+    val firstBalls: Int
+
+    if (console.phase == InningsPhase.FIRST_INNINGS) {
+        // Still in first innings — show live data
+        firstBatting = console.allBattingEntries
+        firstBowling = console.allBowlingEntries
+        firstExtras = state.extras
+        firstWides = state.wides
+        firstNoBalls = state.noBalls
+        firstByes = state.byes
+        firstLegByes = state.legByes
+        firstRuns = state.runs
+        firstWickets = state.wickets
+        firstOvers = state.overs
+        firstBalls = state.balls
+    } else {
+        // After first innings — use saved snapshot
+        firstBatting = console.firstInningsBattingEntries
+        firstBowling = console.firstInningsBowlingEntries
+        firstExtras = console.firstInningsExtras
+        firstWides = console.firstInningsWides
+        firstNoBalls = console.firstInningsNoBalls
+        firstByes = console.firstInningsByes
+        firstLegByes = console.firstInningsLegByes
+        firstRuns = console.firstInningsRuns
+        firstWickets = console.firstInningsWickets
+        firstOvers = console.firstInningsOvers
+        firstBalls = console.firstInningsBalls
+    }
+
+    LazyColumn(
         modifier = modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        val match = activeMatch ?: scoringMatch
-        if (match == null || console.phase == InningsPhase.SETUP) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(32.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(
-                    "Scorecard will be available once scoring starts.",
-                    style = MaterialTheme.typography.bodyLarge,
-                    textAlign = TextAlign.Center,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                )
-            }
-            return
-        }
+        item { Spacer(Modifier.height(4.dp)) }
 
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            // --- Match header ---
-            ScorecardMatchHeader(match = match)
+        // --- Match header ---
+        item { ScorecardMatchHeader(match = match) }
 
-            HorizontalDivider()
+        item { HorizontalDivider() }
 
-            // --- 1st innings ---
-            val firstBatting: List<BattingEntry>
-            val firstBowling: List<BowlingEntry>
-            val firstExtras: Int
-            val firstRuns: Int
-            val firstWickets: Int
-
-            if (console.phase == InningsPhase.FIRST_INNINGS) {
-                // Still in first innings — show live data
-                firstBatting = console.allBattingEntries
-                firstBowling = console.allBowlingEntries
-                firstExtras = state.extras
-                firstRuns = state.runs
-                firstWickets = state.wickets
-            } else {
-                // After first innings — use saved snapshot
-                firstBatting = console.firstInningsBattingEntries
-                firstBowling = console.firstInningsBowlingEntries
-                firstExtras = console.firstInningsExtras
-                firstRuns = console.firstInningsRuns
-                firstWickets = console.firstInningsWickets
-            }
-
+        // --- 1st innings ---
+        item {
             InningsScorecardSection(
                 title = "1st Innings — ${match.battingFirst.name}",
                 battingEntries = firstBatting,
                 bowlingEntries = firstBowling,
                 extras = firstExtras,
+                wides = firstWides,
+                noBalls = firstNoBalls,
+                byes = firstByes,
+                legByes = firstLegByes,
                 totalRuns = firstRuns,
-                totalWickets = firstWickets
+                totalWickets = firstWickets,
+                totalOvers = firstOvers,
+                totalBalls = firstBalls
             )
+        }
 
-            // --- 2nd innings (if started) ---
-            if (console.phase == InningsPhase.SECOND_INNINGS ||
-                console.phase == InningsPhase.MATCH_COMPLETE
-            ) {
-                HorizontalDivider()
+        // --- 2nd innings (if started) ---
+        if (console.phase == InningsPhase.SECOND_INNINGS ||
+            console.phase == InningsPhase.MATCH_COMPLETE
+        ) {
+            item { HorizontalDivider() }
 
-                // Target info
+            // Target info
+            item {
                 Surface(
                     color = MaterialTheme.colorScheme.tertiaryContainer,
                     shape = MaterialTheme.shapes.medium,
@@ -134,19 +160,27 @@ fun ScorecardScreen(
                         modifier = Modifier.padding(12.dp)
                     )
                 }
+            }
 
+            item {
                 InningsScorecardSection(
                     title = "2nd Innings — ${match.bowlingFirst.name}",
                     battingEntries = console.allBattingEntries,
                     bowlingEntries = console.allBowlingEntries,
                     extras = state.extras,
+                    wides = state.wides,
+                    noBalls = state.noBalls,
+                    byes = state.byes,
+                    legByes = state.legByes,
                     totalRuns = state.runs,
-                    totalWickets = state.wickets
+                    totalWickets = state.wickets,
+                    totalOvers = state.overs,
+                    totalBalls = state.balls
                 )
             }
-
-            Spacer(modifier = Modifier.height(24.dp))
         }
+
+        item { Spacer(modifier = Modifier.height(24.dp)) }
     }
 }
 
@@ -194,8 +228,14 @@ private fun InningsScorecardSection(
     battingEntries: List<BattingEntry>,
     bowlingEntries: List<BowlingEntry>,
     extras: Int,
+    wides: Int,
+    noBalls: Int,
+    byes: Int,
+    legByes: Int,
     totalRuns: Int,
-    totalWickets: Int
+    totalWickets: Int,
+    totalOvers: Int,
+    totalBalls: Int
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(
@@ -204,6 +244,13 @@ private fun InningsScorecardSection(
             fontWeight = FontWeight.Bold
         )
 
+        // --- BATTING SCORECARD ---
+        Text(
+            "BATTING",
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary
+        )
         if (battingEntries.isEmpty()) {
             Text(
                 "No batting data available.",
@@ -214,18 +261,16 @@ private fun InningsScorecardSection(
             BattingTable(entries = battingEntries)
         }
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(
-                "Extras",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-            )
-            Text("$extras", style = MaterialTheme.typography.bodySmall)
-        }
+        // --- Extras breakdown ---
+        ExtrasRow(
+            total = extras,
+            wides = wides,
+            noBalls = noBalls,
+            byes = byes,
+            legByes = legByes
+        )
 
+        // --- Totals row ---
         HorizontalDivider(thickness = 0.5.dp)
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -237,21 +282,59 @@ private fun InningsScorecardSection(
                 fontWeight = FontWeight.Bold
             )
             Text(
-                "$totalRuns/$totalWickets",
+                "$totalRuns/$totalWickets  (${ScorecardFormatter.formatOvers(totalOvers, totalBalls)} ov)",
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Bold
             )
         }
 
+        // --- BOWLING FIGURES ---
         if (bowlingEntries.isNotEmpty()) {
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                "Bowling",
+                "BOWLING",
                 style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
             )
             BowlingTable(entries = bowlingEntries)
         }
+    }
+}
+
+// =============================================================================
+// Extras breakdown row
+// =============================================================================
+
+@Composable
+private fun ExtrasRow(
+    total: Int,
+    wides: Int,
+    noBalls: Int,
+    byes: Int,
+    legByes: Int
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                "Extras",
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.Medium
+            )
+            Text(
+                "$total",
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.Medium
+            )
+        }
+        Text(
+            text = "  (wd $wides, nb $noBalls, b $byes, lb $legByes)",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+        )
     }
 }
 
@@ -262,7 +345,6 @@ private fun InningsScorecardSection(
 @Composable
 private fun BattingTable(entries: List<BattingEntry>) {
     Column {
-        // Header
         BattingTableHeader()
         HorizontalDivider(thickness = 0.5.dp)
         entries.forEach { entry ->
@@ -285,12 +367,12 @@ private fun BattingTableHeader() {
             fontWeight = FontWeight.Bold,
             modifier = Modifier.weight(2f)
         )
-        listOf("R", "B", "4s", "6s").forEach { col ->
+        listOf("R", "B", "4s", "6s", "SR").forEach { col ->
             Text(
                 col,
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Bold,
-                modifier = Modifier.weight(0.5f),
+                modifier = Modifier.weight(0.6f),
                 textAlign = TextAlign.End
             )
         }
@@ -330,12 +412,13 @@ private fun BattingTableRow(entry: BattingEntry) {
             "${entry.runs}",
             "${entry.balls}",
             "${entry.fours}",
-            "${entry.sixes}"
+            "${entry.sixes}",
+            ScorecardFormatter.formatStrikeRate(entry.runs, entry.balls)
         ).forEach { value ->
             Text(
                 value,
                 style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.weight(0.5f),
+                modifier = Modifier.weight(0.6f),
                 textAlign = TextAlign.End
             )
         }
@@ -371,12 +454,12 @@ private fun BowlingTableHeader() {
             fontWeight = FontWeight.Bold,
             modifier = Modifier.weight(2f)
         )
-        listOf("O", "R", "W").forEach { col ->
+        listOf("O", "R", "W", "Econ").forEach { col ->
             Text(
                 col,
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Bold,
-                modifier = Modifier.weight(0.5f),
+                modifier = Modifier.weight(0.6f),
                 textAlign = TextAlign.End
             )
         }
@@ -398,16 +481,18 @@ private fun BowlingTableRow(entry: BowlingEntry) {
             modifier = Modifier.weight(2f)
         )
         listOf(
-            "${entry.overs}.${entry.balls}",
+            ScorecardFormatter.formatOvers(entry.overs, entry.balls),
             "${entry.runs}",
-            "${entry.wickets}"
+            "${entry.wickets}",
+            ScorecardFormatter.formatEconomy(entry.runs, entry.overs, entry.balls)
         ).forEach { value ->
             Text(
                 value,
                 style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.weight(0.5f),
+                modifier = Modifier.weight(0.6f),
                 textAlign = TextAlign.End
             )
         }
     }
 }
+

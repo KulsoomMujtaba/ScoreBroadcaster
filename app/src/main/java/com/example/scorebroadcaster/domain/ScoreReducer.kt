@@ -30,6 +30,7 @@ private fun applyEvent(state: MatchState, event: ScoreEvent): MatchState = when 
         state.copy(
             runs = state.runs + event.runs + 1,
             extras = state.extras + event.runs + 1,
+            wides = state.wides + event.runs + 1,
             lastBalls = updateLastBalls(state.lastBalls, "Wd")
         )
     }
@@ -38,6 +39,7 @@ private fun applyEvent(state: MatchState, event: ScoreEvent): MatchState = when 
         state.copy(
             runs = state.runs + event.runs + 1,
             extras = state.extras + 1,
+            noBalls = state.noBalls + 1,
             lastBalls = updateLastBalls(state.lastBalls, "NB")
         )
     }
@@ -46,6 +48,7 @@ private fun applyEvent(state: MatchState, event: ScoreEvent): MatchState = when 
         state.copy(
             runs = state.runs + event.runs,
             extras = state.extras + event.runs,
+            byes = state.byes + event.runs,
             overs = overs,
             balls = balls,
             lastBalls = updateLastBalls(state.lastBalls, "B${event.runs}")
@@ -56,6 +59,7 @@ private fun applyEvent(state: MatchState, event: ScoreEvent): MatchState = when 
         state.copy(
             runs = state.runs + event.runs,
             extras = state.extras + event.runs,
+            legByes = state.legByes + event.runs,
             overs = overs,
             balls = balls,
             lastBalls = updateLastBalls(state.lastBalls, "LB${event.runs}")
