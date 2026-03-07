@@ -242,6 +242,32 @@ Previously, `CreateMatchScreen` showed a small **"Saved"** `OutlinedButton` next
 
 ---
 
+### 2026-03-07 – Bug Fix: All Out option in wicket replacement flow
+
+**Bug:** After a wicket, the next-batter dialog only allowed selecting an existing player or adding a new one. There was no way to declare "no more players", so the innings never ended via all-out unless exactly 10 wickets had fallen. The scorer could keep adding phantom players forever.
+
+**Files changed:**
+| File | Change |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/viewmodel/MatchViewModel.kt` | Added `endInningsAsAllOut()` handler |
+| `app/src/main/java/com/example/scorebroadcaster/ui/ScoringScreen.kt` | Added `onAllOut` parameter to `SelectPlayerDialog`; wired it for `SelectNextBatter` dialog |
+| `README.md` | Added this log entry |
+
+**What was fixed:**
+
+- **`endInningsAsAllOut()` in `MatchViewModel`** — new public method that clears the pending batter action and immediately ends the innings. If the current innings is the first, it calls `endFirstInnings()` (moving to `INNINGS_BREAK`, preserving total, calculating target). If the current innings is the second, it calls `endMatch()` (moving to `MATCH_COMPLETE`).
+- **`SelectPlayerDialog` — `onAllOut` parameter** — optional `(() -> Unit)?` callback. When non-null, a prominent "No more players / All out" button (styled with `errorContainer` colour) is added after the add-new-player section. For bowler-change dialogs the callback is not passed, so the button is never shown there.
+- **Scoring blocked during wicket dialog** — no change needed; `ScoringButtonsSection` is already gated on `console.pendingAction == null`. After "All out" is chosen, `pendingAction` is cleared and the phase changes to `INNINGS_BREAK` or `MATCH_COMPLETE`, which correctly hides the scoring controls.
+
+**Debug logs added (tag `WicketFlow`):**
+1. `"All out selected by scorer"` — at the start of `endInningsAsAllOut()`.
+2. `"Innings ended due to all out — moving to innings break"` — when first innings ends.
+3. `"Innings ended due to all out — match completed"` — when second innings ends.
+
+**Architecture unchanged:** `ScoreReducer`, `MatchState`, `ScoreEvent`, `ScoringConsoleState`, `PendingAction`, `InningsPhase`, and the bowler-change flow are all unmodified.
+
+---
+
 ### 2026-03-06 – Bug Fix: Wicket-to-Next-Batter Flow
 
 **Bug:** The `SelectNextBatter` dialog was never shown after a wicket, so scoring could continue without a replacement batter being selected.
