@@ -176,6 +176,22 @@ Scoring is modelled as an append-only event log:
 
 ## Development Log
 
+### 2026-03-07 – Prevent Same Team Match Creation
+
+**Validation rule:**
+Team A and Team B must not be the same name (comparison is case-insensitive). This applies both to freely typed names and to saved teams selected from the dropdown. For example, "Falcons" vs "Falcons" and "Falcons" vs "falcons" are both invalid.
+
+**UI error message:**
+When the two team names are equal (case-insensitive), a Material3-styled error message — _"Both teams cannot be the same."_ — is displayed immediately below the Team B field. The "Next: Add Players →" button is disabled until the conflict is resolved.
+
+**Files modified:**
+| File | Change |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/ui/CreateMatchScreen.kt` | Added `sameTeamError` derived state; updated `canProceed` to include `!sameTeamError`; added error `Text` composable below Team B field. |
+| `README.md` | Added this Development Log entry. |
+
+---
+
 ### 2026-03-07 – Publish-Ready Match Model
 
 **What changed:**
