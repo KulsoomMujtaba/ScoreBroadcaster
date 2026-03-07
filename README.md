@@ -378,6 +378,42 @@ Previously, `CreateMatchScreen` showed a small **"Saved"** `OutlinedButton` next
 
 ---
 
+### 2026-03-07 – Phase 5: Searchable Team Selector UX in CreateMatchScreen
+
+**Feature:** Replace the two-mode (New Team / Use Saved Team) team selection flow in `CreateMatchScreen` with a unified, searchable editable-dropdown field for each team.
+
+**Files modified:**
+| File | Action |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/ui/CreateMatchScreen.kt` | Replaced FilterChip mode-toggle + separate picker dialog with `TeamSelectorField`; simplified state; removed `SavedTeamChip` and `SavedTeamPickerDialog` composables |
+| `README.md` | Added this log entry |
+
+**New composable — `TeamSelectorField`:**
+- A reusable `ExposedDropdownMenuBox`-based composable that combines an editable text field with a searchable saved-team dropdown.
+- **Free typing:** the user can type any team name; if they never pick from the dropdown the name is used as-is for the match.
+- **Dropdown filtering:** as the user types, saved teams are filtered case-insensitively; results appear immediately.
+- **Select existing team:** tapping a team from the dropdown fills the name field and pre-populates the player list (players are deep-copied so the match stays independent of the saved-team template).
+- **Create new team:** "＋ Create new team" is always shown at the bottom of the dropdown. Tapping it opens the existing `CreateSavedTeamDialog`, saves the new team to `SavedTeamRepository` via `MatchSessionViewModel.addSavedTeam()`, and auto-selects it (name + players) into the current team field.
+- Reused for both Team A and Team B fields.
+
+**State simplification in `CreateMatchScreen`:**
+- Removed: `teamAUseSaved`, `teamBUseSaved`, `teamASelectedSaved`, `teamBSelectedSaved`, `saveTeamA`, `saveTeamB`, `showSavedTeamPickerForA`, `showSavedTeamPickerForB`.
+- Kept: `teamAName`, `teamAPlayers`, `teamBName`, `teamBPlayers` — the same fields that fed the match creation before.
+- `finalTeamAName`/`finalTeamBName` are now simply `teamAName.trim()` / `teamBName.trim()`.
+- The "save team on proceed" checkbox is replaced by the in-dropdown create flow.
+
+**Removed composables:**
+- `SavedTeamChip` — no longer needed (dropdown handles post-selection display).
+- `SavedTeamPickerDialog` — replaced by the inline dropdown in `TeamSelectorField`.
+
+**What was improved:**
+- Single field per team instead of two separate modes.
+- Search-as-you-type filtering of saved teams.
+- Creating a new saved team is one tap away from the same field.
+- Free typing still works — PlayerSetupScreen and the rest of the match flow are unaffected.
+
+---
+
 ### 2026-03-07 – Phase 4: Full Scorecard Screen
 
 **Feature:** Add a proper cricket scorecard screen (`ScorecardScreen`) that displays a realistic batting and bowling summary for both innings.
