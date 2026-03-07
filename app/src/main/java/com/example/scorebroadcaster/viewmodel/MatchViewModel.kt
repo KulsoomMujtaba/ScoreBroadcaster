@@ -252,6 +252,85 @@ class MatchViewModel : ViewModel() {
         }
     }
 
+    /**
+     * Replace the [BallEvent] at [globalIndex] in the active-innings event log
+     * (or the first-innings log when [inFirstInnings] is true) with [updatedEvent].
+     *
+     * The innings aggregate [MatchState] is rebuilt by replaying the modified event log.
+     * Per-player batting/bowling stats in [ScoringConsoleState] are **not** rebuilt
+     * (the same simplification applied by [undo]).
+     *
+     * @param globalIndex   0-based position in the target event log.
+     * @param updatedEvent  The corrected [BallEvent] to store at that position.
+     * @param inFirstInnings True when editing the archived first-innings log.
+     */
+    fun replaceBallEvent(globalIndex: Int, updatedEvent: BallEvent, inFirstInnings: Boolean = false) {
+        if (inFirstInnings) {
+            val current = _firstInningsEvents.value
+            if (globalIndex < 0 || globalIndex >= current.size) return
+            val updated = current.toMutableList().apply { set(globalIndex, updatedEvent) }
+            _firstInningsEvents.value = updated
+            rebuildFirstInningsSnapshot(updated)
+        } else {
+            val current = _events.value
+            if (globalIndex < 0 || globalIndex >= current.size) return
+            _events.value = current.toMutableList().apply { set(globalIndex, updatedEvent) }
+            _state.value = reduce(_events.value)
+                .copy(teamAName = currentTeamAName, teamBName = currentTeamBName)
+        }
+    }
+
+    /**
+     * Delete the [BallEvent] at [globalIndex] from the active-innings event log
+     * (or the first-innings log when [inFirstInnings] is true).
+     *
+     * The innings aggregate [MatchState] is rebuilt by replaying the remaining events.
+     * Per-player batting/bowling stats in [ScoringConsoleState] are **not** rebuilt
+     * (the same simplification applied by [undo]).
+     *
+     * @param globalIndex   0-based position in the target event log.
+     * @param inFirstInnings True when deleting from the archived first-innings log.
+     */
+    fun deleteBallEvent(globalIndex: Int, inFirstInnings: Boolean = false) {
+        if (inFirstInnings) {
+            val current = _firstInningsEvents.value
+            if (globalIndex < 0 || globalIndex >= current.size) return
+            val updated = current.filterIndexed { index, _ -> index != globalIndex }
+            _firstInningsEvents.value = updated
+            rebuildFirstInningsSnapshot(updated)
+        } else {
+            val current = _events.value
+            if (globalIndex < 0 || globalIndex >= current.size) return
+            _events.value = _events.value.filterIndexed { index, _ -> index != globalIndex }
+            _state.value = reduce(_events.value)
+                .copy(teamAName = currentTeamAName, teamBName = currentTeamBName)
+        }
+    }
+
+    /**
+     * Recompute the first-innings aggregate snapshot stored in [ScoringConsoleState] by
+     * replaying [firstEvents] through the reducer.
+     *
+     * Called after [replaceBallEvent] or [deleteBallEvent] modifies the first-innings log.
+     * Only aggregate totals (runs, wickets, extras, overs, target) are updated; per-player
+     * batting/bowling entries are left unchanged.
+     */
+    private fun rebuildFirstInningsSnapshot(firstEvents: List<BallEvent>) {
+        val firstState = reduce(firstEvents)
+        _consoleState.value = _consoleState.value.copy(
+            firstInningsRuns     = firstState.runs,
+            firstInningsWickets  = firstState.wickets,
+            firstInningsExtras   = firstState.extras,
+            firstInningsWides    = firstState.wides,
+            firstInningsNoBalls  = firstState.noBalls,
+            firstInningsByes     = firstState.byes,
+            firstInningsLegByes  = firstState.legByes,
+            firstInningsOvers    = firstState.overs,
+            firstInningsBalls    = firstState.balls,
+            target               = firstState.runs + 1
+        )
+    }
+
     fun resetMatch() {
         _events.value = emptyList()
         _state.value = MatchState()
