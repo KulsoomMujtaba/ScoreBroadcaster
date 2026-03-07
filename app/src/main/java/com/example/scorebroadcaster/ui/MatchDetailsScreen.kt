@@ -36,6 +36,7 @@ import com.example.scorebroadcaster.data.MatchState
 import com.example.scorebroadcaster.data.ScoringConsoleState
 import com.example.scorebroadcaster.data.entity.Match
 import com.example.scorebroadcaster.data.entity.MatchStatus
+import com.example.scorebroadcaster.data.entity.MatchVisibility
 import com.example.scorebroadcaster.data.entity.Player
 import com.example.scorebroadcaster.viewmodel.MatchSessionViewModel
 import com.example.scorebroadcaster.viewmodel.MatchViewModel
@@ -130,6 +131,11 @@ fun MatchDetailsScreen(
                     }
                 )
             }
+
+            HorizontalDivider()
+
+            // --- Publishing controls (placeholder — backend not yet implemented) ---
+            MatchPublishingSection(match = match)
 
             Spacer(modifier = Modifier.height(24.dp))
         }
@@ -412,6 +418,81 @@ private fun MatchActionButtons(
             ) {
                 Text("Go Live")
             }
+        }
+    }
+}
+
+// =============================================================================
+// Publishing controls (placeholder — backend not yet implemented)
+// =============================================================================
+
+/**
+ * Placeholder section for match publishing controls.
+ *
+ * All actions here are disabled today.  They are present to make the future
+ * one-scorer / many-viewers product direction visible in the UI and to reserve
+ * the correct layout slot for when backend publishing is added.
+ *
+ * Future implementation notes:
+ * - "Publish Match" will set [Match.visibility] to [MatchVisibility.PUBLISHED],
+ *   write [Match.publishedAt], and sync the match to the remote backend.
+ * - "Share Match" will generate or display [Match.shareCode] for viewers.
+ * - Visibility chip will allow toggling between PRIVATE / UNLISTED / PUBLISHED.
+ */
+@Composable
+private fun MatchPublishingSection(match: Match) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text(
+            text = "Publishing",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+        )
+
+        // Visibility status row
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Match Visibility",
+                style = MaterialTheme.typography.bodyMedium
+            )
+            Surface(
+                color = MaterialTheme.colorScheme.secondaryContainer,
+                shape = MaterialTheme.shapes.extraSmall
+            ) {
+                Text(
+                    text = match.visibility.label,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                )
+            }
+        }
+
+        // Publish Match button (disabled — backend not yet implemented)
+        OutlinedButton(
+            onClick = { /* TODO: implement backend publish */ },
+            enabled = false,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(
+                "Publish Match  ·  coming soon",
+                style = MaterialTheme.typography.titleSmall
+            )
+        }
+
+        // Share Match button (disabled — requires published match + backend)
+        OutlinedButton(
+            onClick = { /* TODO: implement share after publish */ },
+            enabled = false,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(
+                "Share Match  ·  coming soon",
+                style = MaterialTheme.typography.titleSmall
+            )
         }
     }
 }

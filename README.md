@@ -58,6 +58,7 @@ The core promise is simple: open the app, start a match, score every ball, and s
 | Scorecard view (batting + bowling summary, both innings) | ✅ Done | `ScorecardScreen` |
 | Ball timeline / over history (per-ball, grouped by over) | ✅ Done | `BallTimelineScreen` |
 | Domain entities (Team, Player, Match, …) | ✅ Done | `data/entity/` |
+| Publish-ready match model (MatchVisibility, ownerUserId, remoteId, shareCode) | ✅ Done | `data/entity/Match`, `data/entity/MatchVisibility` |
 | Local in-memory repository | ✅ Done | `repository/MatchRepository` |
 | Match session management | ✅ Done | `MatchSessionViewModel` |
 
@@ -130,6 +131,7 @@ com.example.scorebroadcaster/
 │       ├── Innings.kt
 │       ├── MatchFormat.kt     # T20, ODI, T10, Tape-ball, Custom
 │       ├── MatchStatus.kt     # NOT_STARTED, IN_PROGRESS, INNINGS_BREAK, COMPLETED
+│       ├── MatchVisibility.kt # PRIVATE, PUBLISHED, UNLISTED (publish-ready)
 │       ├── TossDecision.kt    # BAT / BOWL
 │       ├── BattingEntry.kt
 │       ├── BowlingEntry.kt
@@ -173,6 +175,75 @@ Scoring is modelled as an append-only event log:
 ---
 
 ## Development Log
+
+### 2026-03-07 – Publish-Ready Match Model
+
+**What changed:**
+Refactored the `Match` entity and app structure to be ready for future match publishing, without implementing any backend or authentication logic.  All existing behaviour is unchanged — matches remain local/private, scoring is unaffected, and all screens continue to work exactly as before.
+
+**New `MatchVisibility` enum:**
+
+| Value | Meaning |
+|-------|---------|
+| `PRIVATE` | Local/scorer-only.  Default for all new matches. |
+| `PUBLISHED` | Publicly listed via backend (future). |
+| `UNLISTED` | Accessible by direct link / share-code but not listed publicly (future). |
+
+**New fields on `Match` (all nullable / defaulted — zero breaking changes):**
+
+| Field | Type | Purpose |
+|-------|------|---------|
+| `localId` | `String` | Stable on-device key (mirrors `id` today; kept separate for future local-vs-remote clarity) |
+| `remoteId` | `String?` | Backend-assigned identifier after publishing (null until sync exists) |
+| `ownerUserId` | `String?` | Account ID of the scorer/owner (null until auth exists) |
+| `visibility` | `MatchVisibility` | Defaults to `PRIVATE` |
+| `publishedAt` | `Long?` | Epoch-ms timestamp of first publication (null while private) |
+| `shareCode` | `String?` | Short public slug for viewer links (null until backend assigns one) |
+
+**Computed property added to `Match`:**
+- `isPublished: Boolean` — `true` when `visibility == PUBLISHED && publishedAt != null`.
+
+**Publishing placeholder in `MatchDetailsScreen`:**
+A new `MatchPublishingSection` composable is added below the action buttons.  It shows:
+- **Match Visibility** row displaying the current `visibility` label (always "Private" today).
+- **Publish Match · coming soon** button (disabled).
+- **Share Match · coming soon** button (disabled).
+
+This makes the one-scorer / many-viewers product direction visible in the UI without pretending any backend exists.
+
+**Architecture notes — one-scorer / many-viewers:**
+- Only one scorer (the device that created the match) can edit a match.  This assumption is preserved.
+- Viewer access will later be gated on `MatchVisibility`; the local repository never enforces viewer permissions — that is the remote backend's responsibility.
+- `MatchRepository` documentation updated to reflect local-vs-remote identity separation and future viewer architecture.
+
+**Files created/modified:**
+
+| File | Action |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/data/entity/MatchVisibility.kt` | **Created** – new `MatchVisibility` enum with `PRIVATE`, `PUBLISHED`, `UNLISTED` |
+| `app/src/main/java/com/example/scorebroadcaster/data/entity/Match.kt` | **Updated** – new publish-ready fields; `isPublished` computed property |
+| `app/src/main/java/com/example/scorebroadcaster/repository/MatchRepository.kt` | **Updated** – documentation updated for future remote-sync and viewer architecture |
+| `app/src/main/java/com/example/scorebroadcaster/ui/MatchDetailsScreen.kt` | **Updated** – `MatchPublishingSection` placeholder added |
+| `README.md` | **Updated** |
+
+**What was prepared now vs. what is still future work:**
+
+| Prepared now | Still future work |
+|-------------|-------------------|
+| `MatchVisibility` enum | Backend API for publishing |
+| Publish-ready fields on `Match` | Authentication / `ownerUserId` population |
+| `isPublished` helper | Remote match sync |
+| Placeholder publishing UI in `MatchDetailsScreen` | Enabling "Publish" / "Share" buttons |
+| Architecture documentation | Viewer-mode read-only screens |
+| `MatchRepository` future-readiness comments | Remote `MatchRepository` implementation |
+
+**What did NOT change:**
+- Scoring engine (`ScoreReducer`, `MatchState`, `ScoreEvent`, `BallEvent`) — untouched.
+- All scoring, scorecard, timeline, camera, and streaming screens — untouched.
+- Create Match flow — untouched (new `Match` fields all have defaults).
+- `MatchViewModel`, `MatchSessionViewModel`, `LiveStreamViewModel` — untouched.
+
+---
 
 ### 2026-03-07 – Player Picker Integration
 
