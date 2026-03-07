@@ -67,6 +67,12 @@ data class ScoringConsoleState(
     val firstInningsBattingEntries: List<BattingEntry> = emptyList(),
     val firstInningsBowlingEntries: List<BowlingEntry> = emptyList(),
     val firstInningsExtras: Int = 0,
+    val firstInningsWides: Int = 0,
+    val firstInningsNoBalls: Int = 0,
+    val firstInningsByes: Int = 0,
+    val firstInningsLegByes: Int = 0,
+    val firstInningsOvers: Int = 0,
+    val firstInningsBalls: Int = 0,
 
     // First-innings totals (populated at end of 1st innings; used for target in 2nd)
     val firstInningsRuns: Int = 0,
