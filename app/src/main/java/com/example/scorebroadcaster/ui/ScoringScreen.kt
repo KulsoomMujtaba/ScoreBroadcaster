@@ -15,6 +15,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
@@ -49,10 +50,20 @@ import com.example.scorebroadcaster.data.entity.BattingEntry
 import com.example.scorebroadcaster.data.entity.BowlingEntry
 import com.example.scorebroadcaster.data.entity.DismissalDetail
 import com.example.scorebroadcaster.data.entity.DismissalType
+import com.example.scorebroadcaster.data.entity.ExtrasBreakdown
 import com.example.scorebroadcaster.data.entity.Match
 import com.example.scorebroadcaster.data.entity.Player
 import com.example.scorebroadcaster.data.entity.Team
+import com.example.scorebroadcaster.domain.BallEvent
 import com.example.scorebroadcaster.viewmodel.MatchViewModel
+
+/** Identifies which type of extra delivery the scorer is entering. */
+enum class ExtraType(val label: String) {
+    WIDE("Wide"),
+    NO_BALL("No Ball"),
+    BYE("Bye"),
+    LEG_BYE("Leg Bye"),
+}
 
 @Composable
 fun ScoringScreen(
@@ -178,10 +189,13 @@ fun ScoringScreen(
                     console.pendingAction == null
             // Wicket details dialog state — shown before dispatching the Wicket event
             var showWicketDialog by remember { mutableStateOf(false) }
+            // Extras entry dialog state
+            var extrasDialogType by remember { mutableStateOf<ExtraType?>(null) }
             ScoringButtonsSection(
                 onEvent = { matchViewModel.addEvent(it) },
                 onUndo = { matchViewModel.undo() },
                 onWicket = { showWicketDialog = true },
+                onExtras = { type -> extrasDialogType = type },
                 enabled = scoringEnabled
             )
             if (showWicketDialog) {
@@ -200,6 +214,25 @@ fun ScoringScreen(
                         matchViewModel.addEvent(ScoreEvent.Wicket(dismissal))
                     },
                     onDismiss = { showWicketDialog = false }
+                )
+            }
+            val currentExtrasType = extrasDialogType
+            if (currentExtrasType != null) {
+                val bowlingTeamPlayers = when {
+                    activeMatch == null -> emptyList()
+                    console.inningsNumber == 1 -> activeMatch.bowlingFirst.players
+                    else -> activeMatch.battingFirst.players
+                }
+                ExtrasEntryDialog(
+                    initialType = currentExtrasType,
+                    striker = console.striker,
+                    nonStriker = console.nonStriker,
+                    bowlingTeamPlayers = bowlingTeamPlayers,
+                    onConfirm = { ballEvent ->
+                        extrasDialogType = null
+                        matchViewModel.addBallEvent(ballEvent)
+                    },
+                    onDismiss = { extrasDialogType = null }
                 )
             }
             Spacer(modifier = Modifier.height(8.dp))
@@ -580,6 +613,7 @@ private fun ScoringButtonsSection(
     onEvent: (ScoreEvent) -> Unit,
     onUndo: () -> Unit,
     onWicket: () -> Unit,
+    onExtras: (ExtraType) -> Unit,
     enabled: Boolean
 ) {
     // Run buttons: 0 1 2 3 4 6
@@ -592,17 +626,16 @@ private fun ScoringButtonsSection(
     }
     Spacer(modifier = Modifier.height(8.dp))
 
-    // Wicket / Wide / No Ball / Bye / Leg Bye
+    // Wicket / Extras row
     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         Button(
             onClick = onWicket,
             enabled = enabled,
             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
         ) { Text("W") }
-        Button(onClick = { onEvent(ScoreEvent.Wide(0)) }, enabled = enabled) { Text("Wd+1") }
-        Button(onClick = { onEvent(ScoreEvent.NoBall(0)) }, enabled = enabled) { Text("NB+1") }
-        Button(onClick = { onEvent(ScoreEvent.Bye(1)) }, enabled = enabled) { Text("Bye") }
-        Button(onClick = { onEvent(ScoreEvent.LegBye(1)) }, enabled = enabled) { Text("LB") }
+        ExtraType.entries.forEach { type ->
+            Button(onClick = { onExtras(type) }, enabled = enabled) { Text(type.label) }
+        }
     }
     Spacer(modifier = Modifier.height(8.dp))
 
@@ -926,6 +959,229 @@ internal fun WicketDetailsDialog(
             TextButton(onClick = onDismiss) { Text("Cancel") }
         }
     )
+}
+
+// =============================================================================
+// Extras entry dialog
+// =============================================================================
+
+/**
+ * Dialog shown when the scorer taps one of the extras buttons (Wide, No Ball, Bye, Leg Bye).
+ *
+ * Lets the scorer specify:
+ * - Extra type (pre-filled from the button that was tapped, but changeable)
+ * - Total runs on the delivery (defaults to 1 for all types)
+ * - Optional run-out wicket on the same delivery
+ *   - Which batter was run out (striker or non-striker)
+ *   - Optional fielder involved
+ *
+ * Only Run Out is allowed as a wicket mode for extras, matching real-world cricket rules.
+ */
+@Composable
+internal fun ExtrasEntryDialog(
+    initialType: ExtraType,
+    striker: Player?,
+    nonStriker: Player?,
+    bowlingTeamPlayers: List<Player>,
+    onConfirm: (BallEvent) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var extraType by remember { mutableStateOf(initialType) }
+    var selectedRuns by remember { mutableStateOf(1) }
+    var customRunsText by remember { mutableStateOf("") }
+    var useCustomRuns by remember { mutableStateOf(false) }
+    var hasWicket by remember { mutableStateOf(false) }
+    var batterOut by remember { mutableStateOf(striker ?: nonStriker) }
+    var selectedFielder by remember { mutableStateOf<Player?>(null) }
+
+    // Reset wicket state whenever the extra type changes
+    LaunchedEffect(extraType) {
+        hasWicket = false
+        batterOut = striker ?: nonStriker
+        selectedFielder = null
+    }
+
+    val totalRuns = if (useCustomRuns) customRunsText.toIntOrNull()?.coerceAtLeast(1) ?: selectedRuns else selectedRuns
+
+    val isValid = !hasWicket || batterOut != null
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Extras Entry") },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.verticalScroll(rememberScrollState())
+            ) {
+                // --- Extra type selector ---
+                Text("Extra type", style = MaterialTheme.typography.labelMedium)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    ExtraType.entries.forEach { type ->
+                        FilterChip(
+                            selected = extraType == type,
+                            onClick = { extraType = type },
+                            label = { Text(type.label) }
+                        )
+                    }
+                }
+
+                HorizontalDivider()
+
+                // --- Runs selector ---
+                Text("Runs on delivery", style = MaterialTheme.typography.labelMedium)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf(1, 2, 3, 4).forEach { runs ->
+                        FilterChip(
+                            selected = !useCustomRuns && selectedRuns == runs,
+                            onClick = { selectedRuns = runs; useCustomRuns = false },
+                            label = { Text("$runs") }
+                        )
+                    }
+                    FilterChip(
+                        selected = useCustomRuns,
+                        onClick = { useCustomRuns = true },
+                        label = { Text("5+") }
+                    )
+                }
+                if (useCustomRuns) {
+                    OutlinedTextField(
+                        value = customRunsText,
+                        onValueChange = { customRunsText = it.filter { char -> char.isDigit() } },
+                        label = { Text("Enter runs") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
+                HorizontalDivider()
+
+                // --- Wicket toggle ---
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Checkbox(
+                        checked = hasWicket,
+                        onCheckedChange = { checked ->
+                            hasWicket = checked
+                            if (!checked) { batterOut = striker ?: nonStriker; selectedFielder = null }
+                        }
+                    )
+                    Text("Wicket on this ball (Run Out only)", style = MaterialTheme.typography.bodyMedium)
+                }
+
+                // --- Wicket detail section (only when hasWicket is true) ---
+                if (hasWicket) {
+                    HorizontalDivider()
+                    Text("Who was run out?", style = MaterialTheme.typography.labelMedium)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (striker != null) {
+                            FilterChip(
+                                selected = batterOut?.id == striker.id,
+                                onClick = { batterOut = striker },
+                                label = { Text("${striker.name} (striker)") }
+                            )
+                        }
+                        if (nonStriker != null) {
+                            FilterChip(
+                                selected = batterOut?.id == nonStriker.id,
+                                onClick = { batterOut = nonStriker },
+                                label = { Text("${nonStriker.name} (non-striker)") }
+                            )
+                        }
+                    }
+
+                    Text("Fielder (optional)", style = MaterialTheme.typography.labelMedium)
+                    if (bowlingTeamPlayers.isEmpty()) {
+                        Text(
+                            "No fielding team players registered.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        )
+                    } else {
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            bowlingTeamPlayers.forEach { player ->
+                                FilterChip(
+                                    selected = selectedFielder?.id == player.id,
+                                    onClick = {
+                                        selectedFielder = if (selectedFielder?.id == player.id) null else player
+                                    },
+                                    label = { Text(player.name) }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val ballEvent = buildExtrasEvent(extraType, totalRuns, hasWicket, batterOut, selectedFielder)
+                    onConfirm(ballEvent)
+                },
+                enabled = isValid
+            ) { Text("Confirm") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
+}
+
+/**
+ * Constructs a [BallEvent] for an extras delivery.
+ *
+ * Run mapping:
+ * - **Wide**: all runs go to wides (including the 1-run penalty). User sees "total runs".
+ * - **No Ball**: 1 run is the no-ball penalty (extras); remaining runs are credited off bat.
+ * - **Bye / Leg Bye**: all runs go directly to byes / leg-byes.
+ *
+ * A wicket on an extras delivery is always a **Run Out** and does NOT credit the bowler.
+ */
+private fun buildExtrasEvent(
+    type: ExtraType,
+    runs: Int,
+    hasWicket: Boolean,
+    batterOut: Player?,
+    fielder: Player?
+): BallEvent {
+    val dismissal: DismissalDetail? = if (hasWicket && batterOut != null) {
+        DismissalDetail(
+            batter = batterOut,
+            dismissalType = DismissalType.RUN_OUT,
+            fielder = fielder,
+            bowler = null
+        )
+    } else null
+
+    return when (type) {
+        ExtraType.WIDE -> BallEvent(
+            extras = ExtrasBreakdown(wides = runs),
+            wicket = hasWicket,
+            dismissalDetail = dismissal,
+            countsAsBall = false
+        )
+        ExtraType.NO_BALL -> BallEvent(
+            runsOffBat = maxOf(0, runs - 1),
+            extras = ExtrasBreakdown(noBalls = 1),
+            wicket = hasWicket,
+            dismissalDetail = dismissal,
+            countsAsBall = false
+        )
+        ExtraType.BYE -> BallEvent(
+            extras = ExtrasBreakdown(byes = runs),
+            wicket = hasWicket,
+            dismissalDetail = dismissal,
+            countsAsBall = true
+        )
+        ExtraType.LEG_BYE -> BallEvent(
+            extras = ExtrasBreakdown(legByes = runs),
+            wicket = hasWicket,
+            dismissalDetail = dismissal,
+            countsAsBall = true
+        )
+    }
 }
 
 // =============================================================================

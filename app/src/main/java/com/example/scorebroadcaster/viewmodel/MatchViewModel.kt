@@ -50,7 +50,16 @@ class MatchViewModel : ViewModel() {
      * This keeps the UI layer stable while the scoring engine operates on the richer model.
      */
     fun addEvent(event: ScoreEvent) {
-        val ballEvent = event.toBallEvent()
+        addBallEvent(event.toBallEvent())
+    }
+
+    /**
+     * Record a fully-constructed [BallEvent] directly.
+     *
+     * Use this for deliveries that cannot be expressed as a single [ScoreEvent], such as
+     * extras with a wicket (e.g. run-out on a wide or no-ball).
+     */
+    fun addBallEvent(ballEvent: BallEvent) {
         if (ballEvent.wicket) {
             Log.d("WicketFlow", "Wicket recorded: ${ballEvent.dismissalDetail?.dismissalType} — ${ballEvent.dismissalDetail?.batter?.name}")
         }
