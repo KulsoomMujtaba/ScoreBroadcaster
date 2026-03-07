@@ -38,7 +38,7 @@ sealed class PendingAction {
 /**
  * Higher-level scoring-console state that complements [MatchState].
  *
- * [MatchState] tracks raw cumulative totals derived by folding [ScoreEvent]s
+ * [MatchState] tracks raw cumulative totals derived by folding [BallEvent]s
  * through the pure reducer. [ScoringConsoleState] tracks everything the
  * scoring console needs on top of that: which players are at the crease,
  * per-player batting/bowling stats, innings phase, and any pending dialog.
