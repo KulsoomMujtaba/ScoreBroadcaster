@@ -252,7 +252,8 @@ fun ScoringScreen(
                         val newPlayer = Player(name = name)
                         matchViewModel.addPlayerToTeam(newPlayer, addToBattingTeam = true)
                         matchViewModel.selectNextBatter(newPlayer)
-                    }
+                    },
+                    onAllOut = { matchViewModel.endInningsAsAllOut() }
                 )
             }
             is PendingAction.SelectBowler -> SelectPlayerDialog(
@@ -665,13 +666,16 @@ private fun MatchCompleteSection(
  * @param onAddNewPlayer Optional callback: when non-null, an "Add new player" inline field
  *   is shown so the scorer can create a player on the fly without closing this dialog.
  *   The callback receives the trimmed player name.
+ * @param onAllOut Optional callback: when non-null, a "No more players / All out" button is
+ *   shown so the scorer can end the innings immediately without selecting a batter.
  */
 @Composable
 private fun SelectPlayerDialog(
     title: String,
     players: List<Player>,
     onPlayerSelected: (Player) -> Unit,
-    onAddNewPlayer: ((String) -> Unit)? = null
+    onAddNewPlayer: ((String) -> Unit)? = null,
+    onAllOut: (() -> Unit)? = null
 ) {
     var newPlayerName by remember { mutableStateOf("") }
 
@@ -722,6 +726,19 @@ private fun SelectPlayerDialog(
                             },
                             enabled = newPlayerName.isNotBlank()
                         ) { Text("Add") }
+                    }
+                }
+                if (onAllOut != null) {
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                    Button(
+                        onClick = onAllOut,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.errorContainer,
+                            contentColor = MaterialTheme.colorScheme.onErrorContainer
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("No more players / All out")
                     }
                 }
             }

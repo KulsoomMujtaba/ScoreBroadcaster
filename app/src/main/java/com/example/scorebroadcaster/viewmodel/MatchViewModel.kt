@@ -383,6 +383,27 @@ class MatchViewModel : ViewModel() {
         _consoleState.value = _consoleState.value.copy(phase = InningsPhase.MATCH_COMPLETE)
     }
 
+    /**
+     * Called when the scorer selects "No more players / All out" in the next-batter dialog.
+     *
+     * Clears the pending batter selection and ends the current innings immediately:
+     * - First innings → moves to [InningsPhase.INNINGS_BREAK] (preserves total, sets target).
+     * - Second innings → marks match as [InningsPhase.MATCH_COMPLETE].
+     */
+    fun endInningsAsAllOut() {
+        Log.d("WicketFlow", "All out selected by scorer")
+        val console = _consoleState.value
+        // Clear pending action first so scoring controls are unblocked for the transition.
+        _consoleState.value = console.copy(pendingAction = null, bowlerChangePending = false)
+        if (console.inningsNumber == 1) {
+            Log.d("WicketFlow", "Innings ended due to all out — moving to innings break")
+            endFirstInnings()
+        } else {
+            Log.d("WicketFlow", "Innings ended due to all out — match completed")
+            endMatch()
+        }
+    }
+
     // ---------------------------------------------------------------------------
     // Initialisation
     // ---------------------------------------------------------------------------
