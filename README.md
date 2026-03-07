@@ -164,6 +164,32 @@ Scoring is modelled as an append-only event log:
 
 ## Development Log
 
+### 2026-03-07 – Innings Setup Popup Flow Fix
+
+**Fix:** Innings setup dialog (opening batters + bowler) is now safe, dismissible, and handles missing players gracefully.
+
+**Files modified:**
+| File | Change |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/ui/ScoringScreen.kt` | See details below |
+| `README.md` | Added this log entry |
+
+**What was corrected:**
+
+1. **Dismissible dialog** — `SetupOpenersDialog` previously had `onDismissRequest = { /* must complete setup */ }` (a no-op), trapping the user. It now accepts an `onDismiss` callback and exposes a **"Later"** dismiss button, so the user can close it and return at any time.
+
+2. **Setup required banner** — When the innings-setup dialog is dismissed without completing setup, a red "Innings setup required before scoring can begin" banner appears on the scoring screen with a **"Setup"** button to re-open the dialog. Scoring controls remain disabled until setup is complete (unchanged behaviour, now clearly communicated).
+
+3. **Missing-player warnings** — If the batting team has fewer than 2 players, the dialog shows: *"You need at least 2 batters to start the innings."* If the bowling team has no players, it shows: *"You need at least 1 bowler to start the innings."* These messages appear inline, above the relevant dropdowns.
+
+4. **Inline add-player** — The dialog now contains an "Add batter" row (name field + Add button) below the batting dropdowns, and an "Add bowler" row below the bowling dropdown. Adding a player calls `MatchViewModel.addPlayerToTeam()`, which immediately updates `_activeMatch` and the repository. Because `activeMatch` is a `StateFlow`, the composable recomposes and the new player appears in the dropdowns without closing the dialog.
+
+**Architecture notes:**
+- All new player-management logic stays in `MatchViewModel.addPlayerToTeam()` (unchanged).
+- No new ViewModel methods were needed.
+- The `InningsPhase.SETUP` phase continues to disable scoring controls (no change to reducer or phase logic).
+- Wicket flow, bowler-change flow, camera preview, and Facebook Live flow are unaffected.
+
 ### 2026-03-06 – Wicket Dismissal Detail Support
 
 **Feature:** Proper wicket detail capture for realistic MVP scoring — dismissal type, fielder, and bowler credit.
