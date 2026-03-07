@@ -126,8 +126,9 @@ com.example.scorebroadcaster/
 │       ├── TossDecision.kt    # BAT / BOWL
 │       ├── BattingEntry.kt
 │       ├── BowlingEntry.kt
-│       └── SavedTeam.kt       # ← Phase 4: reusable team template
-├── domain/           # Pure business logic: ScoreReducer
+│       ├── ExtrasBreakdown.kt     # ← Phase 5: extras breakdown per delivery
+│       └── SavedTeam.kt           # ← Phase 4: reusable team template
+├── domain/           # Pure business logic: BallEvent, ScoreReducer
 ├── repository/       # ← Phase 2: local in-memory repository
 │   ├── MatchRepository.kt
 │   └── SavedTeamRepository.kt # ← Phase 4
@@ -153,16 +154,48 @@ com.example.scorebroadcaster/
 └── MainActivity.kt               ← Phase 4: saved_teams route added
 ```
 
-### Event-based Scoring Engine (ScoreEvent Reducer Pattern)
+### Event-based Scoring Engine (BallEvent Reducer Pattern)
 Scoring is modelled as an append-only event log:
-1. Every user action (run, wicket, wide, no-ball, bye, leg-bye) is represented as a `ScoreEvent` subclass.
-2. `ScoreReducer.kt` contains a pure `reduce(state, event)` function that returns a new `MatchState` without mutating anything.
-3. `MatchViewModel` maintains the full event history and recomputes the current state by folding all events through the reducer. This makes **undo** trivial — simply drop the last event and re-reduce.
+1. Every user action (run, wicket, wide, no-ball, bye, leg-bye) is represented as a `ScoreEvent` subclass at the UI layer. Each `ScoreEvent` is converted to a `BallEvent` before being appended to the internal log.
+2. `BallEvent` (`domain/BallEvent.kt`) is the canonical delivery model. It carries `runsOffBat`, an `ExtrasBreakdown` (wides, noBalls, byes, legByes), a `wicket` flag, optional `DismissalDetail`, and a `countsAsBall` flag.
+3. `ScoreReducer.kt` contains a pure `reduce(events: List<BallEvent>)` function that returns a new `MatchState` without mutating anything.
+4. `MatchViewModel` maintains the full event history as `List<BallEvent>` and recomputes the current state by folding all events through the reducer. This makes **undo** trivial — simply drop the last event and re-reduce.
 4. Because state is always derived from the event log, replaying, debugging, or persisting a match is straightforward.
 
 ---
 
 ## Development Log
+
+### 2026-03-07 – Phase 5: Flexible Ball Event Model
+
+**Why BallEvent was introduced:**
+The original `ScoreEvent` sealed class modelled each delivery as a single, flat type (Run, Wide, NoBall, Bye, LegBye, Wicket). This worked for simple outcomes but could not represent combined real-world deliveries such as *Wide + 4 runs*, *NoBall + run out*, *Bye + 3*, or *LegBye + 2*. A richer domain model was needed so that one delivery object can capture every possible outcome without ambiguity.
+
+**How extras and wickets are now modelled:**
+- **`ExtrasBreakdown`** (`data/entity/ExtrasBreakdown.kt`) — a data class with four fields (`wides`, `noBalls`, `byes`, `legByes`) that records precisely which extras were conceded and how many. A `total` computed property sums them. A `NONE` companion constant is provided for the common case of no extras.
+- **`BallEvent`** (`domain/BallEvent.kt`) — the new canonical delivery model. Fields:
+  - `runsOffBat` — runs credited to the batter.
+  - `extras` — an `ExtrasBreakdown` for any extras on the delivery.
+  - `wicket` — whether a dismissal occurred.
+  - `dismissalDetail` — full dismissal information (null when no wicket).
+  - `countsAsBall` — `true` for legal deliveries; `false` for wides and no-balls, which do not increment the over counter.
+- **`ScoreReducer`** now accepts `List<BallEvent>` and applies a single unified `applyEvent` function. Ball-count logic, extras breakdown, and run totals are all derived from `BallEvent` fields rather than from the type of the event.
+
+**Backward compatibility:**
+`ScoreEvent` (the original sealed class) is retained unchanged. A `ScoreEvent.toBallEvent()` extension function converts each legacy variant to the equivalent `BallEvent`. `MatchViewModel.addEvent(ScoreEvent)` converts at the boundary so the UI buttons (`0`, `1`, `2`, `3`, `4`, `6`, `W`, `Wd+1`, `NB+1`, `Bye`, `LB`) continue to work without modification.
+
+**Files modified:**
+
+| File | Action |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/data/entity/ExtrasBreakdown.kt` | Created |
+| `app/src/main/java/com/example/scorebroadcaster/domain/BallEvent.kt` | Created |
+| `app/src/main/java/com/example/scorebroadcaster/data/ScoreEvent.kt` | Updated – added `toBallEvent()` extension |
+| `app/src/main/java/com/example/scorebroadcaster/domain/ScoreReducer.kt` | Updated – now reduces `List<BallEvent>` |
+| `app/src/main/java/com/example/scorebroadcaster/viewmodel/MatchViewModel.kt` | Updated – internal event log changed to `List<BallEvent>`; `updateConsoleAfterEvent` rewritten for `BallEvent` |
+| `README.md` | Updated |
+
+---
 
 ### 2026-03-07 – UI Cleanup: Remove Duplicate Screen Titles
 

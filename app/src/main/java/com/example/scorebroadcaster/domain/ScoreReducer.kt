@@ -1,70 +1,48 @@
 package com.example.scorebroadcaster.domain
 
 import com.example.scorebroadcaster.data.MatchState
-import com.example.scorebroadcaster.data.ScoreEvent
 
-fun reduce(events: List<ScoreEvent>): MatchState =
+/**
+ * Pure functional scoring reducer.
+ *
+ * Folds a list of [BallEvent]s into a [MatchState]. Because this is a pure function with no
+ * side-effects, replaying the full event log always produces the canonical match state — which
+ * makes undo trivial (drop the last event and re-reduce).
+ */
+fun reduce(events: List<BallEvent>): MatchState =
     events.fold(MatchState()) { state, event -> applyEvent(state, event) }
 
-private fun applyEvent(state: MatchState, event: ScoreEvent): MatchState = when (event) {
-    is ScoreEvent.Run -> {
-        val (overs, balls) = incrementBall(state.overs, state.balls)
-        state.copy(
-            runs = state.runs + event.runs,
-            overs = overs,
-            balls = balls,
-            lastBalls = updateLastBalls(state.lastBalls, event.runs.toString())
-        )
+private fun applyEvent(state: MatchState, event: BallEvent): MatchState {
+    val (overs, balls) = if (event.countsAsBall) {
+        incrementBall(state.overs, state.balls)
+    } else {
+        Pair(state.overs, state.balls)
     }
-    is ScoreEvent.Wicket -> {
-        val (overs, balls) = incrementBall(state.overs, state.balls)
-        state.copy(
-            wickets = state.wickets + 1,
-            overs = overs,
-            balls = balls,
-            lastBalls = updateLastBalls(state.lastBalls, "W")
-        )
-    }
-    is ScoreEvent.Wide -> {
-        // Wides do not count as legal deliveries
-        state.copy(
-            runs = state.runs + event.runs + 1,
-            extras = state.extras + event.runs + 1,
-            wides = state.wides + event.runs + 1,
-            lastBalls = updateLastBalls(state.lastBalls, "Wd")
-        )
-    }
-    is ScoreEvent.NoBall -> {
-        // No-balls do not count as legal deliveries; batter's runs (if any) added normally
-        state.copy(
-            runs = state.runs + event.runs + 1,
-            extras = state.extras + 1,
-            noBalls = state.noBalls + 1,
-            lastBalls = updateLastBalls(state.lastBalls, "NB")
-        )
-    }
-    is ScoreEvent.Bye -> {
-        val (overs, balls) = incrementBall(state.overs, state.balls)
-        state.copy(
-            runs = state.runs + event.runs,
-            extras = state.extras + event.runs,
-            byes = state.byes + event.runs,
-            overs = overs,
-            balls = balls,
-            lastBalls = updateLastBalls(state.lastBalls, "B${event.runs}")
-        )
-    }
-    is ScoreEvent.LegBye -> {
-        val (overs, balls) = incrementBall(state.overs, state.balls)
-        state.copy(
-            runs = state.runs + event.runs,
-            extras = state.extras + event.runs,
-            legByes = state.legByes + event.runs,
-            overs = overs,
-            balls = balls,
-            lastBalls = updateLastBalls(state.lastBalls, "LB${event.runs}")
-        )
-    }
+
+    val totalRuns = event.runsOffBat + event.extras.total
+
+    return state.copy(
+        runs = state.runs + totalRuns,
+        wickets = if (event.wicket) state.wickets + 1 else state.wickets,
+        overs = overs,
+        balls = balls,
+        extras = state.extras + event.extras.total,
+        wides = state.wides + event.extras.wides,
+        noBalls = state.noBalls + event.extras.noBalls,
+        byes = state.byes + event.extras.byes,
+        legByes = state.legByes + event.extras.legByes,
+        lastBalls = updateLastBalls(state.lastBalls, buildBallLabel(event))
+    )
+}
+
+/** Generates a short human-readable label for the over-summary strip. */
+private fun buildBallLabel(event: BallEvent): String = when {
+    event.wicket -> "W"
+    event.extras.wides > 0 -> "Wd"
+    event.extras.noBalls > 0 -> "NB"
+    event.extras.byes > 0 -> "B${event.extras.byes}"
+    event.extras.legByes > 0 -> "LB${event.extras.legByes}"
+    else -> event.runsOffBat.toString()
 }
 
 private fun incrementBall(overs: Int, balls: Int): Pair<Int, Int> =

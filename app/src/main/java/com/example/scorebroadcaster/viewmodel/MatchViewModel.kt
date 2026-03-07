@@ -12,6 +12,8 @@ import com.example.scorebroadcaster.data.entity.BowlingEntry
 import com.example.scorebroadcaster.data.entity.Match
 import com.example.scorebroadcaster.data.entity.Player
 import com.example.scorebroadcaster.data.entity.Team
+import com.example.scorebroadcaster.data.toBallEvent
+import com.example.scorebroadcaster.domain.BallEvent
 import com.example.scorebroadcaster.domain.reduce
 import com.example.scorebroadcaster.repository.MatchRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -24,7 +26,8 @@ class MatchViewModel : ViewModel() {
     private val _activeMatch = MutableStateFlow<Match?>(null)
     val activeMatch: StateFlow<Match?> = _activeMatch.asStateFlow()
 
-    private val _events = MutableStateFlow<List<ScoreEvent>>(emptyList())
+    // Internal event log uses BallEvent for flexible delivery modelling.
+    private val _events = MutableStateFlow<List<BallEvent>>(emptyList())
 
     private val _state = MutableStateFlow(MatchState())
     val state: StateFlow<MatchState> = _state.asStateFlow()
@@ -40,20 +43,27 @@ class MatchViewModel : ViewModel() {
     // Core scoring
     // ---------------------------------------------------------------------------
 
+    /**
+     * Record a [ScoreEvent] from the UI.
+     *
+     * The event is converted to a [BallEvent] before being appended to the internal log.
+     * This keeps the UI layer stable while the scoring engine operates on the richer model.
+     */
     fun addEvent(event: ScoreEvent) {
-        if (event is ScoreEvent.Wicket) {
-            Log.d("WicketFlow", "Wicket recorded: ${event.dismissal.dismissalType} — ${event.dismissal.batter.name}")
+        val ballEvent = event.toBallEvent()
+        if (ballEvent.wicket) {
+            Log.d("WicketFlow", "Wicket recorded: ${ballEvent.dismissalDetail?.dismissalType} — ${ballEvent.dismissalDetail?.batter?.name}")
         }
         val prevState = _state.value
-        _events.value = _events.value + event
+        _events.value = _events.value + ballEvent
         val newState = reduce(_events.value)
             .copy(teamAName = currentTeamAName, teamBName = currentTeamBName)
         _state.value = newState
-        updateConsoleAfterEvent(event, prevState, newState)
+        updateConsoleAfterEvent(ballEvent, prevState, newState)
     }
 
     private fun updateConsoleAfterEvent(
-        event: ScoreEvent,
+        event: BallEvent,
         prevState: MatchState,
         newState: MatchState
     ) {
@@ -61,63 +71,77 @@ class MatchViewModel : ViewModel() {
         if (console.phase == InningsPhase.SETUP || console.phase == InningsPhase.MATCH_COMPLETE) return
         val striker = console.striker ?: return
 
+        val isWide = event.extras.wides > 0
+        val isNoBall = event.extras.noBalls > 0
+        val isBye = event.extras.byes > 0
+        val isLegBye = event.extras.legByes > 0
+
         // --- Update striker batting entry ---
-        // For Wicket: determine if the striker or non-striker was dismissed.
-        val strikerIsOut = event is ScoreEvent.Wicket &&
-                event.dismissal.batter.id == striker.id
+        // For a wicket: determine if the striker or non-striker was dismissed.
+        val strikerIsOut = event.wicket &&
+                event.dismissalDetail?.batter?.id == striker.id
 
         val updatedStrikerEntry = console.strikerEntry?.let { entry ->
-            when (event) {
-                is ScoreEvent.Run -> entry.copy(
-                    runs = entry.runs + event.runs,
-                    balls = entry.balls + 1,
-                    fours = if (event.runs == 4) entry.fours + 1 else entry.fours,
-                    sixes = if (event.runs == 6) entry.sixes + 1 else entry.sixes
-                )
-                is ScoreEvent.Wicket -> if (strikerIsOut) {
+            when {
+                isWide -> entry // Wide: batter did not face the ball
+                event.wicket && strikerIsOut ->
                     // Striker is out — increment balls, mark dismissed
-                    entry.copy(balls = entry.balls + 1, isOut = true, dismissal = event.dismissal)
-                } else {
+                    entry.copy(balls = entry.balls + 1, isOut = true, dismissal = event.dismissalDetail)
+                event.wicket ->
                     // Non-striker is out on a run out — striker still faced the ball
                     entry.copy(balls = entry.balls + 1)
-                }
-                is ScoreEvent.NoBall -> entry.copy(runs = entry.runs + event.runs)
-                is ScoreEvent.Bye, is ScoreEvent.LegBye -> entry.copy(balls = entry.balls + 1)
-                else -> entry // Wide: no batter-ball count change
+                isNoBall ->
+                    // No-ball: batter gets credit for runs but ball does not count
+                    entry.copy(
+                        runs = entry.runs + event.runsOffBat,
+                        fours = if (event.runsOffBat == 4) entry.fours + 1 else entry.fours,
+                        sixes = if (event.runsOffBat == 6) entry.sixes + 1 else entry.sixes
+                    )
+                isBye || isLegBye ->
+                    // Bye / leg-bye: ball counts but no runs credited to batter
+                    entry.copy(balls = entry.balls + 1)
+                else ->
+                    // Regular delivery: runs and ball count both credited
+                    entry.copy(
+                        runs = entry.runs + event.runsOffBat,
+                        balls = entry.balls + 1,
+                        fours = if (event.runsOffBat == 4) entry.fours + 1 else entry.fours,
+                        sixes = if (event.runsOffBat == 6) entry.sixes + 1 else entry.sixes
+                    )
             }
         }
 
         // --- Update non-striker batting entry when non-striker is out (run out) ---
         // Only computed (non-null) when the non-striker was actually dismissed.
-        val updatedNonStrikerEntry: BattingEntry? = if (event is ScoreEvent.Wicket && !strikerIsOut) {
-            console.nonStrikerEntry?.copy(isOut = true, dismissal = event.dismissal)
+        val updatedNonStrikerEntry: BattingEntry? = if (event.wicket && !strikerIsOut) {
+            console.nonStrikerEntry?.copy(isOut = true, dismissal = event.dismissalDetail)
         } else null
 
         // --- Update current bowler entry ---
         val updatedBowlerEntry = console.currentBowlerEntry?.let { entry ->
-            when (event) {
-                is ScoreEvent.Wide -> entry.copy(runs = entry.runs + event.runs + 1)
-                is ScoreEvent.NoBall -> entry.copy(runs = entry.runs + event.runs + 1)
-                is ScoreEvent.Run -> {
-                    val (o, b) = incrementBall(entry.overs, entry.balls)
-                    entry.copy(runs = entry.runs + event.runs, overs = o, balls = b)
-                }
-                is ScoreEvent.Wicket -> {
+            when {
+                isWide ->
+                    // Wide: charged to bowler; no ball count increment
+                    entry.copy(runs = entry.runs + event.extras.wides)
+                isNoBall ->
+                    // No-ball: 1-run penalty + any runs off bat charged to bowler; no ball count
+                    entry.copy(runs = entry.runs + event.extras.noBalls + event.runsOffBat)
+                event.wicket -> {
                     val (o, b) = incrementBall(entry.overs, entry.balls)
                     // Only credit the bowler with a wicket if the dismissal type warrants it
-                    if (event.dismissal.bowlerCredited) {
+                    if (event.dismissalDetail?.bowlerCredited == true) {
                         entry.copy(wickets = entry.wickets + 1, overs = o, balls = b)
                     } else {
                         entry.copy(overs = o, balls = b)
                     }
                 }
-                is ScoreEvent.Bye -> {
+                isBye || isLegBye -> {
                     val (o, b) = incrementBall(entry.overs, entry.balls)
-                    entry.copy(overs = o, balls = b) // byes do not count against bowler
+                    entry.copy(overs = o, balls = b) // extras do not count against bowler
                 }
-                is ScoreEvent.LegBye -> {
+                else -> {
                     val (o, b) = incrementBall(entry.overs, entry.balls)
-                    entry.copy(overs = o, balls = b) // leg byes do not count against bowler
+                    entry.copy(runs = entry.runs + event.runsOffBat, overs = o, balls = b)
                 }
             }
         }
@@ -145,17 +169,15 @@ class MatchViewModel : ViewModel() {
         } else console.allBowlingEntries
 
         // --- Detect over end (a legal ball that completes an over) ---
-        val isLegalBall = event !is ScoreEvent.Wide && event !is ScoreEvent.NoBall
-        val overEnded = isLegalBall && newState.balls == 0 && newState.overs > prevState.overs
+        val overEnded = event.countsAsBall && newState.balls == 0 && newState.overs > prevState.overs
 
-        val wicketFell = event is ScoreEvent.Wicket
+        val wicketFell = event.wicket
 
         // --- Strike rotation ---
-        val oddRuns = when (event) {
-            is ScoreEvent.Run -> event.runs % 2 == 1
-            is ScoreEvent.Bye -> event.runs % 2 == 1
-            is ScoreEvent.LegBye -> event.runs % 2 == 1
-            else -> false
+        // Runs from bat and byes/leg-byes can rotate the strike; wides and no-balls do not.
+        val oddRuns = when {
+            isWide || isNoBall -> false
+            else -> (event.runsOffBat + event.extras.byes + event.extras.legByes) % 2 == 1
         }
         // Strike rotation rules:
         //  - Striker wicket: new batter comes in at striker's end (striker = null).
