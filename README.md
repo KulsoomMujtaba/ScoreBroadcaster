@@ -50,6 +50,11 @@ The core promise is simple: open the app, start a match, score every ball, and s
 | My Matches (local in-memory list) | ✅ Done | `MyMatchesScreen` |
 | Add player after match start | ✅ Done | `ScoringScreen`, `MatchDetailsScreen` |
 | Saved teams (create, view, reuse) | ✅ Done | `SavedTeamsScreen`, `CreateMatchScreen` |
+| Reusable player profiles (private) | ✅ Done | `SavedPlayersScreen`, `PlayerProfile`, `SavedPlayerRepository` |
+| Player picker (search, saved players, inline create, future section) | ✅ Done | `PlayerPickerDialog` |
+| Player picker integrated into team setup | ✅ Done | `PlayerSetupScreen`, `SavedTeamsScreen` |
+| Player picker integrated into match-time flows | ✅ Done | `ScoringScreen` |
+| New player auto-saved as private profile in match flows | ✅ Done | `ScoringScreen`, `MatchSessionViewModel` |
 | Scorecard view (batting + bowling summary, both innings) | ✅ Done | `ScorecardScreen` |
 | Ball timeline / over history (per-ball, grouped by over) | ✅ Done | `BallTimelineScreen` |
 | Domain entities (Team, Player, Match, …) | ✅ Done | `data/entity/` |
@@ -143,7 +148,8 @@ com.example.scorebroadcaster/
 │   ├── MatchSummaryScreen.kt      ← Phase 2: new
 │   ├── MyMatchesScreen.kt         ← Phase 2: real in-memory list
 │   ├── MatchDetailsScreen.kt      ← Phase 4: add-player button
-│   ├── SavedTeamsScreen.kt        ← Phase 4: new
+│   ├── SavedTeamsScreen.kt        ← Phase 4 + Player Picker: PlayerPickerDialog integrated
+│   ├── PlayerPickerDialog.kt      ← Player Picker: new reusable picker composable
 │   ├── CameraPreviewScreen.kt
 │   ├── ScoringScreen.kt           ← Phase 4: wicket/bowler add-new-player + add-player button
 │   ├── ScoreboardOverlay.kt
@@ -167,6 +173,63 @@ Scoring is modelled as an append-only event log:
 ---
 
 ## Development Log
+
+### 2026-03-07 – Player Picker Integration
+
+**What changed:**
+Replaced the basic `SavedPlayerPickerDialog` with a richer `PlayerPickerDialog` and integrated it throughout every player-entry flow in the app.  All flows now create reusable private `PlayerProfile` records when a new player is typed, and all picker interactions preserve the `sourceProfileId` link in the match-level `Player` snapshot so historical scorecards remain stable.
+
+**Flows migrated:**
+
+| Flow | Screen | Change |
+|------|--------|--------|
+| Team player setup | `PlayerSetupScreen` | Person-icon always visible; opens `PlayerPickerDialog`; creates profile on inline create; preserves `sourceProfileId` in `Player` snapshots |
+| Saved team creation | `SavedTeamsScreen` | Same picker integration; `CreateSavedTeamDialog` now accepts `onCreatePlayer` to persist new profiles |
+| Next batter selection (after wicket) | `ScoringScreen` | "Pick from saved players" button added; typing a new name also saves a `PlayerProfile` |
+| Bowler selection (end of over) | `ScoringScreen` | Same as batter flow |
+| Innings setup (openers + opening bowler) | `ScoringScreen` | Person-icon added to "Add batter" and "Add bowler" rows; opens `PlayerPickerDialog`; typing also saves profile |
+| Add player during active match | `ScoringScreen` | "Pick from saved players" button added to `AddPlayerToMatchDialog`; typing also saves profile |
+
+**Files created/modified:**
+| File | Action |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/ui/PlayerPickerDialog.kt` | Created – reusable `PlayerPickerDialog` composable |
+| `app/src/main/java/com/example/scorebroadcaster/ui/PlayerSetupScreen.kt` | Updated – `PlayerPickerDialog`, `sourceProfileId` tracking, removed `SavedPlayerPickerDialog` |
+| `app/src/main/java/com/example/scorebroadcaster/ui/SavedTeamsScreen.kt` | Updated – `PlayerPickerDialog`, `sourceProfileId` tracking, `onCreatePlayer` callback |
+| `app/src/main/java/com/example/scorebroadcaster/ui/ScoringScreen.kt` | Updated – `savedPlayers`/`onSavePrivatePlayer` params; picker in `SelectPlayerDialog`, `AddPlayerToMatchDialog`, `SetupOpenersDialog` |
+| `app/src/main/java/com/example/scorebroadcaster/MainActivity.kt` | Updated – collects `savedPlayers`; passes it + `onSavePrivatePlayer` to both `ScoringScreen` invocations |
+| `README.md` | Updated |
+
+**`PlayerPickerDialog` architecture:**
+
+The new composable has three sections:
+
+1. **Search field** — real-time prefix/substring filter over `savedPlayers`.
+2. **Saved Players** — scrollable list of matching `PlayerProfile` entries; one tap selects and closes.
+3. **Scored Users · coming soon** — clearly-labelled placeholder for future backend player search.  No backend is wired; the section is a static label so the UI slot is reserved without any behavioural cost.
+4. **Create new player** — inline `OutlinedTextField` + Add button.  Tapping Add calls `onCreateAndSelect(PlayerProfile(displayName = name, playerSourceType = PRIVATE))`.  The caller persists the profile via `MatchSessionViewModel.addSavedPlayer`.
+
+Two separate callbacks (`onSelect` for existing profiles, `onCreateAndSelect` for new ones) let every call-site decide whether to persist the profile, keeping the dialog stateless and reusable.
+
+**Snapshot stability:**
+
+- `PlayerSetupScreen` and `CreateSavedTeamDialog` now track a `HashMap<Int, String>` (slot index → `profileId`) alongside the name-string list.  The final `Player(name, sourceProfileId)` is built from both when the flow is confirmed.
+- During active match play, `profile.toMatchPlayer()` is used to build the `Player` snapshot, retaining the `sourceProfileId` so future scorecard lookup can trace which profile a player came from.
+- Subsequent edits to a `PlayerProfile` never affect existing `Player` snapshots — the three-copy model (profile → team snapshot → match player) is preserved.
+
+**Scorer speed:**
+
+- Existing team-roster players remain the primary one-tap path in `SelectPlayerDialog`.
+- The "Pick from saved players" button and the "Create new player" inline entry are visually secondary (below a divider), so the common case (tap from team list) is unchanged.
+- The person-icon in `PlayerSetupScreen` and `CreateSavedTeamDialog` is now always visible (previously hidden when the saved-player list was empty), so the scorer can always create a player without leaving the screen.
+
+**What did NOT change:**
+- `MatchViewModel` scoring engine, reducer, event log — untouched.
+- `ScoreReducer`, `BallEvent`, `MatchState` — untouched.
+- Existing team-player list in all dialogs remains the primary selection path.
+- Camera preview, RTMP streaming, scorecard — untouched.
+
+---
 
 ### 2026-03-07 – Reusable Player Profiles
 
@@ -210,8 +273,8 @@ A `PlayerProfile.toMatchPlayer()` extension function snapshots the profile into 
 
 **UX additions:**
 - *Saved Players screen* (`saved_players` route in `MainActivity`, drawer item in `AppShell`) — list, create, and delete private player profiles.
-- *PlayerSetupScreen* — each player slot gains a person-icon button that opens `SavedPlayerPickerDialog` to fill the slot from a saved profile.  Manual typing is still fully supported.
-- *SavedTeamsScreen* `CreateSavedTeamDialog` — same person-icon button added to each player row so teams can be assembled from existing saved profiles.
+- *PlayerSetupScreen* — each player slot has a person-icon button (now always visible) that opens `PlayerPickerDialog` to fill the slot from a saved profile or create a new one inline.  Manual typing is still fully supported.
+- *SavedTeamsScreen* `CreateSavedTeamDialog` — same person-icon button added to each player row so teams can be assembled from existing saved profiles or new inline creations.
 
 **Future readiness:**
 The `PlayerSourceType` enum and `linkedUserId` field mean that when app-user player search is added, a new `APP_USER` profile can be created and stored without touching the existing `PRIVATE` flow or any scoring logic.

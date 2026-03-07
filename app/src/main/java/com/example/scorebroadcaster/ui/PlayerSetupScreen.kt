@@ -16,15 +16,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -62,6 +59,11 @@ fun PlayerSetupScreen(
         if (list.isEmpty()) list.add("")
     }}
 
+    // Track the sourceProfileId for slots filled via PlayerPickerDialog so the
+    // match-level Player snapshot preserves the link back to the reusable profile.
+    val teamASourceIds = remember { hashMapOf<Int, String>() }
+    val teamBSourceIds = remember { hashMapOf<Int, String>() }
+
     // Index of the slot that has the picker dialog open; null = closed
     // Negative indices represent team B: -(index+1)
     var pickerForIndex by remember { mutableStateOf<Int?>(null) }
@@ -87,10 +89,18 @@ fun PlayerSetupScreen(
         Text(match.teamA.name, style = MaterialTheme.typography.titleMedium)
         PlayerListEditor(
             players = teamAPlayers,
-            hasSavedPlayers = savedPlayers.isNotEmpty(),
-            onPlayerChange = { index, value -> teamAPlayers[index] = value },
+            onPlayerChange = { index, value ->
+                teamAPlayers[index] = value
+                // Clear the profile link when the user manually edits the name
+                teamASourceIds.remove(index)
+            },
             onAddPlayer = { if (teamAPlayers.size < 11) teamAPlayers.add("") },
-            onRemovePlayer = { index -> if (teamAPlayers.size > 1) teamAPlayers.removeAt(index) },
+            onRemovePlayer = { index ->
+                if (teamAPlayers.size > 1) {
+                    teamAPlayers.removeAt(index)
+                    teamASourceIds.remove(index)
+                }
+            },
             onPickSaved = { index -> pickerForIndex = index }
         )
 
@@ -100,10 +110,17 @@ fun PlayerSetupScreen(
         Text(match.teamB.name, style = MaterialTheme.typography.titleMedium)
         PlayerListEditor(
             players = teamBPlayers,
-            hasSavedPlayers = savedPlayers.isNotEmpty(),
-            onPlayerChange = { index, value -> teamBPlayers[index] = value },
+            onPlayerChange = { index, value ->
+                teamBPlayers[index] = value
+                teamBSourceIds.remove(index)
+            },
             onAddPlayer = { if (teamBPlayers.size < 11) teamBPlayers.add("") },
-            onRemovePlayer = { index -> if (teamBPlayers.size > 1) teamBPlayers.removeAt(index) },
+            onRemovePlayer = { index ->
+                if (teamBPlayers.size > 1) {
+                    teamBPlayers.removeAt(index)
+                    teamBSourceIds.remove(index)
+                }
+            },
             onPickSaved = { index -> pickerForIndex = -(index + 1) }
         )
 
@@ -111,15 +128,27 @@ fun PlayerSetupScreen(
 
         Button(
             onClick = {
+                // Build Player snapshots, preserving the sourceProfileId for slots that
+                // were filled via PlayerPickerDialog.
                 val updatedTeamA = match.teamA.copy(
-                    players = teamAPlayers
-                        .filter { it.isNotBlank() }
-                        .mapIndexed { i, name -> Player(name = name.trim().ifBlank { "Player ${i + 1}" }) }
+                    players = teamAPlayers.mapIndexed { i, name -> Pair(i, name) }
+                        .filter { (_, n) -> n.isNotBlank() }
+                        .map { (origIdx, name) ->
+                            Player(
+                                name = name.trim(),
+                                sourceProfileId = teamASourceIds[origIdx]
+                            )
+                        }
                 )
                 val updatedTeamB = match.teamB.copy(
-                    players = teamBPlayers
-                        .filter { it.isNotBlank() }
-                        .mapIndexed { i, name -> Player(name = name.trim().ifBlank { "Player ${i + 1}" }) }
+                    players = teamBPlayers.mapIndexed { i, name -> Pair(i, name) }
+                        .filter { (_, n) -> n.isNotBlank() }
+                        .map { (origIdx, name) ->
+                            Player(
+                                name = name.trim(),
+                                sourceProfileId = teamBSourceIds[origIdx]
+                            )
+                        }
                 )
                 val updatedMatch = match.copy(
                     teamA = updatedTeamA,
@@ -137,18 +166,31 @@ fun PlayerSetupScreen(
         }
     }
 
-    // Saved-player picker dialog
+    // Player picker dialog — opens when the person icon is tapped in any player slot.
+    // Shown for both existing saved players (onSelect) and new inline creation (onCreateAndSelect).
     val pickerIdx = pickerForIndex
-    if (pickerIdx != null && savedPlayers.isNotEmpty()) {
+    if (pickerIdx != null) {
         val isTeamB = pickerIdx < 0
         val slotIndex = if (isTeamB) -(pickerIdx + 1) else pickerIdx
-        SavedPlayerPickerDialog(
+
+        fun applyProfile(profile: PlayerProfile) {
+            if (isTeamB) {
+                teamBPlayers[slotIndex] = profile.displayName
+                teamBSourceIds[slotIndex] = profile.id
+            } else {
+                teamAPlayers[slotIndex] = profile.displayName
+                teamASourceIds[slotIndex] = profile.id
+            }
+            pickerForIndex = null
+        }
+
+        PlayerPickerDialog(
             savedPlayers = savedPlayers,
             onDismiss = { pickerForIndex = null },
-            onSelect = { profile ->
-                if (isTeamB) teamBPlayers[slotIndex] = profile.displayName
-                else teamAPlayers[slotIndex] = profile.displayName
-                pickerForIndex = null
+            onSelect = { profile -> applyProfile(profile) },
+            onCreateAndSelect = { profile ->
+                matchSessionViewModel.addSavedPlayer(profile)
+                applyProfile(profile)
             }
         )
     }
@@ -161,7 +203,6 @@ fun PlayerSetupScreen(
 @Composable
 private fun PlayerListEditor(
     players: List<String>,
-    hasSavedPlayers: Boolean,
     onPlayerChange: (Int, String) -> Unit,
     onAddPlayer: () -> Unit,
     onRemovePlayer: (Int) -> Unit,
@@ -181,17 +222,17 @@ private fun PlayerListEditor(
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next)
                 )
-                if (hasSavedPlayers) {
-                    IconButton(
-                        onClick = { onPickSaved(index) },
-                        modifier = Modifier.size(40.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.Person,
-                            contentDescription = "Pick from saved players",
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                    }
+                // Always show the picker icon — tapping it opens PlayerPickerDialog which
+                // supports both selecting saved players and creating a new one inline.
+                IconButton(
+                    onClick = { onPickSaved(index) },
+                    modifier = Modifier.size(40.dp)
+                ) {
+                    Icon(
+                        Icons.Default.Person,
+                        contentDescription = "Pick or create player",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
                 }
                 if (players.size > 1) {
                     IconButton(
@@ -223,56 +264,4 @@ private fun PlayerListEditor(
     }
 }
 
-// =============================================================================
-// Saved player picker dialog
-// =============================================================================
-
-/**
- * Shows a scrollable list of [PlayerProfile] entries so the user can select one for a
- * player slot.  Reused in both [PlayerSetupScreen] and [SavedTeamsScreen].
- */
-@Composable
-fun SavedPlayerPickerDialog(
-    savedPlayers: List<PlayerProfile>,
-    onDismiss: () -> Unit,
-    onSelect: (PlayerProfile) -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Pick Saved Player") },
-        text = {
-            Column(
-                modifier = Modifier.verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                if (savedPlayers.isEmpty()) {
-                    Text(
-                        text = "No saved players yet.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                    )
-                } else {
-                    savedPlayers.forEach { profile ->
-                        Surface(
-                            tonalElevation = 1.dp,
-                            shape = MaterialTheme.shapes.small,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            OutlinedButton(
-                                onClick = { onSelect(profile) },
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text(profile.displayName)
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {},
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
-        }
-    )
-}
 

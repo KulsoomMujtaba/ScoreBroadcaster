@@ -19,7 +19,6 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -96,7 +95,8 @@ fun SavedTeamsScreen(
             onConfirm = { team ->
                 matchSessionViewModel.addSavedTeam(team)
                 showCreateDialog = false
-            }
+            },
+            onCreatePlayer = { profile -> matchSessionViewModel.addSavedPlayer(profile) }
         )
     }
 }
@@ -156,11 +156,15 @@ private fun SavedTeamCard(team: SavedTeam, onDelete: () -> Unit) {
 fun CreateSavedTeamDialog(
     savedPlayers: List<PlayerProfile> = emptyList(),
     onDismiss: () -> Unit,
-    onConfirm: (SavedTeam) -> Unit
+    onConfirm: (SavedTeam) -> Unit,
+    /** Called when a new private [PlayerProfile] is created inline so it can be persisted. */
+    onCreatePlayer: (PlayerProfile) -> Unit = {}
 ) {
     var teamName by remember { mutableStateOf("") }
     val playerNames = remember { mutableStateListOf("") }
-    // Index of the slot waiting for a picked saved player; null = no picker open
+    // Track sourceProfileId for slots filled via the picker (index → profileId)
+    val slotProfileIds = remember { hashMapOf<Int, String>() }
+    // Index of the slot waiting for a picked player; null = no picker open
     var pickerForSlot by remember { mutableStateOf<Int?>(null) }
 
     AlertDialog(
@@ -191,27 +195,34 @@ fun CreateSavedTeamDialog(
                     ) {
                         OutlinedTextField(
                             value = name,
-                            onValueChange = { playerNames[index] = it },
+                            onValueChange = {
+                                playerNames[index] = it
+                                // Clear the profile link when the user manually edits the name
+                                slotProfileIds.remove(index)
+                            },
                             label = { Text("Player ${index + 1}") },
                             singleLine = true,
                             modifier = Modifier.weight(1f),
                             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next)
                         )
-                        if (savedPlayers.isNotEmpty()) {
-                            IconButton(
-                                onClick = { pickerForSlot = index },
-                                modifier = Modifier.size(36.dp)
-                            ) {
-                                Icon(
-                                    Icons.Default.Person,
-                                    contentDescription = "Pick saved player",
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
-                            }
+                        // Always show picker icon — supports both selecting saved players and
+                        // creating a new private player inline via PlayerPickerDialog.
+                        IconButton(
+                            onClick = { pickerForSlot = index },
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Person,
+                                contentDescription = "Pick or create player",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
                         }
                         if (playerNames.size > 1) {
                             IconButton(
-                                onClick = { playerNames.removeAt(index) },
+                                onClick = {
+                                    playerNames.removeAt(index)
+                                    slotProfileIds.remove(index)
+                                },
                                 modifier = Modifier.size(36.dp)
                             ) {
                                 Icon(
@@ -238,9 +249,14 @@ fun CreateSavedTeamDialog(
         confirmButton = {
             Button(
                 onClick = {
-                    val players = playerNames
-                        .filter { it.isNotBlank() }
-                        .mapIndexed { i, n -> Player(name = n.trim().ifBlank { "Player ${i + 1}" }) }
+                    val players = playerNames.mapIndexed { i, n -> Pair(i, n) }
+                        .filter { (_, n) -> n.isNotBlank() }
+                        .map { (origIdx, n) ->
+                            Player(
+                                name = n.trim(),
+                                sourceProfileId = slotProfileIds[origIdx]
+                            )
+                        }
                     onConfirm(SavedTeam(name = teamName.trim(), players = players))
                 },
                 enabled = teamName.isNotBlank()
@@ -251,14 +267,21 @@ fun CreateSavedTeamDialog(
         }
     )
 
-    // Show picker dialog when a slot icon was tapped
+    // Show PlayerPickerDialog when a slot icon was tapped
     val slotIdx = pickerForSlot
-    if (slotIdx != null && savedPlayers.isNotEmpty()) {
-        SavedPlayerPickerDialog(
+    if (slotIdx != null) {
+        PlayerPickerDialog(
             savedPlayers = savedPlayers,
             onDismiss = { pickerForSlot = null },
             onSelect = { profile ->
                 playerNames[slotIdx] = profile.displayName
+                slotProfileIds[slotIdx] = profile.id
+                pickerForSlot = null
+            },
+            onCreateAndSelect = { profile ->
+                onCreatePlayer(profile)
+                playerNames[slotIdx] = profile.displayName
+                slotProfileIds[slotIdx] = profile.id
                 pickerForSlot = null
             }
         )

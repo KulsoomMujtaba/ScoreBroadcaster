@@ -48,6 +48,7 @@ class MainActivity : ComponentActivity() {
                 val navController = rememberNavController()
 
                 val activeMatch by matchSessionViewModel.activeMatch.collectAsState()
+                val savedPlayers by matchSessionViewModel.savedPlayers.collectAsState()
                 val scoringState by matchViewModel.state.collectAsState()
                 val scoringConsole by matchViewModel.consoleState.collectAsState()
 
@@ -117,6 +118,8 @@ class MainActivity : ComponentActivity() {
                                 }
                                 ScoringScreen(
                                     matchViewModel = matchViewModel,
+                                    savedPlayers = savedPlayers,
+                                    onSavePrivatePlayer = { matchSessionViewModel.addSavedPlayer(it) },
                                     onMatchDetails = { navController.navigate("match_details") },
                                     onViewScorecard = { navController.navigate("scorecard") },
                                     onCameraPreview = { navController.navigate("live_preview") },
@@ -241,6 +244,8 @@ class MainActivity : ComponentActivity() {
                         composable("scoring_only") {
                             ScoringScreen(
                                 matchViewModel = matchViewModel,
+                                savedPlayers = savedPlayers,
+                                onSavePrivatePlayer = { matchSessionViewModel.addSavedPlayer(it) },
                                 onMatchDetails = { navController.navigate("match_details") },
                                 onViewScorecard = { navController.navigate("scorecard") },
                                 onCameraPreview = { navController.navigate("live_preview") },
