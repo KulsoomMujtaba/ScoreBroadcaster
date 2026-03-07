@@ -48,6 +48,7 @@ fun MatchDetailsScreen(
     onCameraPreview: () -> Unit,
     onGoLive: () -> Unit,
     onViewScorecard: () -> Unit,
+    onViewTimeline: () -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -112,6 +113,7 @@ fun MatchDetailsScreen(
                 onCameraPreview = onCameraPreview,
                 onGoLive = onGoLive,
                 onViewScorecard = onViewScorecard,
+                onViewTimeline = onViewTimeline,
                 onAddPlayer = if (isThisMatch) { { showAddPlayerDialog = true } } else null
             )
 
@@ -348,6 +350,7 @@ private fun MatchActionButtons(
     onCameraPreview: () -> Unit,
     onGoLive: () -> Unit,
     onViewScorecard: () -> Unit,
+    onViewTimeline: () -> Unit,
     onAddPlayer: (() -> Unit)? = null
 ) {
     val isComplete = console?.phase == InningsPhase.MATCH_COMPLETE ||
@@ -372,6 +375,13 @@ private fun MatchActionButtons(
             modifier = Modifier.fillMaxWidth()
         ) {
             Text("View Scorecard", style = MaterialTheme.typography.titleSmall)
+        }
+
+        OutlinedButton(
+            onClick = onViewTimeline,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Ball Timeline", style = MaterialTheme.typography.titleSmall)
         }
 
         if (onAddPlayer != null && !isComplete) {

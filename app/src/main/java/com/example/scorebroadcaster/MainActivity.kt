@@ -15,6 +15,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.example.scorebroadcaster.data.InningsPhase
 import com.example.scorebroadcaster.ui.AppShell
+import com.example.scorebroadcaster.ui.BallTimelineScreen
 import com.example.scorebroadcaster.ui.CameraPreviewScreen
 import com.example.scorebroadcaster.ui.CreateMatchScreen
 import com.example.scorebroadcaster.ui.HomeScreen
@@ -117,7 +118,8 @@ class MainActivity : ComponentActivity() {
                                     matchViewModel = matchViewModel,
                                     onMatchDetails = { navController.navigate("match_details") },
                                     onViewScorecard = { navController.navigate("scorecard") },
-                                    onCameraPreview = { navController.navigate("live_preview") }
+                                    onCameraPreview = { navController.navigate("live_preview") },
+                                    onViewTimeline = { navController.navigate("ball_timeline") }
                                 )
                             } else {
                                 ScoreEmptyState(
@@ -201,6 +203,7 @@ class MainActivity : ComponentActivity() {
                                 onCameraPreview = { navController.navigate("live_preview") },
                                 onGoLive = { navController.navigate("stream_setup") },
                                 onViewScorecard = { navController.navigate("scorecard") },
+                                onViewTimeline = { navController.navigate("ball_timeline") },
                                 onBack = { navController.popBackStack() }
                             )
                         }
@@ -208,6 +211,11 @@ class MainActivity : ComponentActivity() {
                             ScorecardScreen(
                                 matchViewModel = matchViewModel,
                                 matchSessionViewModel = matchSessionViewModel
+                            )
+                        }
+                        composable("ball_timeline") {
+                            BallTimelineScreen(
+                                matchViewModel = matchViewModel
                             )
                         }
 
@@ -226,7 +234,8 @@ class MainActivity : ComponentActivity() {
                                 matchViewModel = matchViewModel,
                                 onMatchDetails = { navController.navigate("match_details") },
                                 onViewScorecard = { navController.navigate("scorecard") },
-                                onCameraPreview = { navController.navigate("live_preview") }
+                                onCameraPreview = { navController.navigate("live_preview") },
+                                onViewTimeline = { navController.navigate("ball_timeline") }
                             )
                         }
 

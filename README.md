@@ -51,6 +51,7 @@ The core promise is simple: open the app, start a match, score every ball, and s
 | Add player after match start | ✅ Done | `ScoringScreen`, `MatchDetailsScreen` |
 | Saved teams (create, view, reuse) | ✅ Done | `SavedTeamsScreen`, `CreateMatchScreen` |
 | Scorecard view (batting + bowling summary, both innings) | ✅ Done | `ScorecardScreen` |
+| Ball timeline / over history (per-ball, grouped by over) | ✅ Done | `BallTimelineScreen` |
 | Domain entities (Team, Player, Match, …) | ✅ Done | `data/entity/` |
 | Local in-memory repository | ✅ Done | `repository/MatchRepository` |
 | Match session management | ✅ Done | `MatchSessionViewModel` |
@@ -166,6 +167,56 @@ Scoring is modelled as an append-only event log:
 ---
 
 ## Development Log
+
+### 2026-03-07 – Phase 7: Ball Timeline / Over History
+
+**What changed:**
+Added a full ball-by-ball timeline and over history screen (`BallTimelineScreen`) for the active innings. All deliveries are displayed in compact cricket notation, grouped into over cards and rendered in a scrollable `LazyColumn`. Multi-innings matches show a tab switcher so the scorer can toggle between 1st and 2nd innings histories.
+
+**Grouping and formatting approach:**
+
+- **`BallTimelineFormatter`** (`domain/BallTimelineFormatter.kt`) is a pure Kotlin object (no Android or Compose dependencies) responsible for all non-UI logic:
+  - `formatBall(event: BallEvent): String` — converts a `BallEvent` to compact cricket notation (`.`, `1`, `4`, `6`, `W`, `W (run out)`, `wd`, `wd+2`, `nb`, `nb+4`, `nb+W`, `b2`, `lb3`).
+  - `groupByOver(events: List<BallEvent>): List<OverSummary>` — folds the event log into `OverSummary` objects, respecting the `countsAsBall` flag so wides and no-balls are correctly placed in the over without advancing the ball counter.
+  - `OverSummary` — data class holding the 1-based `overNumber` and a list of `IndexedBall` objects.
+  - `IndexedBall` — data class carrying `globalIndex` (position in the event log), `overNumber`, `ballInOver`, `display` string, and the original `BallEvent`. The stable `globalIndex` keeps each ball identifiable so future edit-ball support can be wired without structural changes.
+
+- **`MatchViewModel`** now exposes two public `StateFlow<List<BallEvent>>`:
+  - `events` — the current-innings event log (always the live innings).
+  - `firstInningsEvents` — snapshot of the first-innings log, populated when `endFirstInnings()` is called and reset when `initFromMatch()` is called.
+
+- **`BallTimelineScreen`** (`ui/BallTimelineScreen.kt`) reads from both flows, calls `BallTimelineFormatter.groupByOver()`, and renders:
+  - An innings tab row (shown only when a second innings is available) using `FilterChip`s.
+  - A `LazyColumn` of `OverCard` composables — each card shows the over label and a `FlowRow` of colour-coded `BallChip` composables.
+  - Ball chips use distinct background colours: error container for wickets, primary container for boundaries, tertiary container for extras, and surface variant for normal deliveries.
+  - An empty-state message when no deliveries have been recorded.
+
+**Navigation:**
+- Accessible from: **ScoringScreen** quick-nav bar → "Timeline", **MatchDetailsScreen** → "Ball Timeline" button, **navigation drawer** → "Ball Timeline" item (new).
+- Route `ball_timeline` registered in `MainActivity`.
+- `TopAppBar` title for `ball_timeline` is "Over History".
+- Bottom-nav tab highlight maps `ball_timeline` to the **Score** tab.
+
+**Files created/modified:**
+
+| File | Action |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/domain/BallTimelineFormatter.kt` | Created – `IndexedBall`, `OverSummary`, `BallTimelineFormatter` |
+| `app/src/main/java/com/example/scorebroadcaster/ui/BallTimelineScreen.kt` | Created – `BallTimelineScreen` and helpers |
+| `app/src/main/java/com/example/scorebroadcaster/viewmodel/MatchViewModel.kt` | Updated – exposed `events` and `firstInningsEvents` StateFlows; snapshots first-innings events in `endFirstInnings()` |
+| `app/src/main/java/com/example/scorebroadcaster/ui/ScoringScreen.kt` | Updated – added `onViewTimeline` param and "Timeline" button to `QuickNavBar` |
+| `app/src/main/java/com/example/scorebroadcaster/ui/MatchDetailsScreen.kt` | Updated – added `onViewTimeline` param and "Ball Timeline" button in `MatchActionButtons` |
+| `app/src/main/java/com/example/scorebroadcaster/ui/AppShell.kt` | Updated – added "Ball Timeline" drawer item, title mapping, and `selectedTab` mapping |
+| `app/src/main/java/com/example/scorebroadcaster/MainActivity.kt` | Updated – wired `ball_timeline` route; passed `onViewTimeline` to `ScoringScreen` and `MatchDetailsScreen` |
+| `README.md` | Updated |
+
+**What did NOT change:**
+- Scoring engine (`ScoreReducer`, `BallEvent`, `MatchState`) — untouched.
+- Existing screens (`ScorecardScreen`, `CameraPreviewScreen`, `StreamPreviewScreen`) — untouched.
+- Scoring flow, undo, extras dialog, wicket dialog — untouched.
+- This phase is **display-only**: no ball editing is implemented.
+
+---
 
 ### 2026-03-07 – Phase 6: Extras Entry Dialog
 

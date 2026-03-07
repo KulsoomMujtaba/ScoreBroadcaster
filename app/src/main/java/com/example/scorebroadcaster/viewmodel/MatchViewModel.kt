@@ -29,6 +29,17 @@ class MatchViewModel : ViewModel() {
     // Internal event log uses BallEvent for flexible delivery modelling.
     private val _events = MutableStateFlow<List<BallEvent>>(emptyList())
 
+    /** Current-innings event log exposed for the ball timeline / over history screen. */
+    val events: StateFlow<List<BallEvent>> = _events.asStateFlow()
+
+    /**
+     * First-innings event log.
+     * Populated when the first innings ends; stays empty until then.
+     * After the second innings starts [events] tracks the second innings only.
+     */
+    private val _firstInningsEvents = MutableStateFlow<List<BallEvent>>(emptyList())
+    val firstInningsEvents: StateFlow<List<BallEvent>> = _firstInningsEvents.asStateFlow()
+
     private val _state = MutableStateFlow(MatchState())
     val state: StateFlow<MatchState> = _state.asStateFlow()
 
@@ -353,6 +364,9 @@ class MatchViewModel : ViewModel() {
     fun endFirstInnings() {
         val state = _state.value
         val console = _consoleState.value
+        // Snapshot the first-innings event log so it can be displayed in the ball timeline
+        // even after the second innings event log replaces _events.
+        _firstInningsEvents.value = _events.value
         _consoleState.value = console.copy(
             phase = InningsPhase.INNINGS_BREAK,
             firstInningsRuns = state.runs,
@@ -449,6 +463,7 @@ class MatchViewModel : ViewModel() {
         currentTeamAName = match.battingFirst.name
         currentTeamBName = match.bowlingFirst.name
         _events.value = emptyList()
+        _firstInningsEvents.value = emptyList()
         _state.value = MatchState(
             teamAName = currentTeamAName,
             teamBName = currentTeamBName
