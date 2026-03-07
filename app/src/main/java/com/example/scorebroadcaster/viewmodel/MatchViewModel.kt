@@ -16,6 +16,7 @@ import com.example.scorebroadcaster.data.entity.Player
 import com.example.scorebroadcaster.data.entity.Team
 import com.example.scorebroadcaster.data.toBallEvent
 import com.example.scorebroadcaster.domain.BallEvent
+import com.example.scorebroadcaster.domain.MaidenOverCalculator
 import com.example.scorebroadcaster.domain.reduce
 import com.example.scorebroadcaster.repository.MatchRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -95,15 +96,22 @@ class MatchViewModel : ViewModel() {
         if (ballEvent.wicket) {
             Log.d("WicketFlow", "Wicket recorded: ${ballEvent.dismissalDetail?.dismissalType} — ${ballEvent.dismissalDetail?.batter?.name}")
         }
+        // Stamp the current bowler onto the event so MaidenOverCalculator can derive maiden
+        // counts from the event log without needing any external player-tracking state.
+        val stamped = if (ballEvent.bowler == null) {
+            ballEvent.copy(bowler = _consoleState.value.currentBowler)
+        } else {
+            ballEvent
+        }
         val prevState = _state.value
-        _events.value = _events.value + ballEvent
+        _events.value = _events.value + stamped
         val newState = reduce(_events.value)
             .copy(teamAName = currentTeamAName, teamBName = currentTeamBName)
         _state.value = newState
-        if (ballEvent.wicket) {
+        if (stamped.wicket) {
             _fallOfWickets.value = computeFallOfWickets(_events.value)
         }
-        updateConsoleAfterEvent(ballEvent, prevState, newState)
+        updateConsoleAfterEvent(stamped, prevState, newState)
     }
 
     private fun updateConsoleAfterEvent(
@@ -254,14 +262,25 @@ class MatchViewModel : ViewModel() {
             else -> Pair(null, false)
         }
 
+        // --- Derive maiden counts from the full event log and apply to bowling entries ---
+        // This is computed from the event log (pure, replay-safe) rather than stored as a
+        // mutable counter, ensuring correctness after undo, ball edits, and ball deletes.
+        val maidensMap = MaidenOverCalculator.compute(_events.value)
+        val bowlingWithMaidens = updatedAllBowling.map { entry ->
+            entry.copy(maidens = maidensMap[entry.player.id] ?: 0)
+        }
+        val bowlerEntryWithMaidens = updatedBowlerEntry?.copy(
+            maidens = maidensMap[console.currentBowler?.id] ?: 0
+        )
+
         _consoleState.value = console.copy(
             striker = rotatedStriker,
             nonStriker = rotatedNonStriker,
             strikerEntry = updatedAllBatting.find { it.player.id == rotatedStriker?.id },
             nonStrikerEntry = updatedAllBatting.find { it.player.id == rotatedNonStriker?.id },
-            currentBowlerEntry = updatedBowlerEntry,
+            currentBowlerEntry = bowlerEntryWithMaidens,
             allBattingEntries = updatedAllBatting,
-            allBowlingEntries = updatedAllBowling,
+            allBowlingEntries = bowlingWithMaidens,
             pendingAction = pendingAction,
             bowlerChangePending = bowlerChangePending
         )
@@ -293,7 +312,9 @@ class MatchViewModel : ViewModel() {
             _state.value = reduce(_events.value)
                 .copy(teamAName = currentTeamAName, teamBName = currentTeamBName)
             _fallOfWickets.value = computeFallOfWickets(_events.value)
-            // Console state is not rolled back for simplicity; scorer can re-select if needed.
+            // Console state is not fully rolled back (other stats require a full replay),
+            // but maiden counts are derived from the event log and can always be kept correct.
+            refreshMaidensFromEvents(_events.value)
         }
     }
 
@@ -323,6 +344,7 @@ class MatchViewModel : ViewModel() {
             _state.value = reduce(_events.value)
                 .copy(teamAName = currentTeamAName, teamBName = currentTeamBName)
             _fallOfWickets.value = computeFallOfWickets(_events.value)
+            refreshMaidensFromEvents(_events.value)
         }
     }
 
@@ -351,6 +373,7 @@ class MatchViewModel : ViewModel() {
             _state.value = reduce(_events.value)
                 .copy(teamAName = currentTeamAName, teamBName = currentTeamBName)
             _fallOfWickets.value = computeFallOfWickets(_events.value)
+            refreshMaidensFromEvents(_events.value)
         }
     }
 
@@ -360,10 +383,15 @@ class MatchViewModel : ViewModel() {
      *
      * Called after [replaceBallEvent] or [deleteBallEvent] modifies the first-innings log.
      * Only aggregate totals (runs, wickets, extras, overs, target) are updated; per-player
-     * batting/bowling entries are left unchanged.
+     * batting/bowling entries are left unchanged except for maiden counts, which are always
+     * derived from the event log and therefore kept accurate.
      */
     private fun rebuildFirstInningsSnapshot(firstEvents: List<BallEvent>) {
         val firstState = reduce(firstEvents)
+        val maidensMap = MaidenOverCalculator.compute(firstEvents)
+        val updatedFirstBowling = _consoleState.value.firstInningsBowlingEntries.map { entry ->
+            entry.copy(maidens = maidensMap[entry.player.id] ?: 0)
+        }
         _consoleState.value = _consoleState.value.copy(
             firstInningsRuns     = firstState.runs,
             firstInningsWickets  = firstState.wickets,
@@ -374,7 +402,31 @@ class MatchViewModel : ViewModel() {
             firstInningsLegByes  = firstState.legByes,
             firstInningsOvers    = firstState.overs,
             firstInningsBalls    = firstState.balls,
-            target               = firstState.runs + 1
+            target               = firstState.runs + 1,
+            firstInningsBowlingEntries = updatedFirstBowling
+        )
+    }
+
+    /**
+     * Recompute maiden counts for the current innings from the event log and update the
+     * bowling entries in [ScoringConsoleState].
+     *
+     * Maiden counts are derived entirely from [events] via [MaidenOverCalculator], so this
+     * function can be called after any modification to the event log (undo, replace, delete)
+     * and will always produce the correct result without needing a full console-state replay.
+     */
+    private fun refreshMaidensFromEvents(events: List<BallEvent>) {
+        val maidensMap = MaidenOverCalculator.compute(events)
+        val console = _consoleState.value
+        val updatedBowling = console.allBowlingEntries.map { entry ->
+            entry.copy(maidens = maidensMap[entry.player.id] ?: 0)
+        }
+        val updatedCurrentBowlerEntry = console.currentBowlerEntry?.let { cur ->
+            updatedBowling.find { it.player.id == cur.player.id } ?: cur
+        }
+        _consoleState.value = console.copy(
+            allBowlingEntries = updatedBowling,
+            currentBowlerEntry = updatedCurrentBowlerEntry
         )
     }
 

@@ -474,6 +474,52 @@ Replaced the four fixed extra buttons (`Wd+1`, `NB+1`, `Bye`, `LB`) with a prope
 
 ---
 
+### 2026-03-07 – Maiden Overs Tracking
+
+**Maiden-over rule used:**
+An over is a maiden when the batting team scores **zero runs in total** during that over.
+Every run source is counted: runs off the bat, wides, no-balls, byes, and leg-byes.
+A wicket with no runs scored does **not** break a maiden.
+This rule is documented in `MaidenOverCalculator.kt`.
+
+**Model updates:**
+- `BallEvent` (`domain/BallEvent.kt`) gained a nullable `bowler: Player?` field (default `null`) so each delivery carries its bowler reference.  The field is backward-compatible — all existing `BallEvent` construction sites are unaffected because the field has a default value.
+- `BowlingEntry` (`data/entity/BowlingEntry.kt`) already contained a `maidens: Int` field (previously always 0); it is now populated by the replay-based calculator.
+
+**Replay-based calculation (`MaidenOverCalculator.kt`):**
+A new pure-function object `MaidenOverCalculator.compute(events)` was created in `domain/`.  It walks the ordered event list, groups deliveries into completed overs (6 `countsAsBall == true` deliveries each), sums the total team runs for each completed over, and credits a maiden to the bowler of any over with 0 runs.  Because the function is stateless and re-runs over the full event log, it is automatically correct after undo, ball edits, and ball deletes — no mutable counters are involved.
+
+**ViewModel integration (`MatchViewModel.kt`):**
+- `addBallEvent` now stamps `bowler = currentBowler` onto every event before appending it to the log.
+- `updateConsoleAfterEvent` calls `MaidenOverCalculator.compute` after each delivery and writes the fresh maiden counts into `allBowlingEntries` and `currentBowlerEntry`.
+- `undo()` calls the new `refreshMaidensFromEvents` helper to keep maiden counts accurate when a ball is rolled back.
+- `replaceBallEvent` and `deleteBallEvent` also call `refreshMaidensFromEvents` after modifying the current-innings log.
+- `rebuildFirstInningsSnapshot` now also recomputes maiden counts for `firstInningsBowlingEntries` using the first-innings event log, so the scorecard remains correct when first-innings balls are edited.
+
+**Scorecard bowling table (`ScorecardScreen.kt`):**
+The bowling table columns were updated from `O R W Econ` to `O M R W Econ`.
+`BowlingTableHeader` and `BowlingTableRow` both now include the maiden column.
+
+**Current-bowler summary card (`ScoringScreen.kt`):**
+`BowlerRow` now displays figures in the compact format `overs.balls-maidens-runs-wickets`
+(e.g. `3.0-1-12-2`), consistent with traditional cricket bowling-figures notation.
+
+**Files created:**
+| File | Action |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/domain/MaidenOverCalculator.kt` | Created |
+
+**Files modified:**
+| File | Change |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/domain/BallEvent.kt` | Added `bowler: Player?` field |
+| `app/src/main/java/com/example/scorebroadcaster/viewmodel/MatchViewModel.kt` | Bowler stamping, maiden derivation, refresh helpers |
+| `app/src/main/java/com/example/scorebroadcaster/ui/ScorecardScreen.kt` | Added M column to bowling table |
+| `app/src/main/java/com/example/scorebroadcaster/ui/ScoringScreen.kt` | Updated BowlerRow display format |
+| `README.md` | This entry |
+
+---
+
 ### 2026-03-07 – Phase 5: Flexible Ball Event Model
 
 **Why BallEvent was introduced:**
