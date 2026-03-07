@@ -24,6 +24,7 @@ import com.example.scorebroadcaster.ui.MatchDetailsScreen
 import com.example.scorebroadcaster.ui.MatchSummaryScreen
 import com.example.scorebroadcaster.ui.MyMatchesScreen
 import com.example.scorebroadcaster.ui.PlayerSetupScreen
+import com.example.scorebroadcaster.ui.SavedPlayersScreen
 import com.example.scorebroadcaster.ui.SavedTeamsScreen
 import com.example.scorebroadcaster.ui.ScoreEmptyState
 import com.example.scorebroadcaster.ui.ScorecardScreen
@@ -223,6 +224,14 @@ class MainActivity : ComponentActivity() {
 
                         composable("saved_teams") {
                             SavedTeamsScreen(
+                                matchSessionViewModel = matchSessionViewModel
+                            )
+                        }
+
+                        // ---- Saved Players ----
+
+                        composable("saved_players") {
+                            SavedPlayersScreen(
                                 matchSessionViewModel = matchSessionViewModel
                             )
                         }

@@ -168,6 +168,56 @@ Scoring is modelled as an append-only event log:
 
 ## Development Log
 
+### 2026-03-07 – Reusable Player Profiles
+
+**What changed:**
+Introduced a reusable player-profile model alongside a dedicated Saved Players screen.  Players can now be saved privately and reused when building teams or setting up a match, while every match-level player entry remains an independent snapshot so historical scorecards are never affected by later profile edits.
+
+**Files created/modified:**
+| File | Action |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/data/entity/PlayerProfile.kt` | Created |
+| `app/src/main/java/com/example/scorebroadcaster/data/entity/Player.kt` | Updated |
+| `app/src/main/java/com/example/scorebroadcaster/repository/SavedPlayerRepository.kt` | Created |
+| `app/src/main/java/com/example/scorebroadcaster/viewmodel/MatchSessionViewModel.kt` | Updated |
+| `app/src/main/java/com/example/scorebroadcaster/ui/SavedPlayersScreen.kt` | Created |
+| `app/src/main/java/com/example/scorebroadcaster/ui/PlayerSetupScreen.kt` | Updated |
+| `app/src/main/java/com/example/scorebroadcaster/ui/SavedTeamsScreen.kt` | Updated |
+| `app/src/main/java/com/example/scorebroadcaster/ui/AppShell.kt` | Updated |
+| `app/src/main/java/com/example/scorebroadcaster/MainActivity.kt` | Updated |
+| `README.md` | Updated |
+
+**Architecture:**
+
+*PlayerProfile* (`data/entity/PlayerProfile.kt`) is the reusable template.  It carries:
+- `id`, `displayName`
+- `playerSourceType: PlayerSourceType` — enum with `PRIVATE` (today) and `APP_USER` (future).  Adding a new source type later requires no changes to repositories or view-models.
+- `linkedUserId: String?` — nullable; will hold the account id when `APP_USER` profiles are introduced without a model change.
+- Nullable metadata stubs: `avatarUrl`, `role`, `battingStyle`, `bowlingStyle` — present in the schema for future extension.
+
+A `PlayerProfile.toMatchPlayer()` extension function snapshots the profile into a `Player` at selection time.
+
+*Player* (`data/entity/Player.kt`) — match-level snapshot — gains one new nullable field `sourceProfileId: String? = null`.  This records which profile the player came from while keeping the data fully independent.  All existing code continues to work unchanged because the field has a default value.
+
+*SavedPlayerRepository* (`repository/SavedPlayerRepository.kt`) — in-memory singleton with `addPlayer`, `removePlayer`, `updatePlayer`, and `findById`.  Follows the same pattern as `SavedTeamRepository`.
+
+*MatchSessionViewModel* — `savedPlayers: StateFlow<List<PlayerProfile>>` exposed alongside the existing `savedTeams`.  `addSavedPlayer` / `removeSavedPlayer` methods added; `refresh()` also refreshes the player list.
+
+**Team vs match player handling:**
+- `SavedTeam.players: List<Player>` stores snapshots created at team-save time.  If the originating `PlayerProfile` is later renamed, the team template is unaffected (by design — the team can be updated manually).
+- When a match is created from a team, the team's `Player` list is copied into `Match.teamA/B.players`.  This is a second-level snapshot.
+- `BattingEntry.player` and `BowlingEntry.player` hold yet another copy captured at the moment the batter/bowler is selected.  Three independent copy points ensure maximum scorecard stability.
+
+**UX additions:**
+- *Saved Players screen* (`saved_players` route in `MainActivity`, drawer item in `AppShell`) — list, create, and delete private player profiles.
+- *PlayerSetupScreen* — each player slot gains a person-icon button that opens `SavedPlayerPickerDialog` to fill the slot from a saved profile.  Manual typing is still fully supported.
+- *SavedTeamsScreen* `CreateSavedTeamDialog` — same person-icon button added to each player row so teams can be assembled from existing saved profiles.
+
+**Future readiness:**
+The `PlayerSourceType` enum and `linkedUserId` field mean that when app-user player search is added, a new `APP_USER` profile can be created and stored without touching the existing `PRIVATE` flow or any scoring logic.
+
+---
+
 ### 2026-03-07 – Phase 8: Ball Editing / Correction
 
 **What changed:**

@@ -16,6 +16,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -40,6 +41,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.example.scorebroadcaster.data.entity.Player
+import com.example.scorebroadcaster.data.entity.PlayerProfile
 import com.example.scorebroadcaster.data.entity.SavedTeam
 import com.example.scorebroadcaster.viewmodel.MatchSessionViewModel
 
@@ -49,6 +51,7 @@ fun SavedTeamsScreen(
     modifier: Modifier = Modifier
 ) {
     val savedTeams by matchSessionViewModel.savedTeams.collectAsState()
+    val savedPlayers by matchSessionViewModel.savedPlayers.collectAsState()
     var showCreateDialog by remember { mutableStateOf(false) }
 
     Column(
@@ -88,6 +91,7 @@ fun SavedTeamsScreen(
 
     if (showCreateDialog) {
         CreateSavedTeamDialog(
+            savedPlayers = savedPlayers,
             onDismiss = { showCreateDialog = false },
             onConfirm = { team ->
                 matchSessionViewModel.addSavedTeam(team)
@@ -150,11 +154,14 @@ private fun SavedTeamCard(team: SavedTeam, onDelete: () -> Unit) {
 
 @Composable
 fun CreateSavedTeamDialog(
+    savedPlayers: List<PlayerProfile> = emptyList(),
     onDismiss: () -> Unit,
     onConfirm: (SavedTeam) -> Unit
 ) {
     var teamName by remember { mutableStateOf("") }
     val playerNames = remember { mutableStateListOf("") }
+    // Index of the slot waiting for a picked saved player; null = no picker open
+    var pickerForSlot by remember { mutableStateOf<Int?>(null) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -180,7 +187,7 @@ fun CreateSavedTeamDialog(
                 playerNames.forEachIndexed { index, name ->
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         OutlinedTextField(
                             value = name,
@@ -190,6 +197,18 @@ fun CreateSavedTeamDialog(
                             modifier = Modifier.weight(1f),
                             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next)
                         )
+                        if (savedPlayers.isNotEmpty()) {
+                            IconButton(
+                                onClick = { pickerForSlot = index },
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.Person,
+                                    contentDescription = "Pick saved player",
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
                         if (playerNames.size > 1) {
                             IconButton(
                                 onClick = { playerNames.removeAt(index) },
@@ -231,4 +250,17 @@ fun CreateSavedTeamDialog(
             TextButton(onClick = onDismiss) { Text("Cancel") }
         }
     )
+
+    // Show picker dialog when a slot icon was tapped
+    val slotIdx = pickerForSlot
+    if (slotIdx != null && savedPlayers.isNotEmpty()) {
+        SavedPlayerPickerDialog(
+            savedPlayers = savedPlayers,
+            onDismiss = { pickerForSlot = null },
+            onSelect = { profile ->
+                playerNames[slotIdx] = profile.displayName
+                pickerForSlot = null
+            }
+        )
+    }
 }

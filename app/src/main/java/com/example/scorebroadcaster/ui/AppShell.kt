@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.OutlinedButton
@@ -92,6 +93,7 @@ private fun topBarTitle(route: String?): String = when (route) {
     "stream_setup" -> "Stream Setup"
     "stream_preview" -> "Go Live"
     "saved_teams" -> "Saved Teams"
+    "saved_players" -> "Saved Players"
     else -> "Scored"
 }
 
@@ -236,6 +238,12 @@ fun AppDrawer(
             label = "Saved Teams",
             selected = currentRoute == "saved_teams",
             onClick = { onNavigate("saved_teams") }
+        )
+        DrawerNavItem(
+            icon = Icons.Default.Person,
+            label = "Saved Players",
+            selected = currentRoute == "saved_players",
+            onClick = { onNavigate("saved_players") }
         )
         DrawerNavItem(
             icon = Icons.Default.List,
