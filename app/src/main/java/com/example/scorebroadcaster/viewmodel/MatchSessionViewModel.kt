@@ -3,8 +3,10 @@ package com.example.scorebroadcaster.viewmodel
 import androidx.lifecycle.ViewModel
 import com.example.scorebroadcaster.data.entity.Match
 import com.example.scorebroadcaster.data.entity.MatchStatus
+import com.example.scorebroadcaster.data.entity.PlayerProfile
 import com.example.scorebroadcaster.data.entity.SavedTeam
 import com.example.scorebroadcaster.repository.MatchRepository
+import com.example.scorebroadcaster.repository.SavedPlayerRepository
 import com.example.scorebroadcaster.repository.SavedTeamRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -12,7 +14,7 @@ import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * Manages the higher-level match lifecycle: creation, player setup, active session, and match list.
- * Also manages saved (reusable) teams.
+ * Also manages saved (reusable) teams and saved (reusable) player profiles.
  * Works alongside [MatchViewModel], which handles ball-by-ball scoring events.
  */
 class MatchSessionViewModel : ViewModel() {
@@ -47,6 +49,25 @@ class MatchSessionViewModel : ViewModel() {
     }
 
     // ---------------------------------------------------------------------------
+    // Saved player profiles
+    // ---------------------------------------------------------------------------
+
+    private val _savedPlayers = MutableStateFlow<List<PlayerProfile>>(SavedPlayerRepository.players)
+    val savedPlayers: StateFlow<List<PlayerProfile>> = _savedPlayers.asStateFlow()
+
+    /** Persist a new private player profile and refresh the observable list. */
+    fun addSavedPlayer(player: PlayerProfile) {
+        SavedPlayerRepository.addPlayer(player)
+        _savedPlayers.value = SavedPlayerRepository.players
+    }
+
+    /** Remove a saved player profile by id. */
+    fun removeSavedPlayer(id: String) {
+        SavedPlayerRepository.removePlayer(id)
+        _savedPlayers.value = SavedPlayerRepository.players
+    }
+
+    // ---------------------------------------------------------------------------
     // Match creation / session management
     // ---------------------------------------------------------------------------
 
@@ -78,5 +99,6 @@ class MatchSessionViewModel : ViewModel() {
         _matches.value = MatchRepository.matches
         _activeMatch.value = MatchRepository.activeMatch
         _savedTeams.value = SavedTeamRepository.teams
+        _savedPlayers.value = SavedPlayerRepository.players
     }
 }
