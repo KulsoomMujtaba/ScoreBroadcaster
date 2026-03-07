@@ -53,10 +53,14 @@ fun CreateMatchScreen(
     var teamAName by remember { mutableStateOf("") }
     // Players pre-filled when a saved team is selected; empty for manually typed names
     var teamAPlayers by remember { mutableStateOf<List<Player>>(emptyList()) }
+    // Tracks which saved team is currently selected for Team A (null if free-typed)
+    var teamASelectedSaved by remember { mutableStateOf<SavedTeam?>(null) }
 
     // Team B state
     var teamBName by remember { mutableStateOf("") }
     var teamBPlayers by remember { mutableStateOf<List<Player>>(emptyList()) }
+    // Tracks which saved team is currently selected for Team B (null if free-typed)
+    var teamBSelectedSaved by remember { mutableStateOf<SavedTeam?>(null) }
 
     var selectedFormat by remember { mutableStateOf(MatchFormat.T20) }
     var customOvers by remember { mutableStateOf("") }
@@ -107,16 +111,19 @@ fun CreateMatchScreen(
         TeamSelectorField(
             label = "Team A name *",
             teamName = teamAName,
-            onTeamNameChange = { teamAName = it; teamAPlayers = emptyList() },
+            onTeamNameChange = { teamAName = it; teamAPlayers = emptyList(); teamASelectedSaved = null },
             savedTeams = savedTeams,
+            excludedTeam = teamBSelectedSaved,
             onTeamSelected = { saved ->
                 teamAName = saved.name
                 teamAPlayers = saved.players.map { it.copy() }
+                teamASelectedSaved = saved
             },
             onNewTeamCreated = { team ->
                 matchSessionViewModel.addSavedTeam(team)
                 teamAName = team.name
                 teamAPlayers = team.players.map { it.copy() }
+                teamASelectedSaved = team
             }
         )
 
@@ -127,16 +134,19 @@ fun CreateMatchScreen(
         TeamSelectorField(
             label = "Team B name *",
             teamName = teamBName,
-            onTeamNameChange = { teamBName = it; teamBPlayers = emptyList() },
+            onTeamNameChange = { teamBName = it; teamBPlayers = emptyList(); teamBSelectedSaved = null },
             savedTeams = savedTeams,
+            excludedTeam = teamASelectedSaved,
             onTeamSelected = { saved ->
                 teamBName = saved.name
                 teamBPlayers = saved.players.map { it.copy() }
+                teamBSelectedSaved = saved
             },
             onNewTeamCreated = { team ->
                 matchSessionViewModel.addSavedTeam(team)
                 teamBName = team.name
                 teamBPlayers = team.players.map { it.copy() }
+                teamBSelectedSaved = team
             }
         )
 
@@ -286,15 +296,24 @@ fun TeamSelectorField(
     savedTeams: List<SavedTeam>,
     onTeamSelected: (SavedTeam) -> Unit,
     onNewTeamCreated: (SavedTeam) -> Unit,
+    excludedTeam: SavedTeam? = null,
     modifier: Modifier = Modifier
 ) {
     var expanded by remember { mutableStateOf(false) }
     var showCreateDialog by remember { mutableStateOf(false) }
 
-    // Filter saved teams by the currently typed text (case-insensitive)
-    val filteredTeams = remember(teamName, savedTeams) {
-        savedTeams.filter { it.name.contains(teamName, ignoreCase = true) }
+    // Saved teams available for selection: exclude the team already selected on the other side
+    val availableTeams = remember(savedTeams, excludedTeam) {
+        if (excludedTeam != null) savedTeams.filter { it.id != excludedTeam.id } else savedTeams
     }
+
+    // Further filter by the currently typed text (case-insensitive)
+    val filteredTeams = remember(teamName, availableTeams) {
+        availableTeams.filter { it.name.contains(teamName, ignoreCase = true) }
+    }
+
+    // True when the other side has selected a saved team and no other saved teams remain
+    val noOtherTeamsAvailable = excludedTeam != null && availableTeams.isEmpty()
 
     ExposedDropdownMenuBox(
         expanded = expanded,
@@ -321,6 +340,22 @@ fun TeamSelectorField(
             expanded = expanded,
             onDismissRequest = { expanded = false }
         ) {
+            // Info row when the other side has claimed the only saved team
+            if (noOtherTeamsAvailable) {
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            "No other saved teams available",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                        )
+                    },
+                    onClick = {},
+                    enabled = false
+                )
+                HorizontalDivider()
+            }
+
             // Matching saved teams
             filteredTeams.forEach { team ->
                 DropdownMenuItem(
