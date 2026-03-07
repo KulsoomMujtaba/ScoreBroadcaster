@@ -831,6 +831,27 @@ Previously, `CreateMatchScreen` showed a small **"Saved"** `OutlinedButton` next
 
 ---
 
+### 2026-03-07 – Exclude Selected Saved Team From Opposite Team Dropdown
+
+**Feature:** Saved-team dropdown options are now mutually exclusive between Team A and Team B.
+
+**Behaviour:**
+- Once a saved team is selected for Team A, it no longer appears in Team B's dropdown list, and vice versa.
+- If the user clears a saved-team selection by typing freely, that team immediately becomes available again in the other side's dropdown.
+- If the user changes Team A's selection from one saved team to another, the old team becomes available in Team B's list and the new one is excluded.
+- A newly created saved team that is auto-selected for one side is immediately excluded from the other side's dropdown.
+- When all other saved teams are excluded (e.g. only one saved team exists and it is selected on the opposite side), a disabled info row "No other saved teams available" is shown at the top of the dropdown.
+- Free typing is completely unaffected — users can still type any custom team name manually.
+- Existing same-team-name validation and disabled Next button logic are unchanged.
+
+**Files modified:**
+| File | Action |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/ui/CreateMatchScreen.kt` | Added `teamASelectedSaved`/`teamBSelectedSaved` state; added `excludedTeam` parameter to `TeamSelectorField`; filter available teams by exclusion; show "No other saved teams available" info row |
+| `README.md` | Added this log entry |
+
+---
+
 ### 2026-03-07 – Phase 5: Searchable Team Selector UX in CreateMatchScreen
 
 **Feature:** Replace the two-mode (New Team / Use Saved Team) team selection flow in `CreateMatchScreen` with a unified, searchable editable-dropdown field for each team.
