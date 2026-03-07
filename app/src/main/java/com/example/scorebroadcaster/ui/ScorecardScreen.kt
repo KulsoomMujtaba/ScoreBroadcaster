@@ -454,7 +454,7 @@ private fun BowlingTableHeader() {
             fontWeight = FontWeight.Bold,
             modifier = Modifier.weight(2f)
         )
-        listOf("O", "R", "W", "Econ").forEach { col ->
+        listOf("O", "M", "R", "W", "Econ").forEach { col ->
             Text(
                 col,
                 style = MaterialTheme.typography.labelSmall,
@@ -482,6 +482,7 @@ private fun BowlingTableRow(entry: BowlingEntry) {
         )
         listOf(
             ScorecardFormatter.formatOvers(entry.overs, entry.balls),
+            "${entry.maidens}",
             "${entry.runs}",
             "${entry.wickets}",
             ScorecardFormatter.formatEconomy(entry.runs, entry.overs, entry.balls)

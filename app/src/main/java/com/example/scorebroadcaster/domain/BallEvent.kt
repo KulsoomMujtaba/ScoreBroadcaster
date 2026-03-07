@@ -2,6 +2,7 @@ package com.example.scorebroadcaster.domain
 
 import com.example.scorebroadcaster.data.entity.DismissalDetail
 import com.example.scorebroadcaster.data.entity.ExtrasBreakdown
+import com.example.scorebroadcaster.data.entity.Player
 
 /**
  * Represents a single delivery (ball) in a cricket innings.
@@ -20,11 +21,16 @@ import com.example.scorebroadcaster.data.entity.ExtrasBreakdown
  * @param dismissalDetail Full details of the dismissal (null when [wicket] is false).
  * @param countsAsBall    True when this delivery counts as a legal ball (increments the over).
  *                        Wides and no-balls are false; all other deliveries are true.
+ * @param bowler          The bowler who delivered this ball.  Null for events recorded before
+ *                        bowler-stamping was introduced (backward-compatible default).
+ *                        Used by [com.example.scorebroadcaster.domain.MaidenOverCalculator] to
+ *                        derive maiden-over counts without storing mutable counters.
  */
 data class BallEvent(
     val runsOffBat: Int = 0,
     val extras: ExtrasBreakdown = ExtrasBreakdown.NONE,
     val wicket: Boolean = false,
     val dismissalDetail: DismissalDetail? = null,
-    val countsAsBall: Boolean = true
+    val countsAsBall: Boolean = true,
+    val bowler: Player? = null
 )

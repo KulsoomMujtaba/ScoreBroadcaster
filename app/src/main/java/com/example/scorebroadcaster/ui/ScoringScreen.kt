@@ -651,7 +651,8 @@ private fun BowlerRow(entry: BowlingEntry) {
             modifier = Modifier.weight(1f)
         )
         Text(
-            text = "${entry.overs}.${entry.balls}  ${entry.runs} runs  ${entry.wickets}w",
+            // Format: overs.balls - maidens - runs - wickets  (e.g. 3.0-1-12-2)
+            text = "${entry.overs}.${entry.balls}-${entry.maidens}-${entry.runs}-${entry.wickets}w",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
         )
