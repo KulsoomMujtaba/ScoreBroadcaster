@@ -176,6 +176,29 @@ Scoring is modelled as an append-only event log:
 
 ## Development Log
 
+### 2026-03-08 – Phase 11: Saved Player Profiles Persistence with Room
+
+Room persistence has been activated for Saved Player Profiles. Profiles now survive app restarts — creating a player profile, killing the app, and reopening it will show the profile exactly as saved.
+
+**No schema changes required** — the `player_profiles` table was already introduced in Phase 9. This phase activates it by wiring the existing `PlayerProfileDao` into `SavedPlayerRepository` and `MatchSessionViewModel`.
+
+**Files modified:**
+
+| File | Change |
+|------|--------|
+| `data/local/PlayerProfileEntity.kt` | Added `toDomain()` and `PlayerProfile.toEntity()` mapping helpers |
+| `data/local/PlayerProfileDao.kt` | Added `observeAll(): Flow<List<PlayerProfileEntity>>` for reactive updates |
+| `repository/SavedPlayerRepository.kt` | Replaced in-memory `object` with Room-backed `class` — `PlayerProfileDao` + `CoroutineScope`, reactive `playerFlow`, non-suspending mutations (`addPlayer`, `removePlayer`, `updatePlayer`) |
+| `viewmodel/MatchSessionViewModel.kt` | Instantiates `SavedPlayerRepository` with `playerProfileDao` + `viewModelScope`; `savedPlayers` is now a reactive `StateFlow` driven by Room Flow |
+
+**What is NOT changed:**
+- `MatchRepository` — still in-memory; Matches migration is a future phase.
+- All screens (`SavedPlayersScreen`, `PlayerPickerDialog`, `PlayerSetupScreen`, `SavedTeamsScreen`, `ScoringScreen`) — zero UX changes.
+- Domain model `PlayerProfile` and `PlayerSourceType` — unchanged.
+- Scoring logic, streaming, and all other flows — untouched.
+
+---
+
 ### 2026-03-08 – Phase 10: Saved Teams Persistence with Room
 
 Room persistence has been activated for Saved Teams. Teams now survive app restarts — creating a team, killing the app, and reopening it will show the team exactly as saved.
