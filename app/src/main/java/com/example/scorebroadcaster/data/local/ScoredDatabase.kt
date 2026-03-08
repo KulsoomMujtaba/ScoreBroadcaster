@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.TypeConverters
 
 /**
  * Room database for the Scored app.
@@ -11,12 +12,9 @@ import androidx.room.RoomDatabase
  * Contains local persistence tables for player profiles, saved teams,
  * matches, and ball-by-ball events.
  *
- * **Architecture note:** The existing in-memory repositories
- * ([com.example.scorebroadcaster.repository.MatchRepository],
- * [com.example.scorebroadcaster.repository.SavedTeamRepository],
- * [com.example.scorebroadcaster.repository.SavedPlayerRepository])
- * remain the active data sources for Phase 9.  The Room database is
- * introduced alongside them and will replace them in a future phase.
+ * **Version history:**
+ * - v1: Initial schema (player_profiles, saved_teams, saved_team_player_cross_ref, matches, ball_events)
+ * - v2: Added `players` JSON column to `saved_teams`; SavedTeamRepository is now Room-backed
  *
  * Use [getInstance] to obtain the singleton database instance.
  */
@@ -28,9 +26,10 @@ import androidx.room.RoomDatabase
         MatchEntity::class,
         BallEventEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
+@TypeConverters(PlayerListTypeConverter::class)
 abstract class ScoredDatabase : RoomDatabase() {
 
     abstract fun playerProfileDao(): PlayerProfileDao
@@ -48,7 +47,11 @@ abstract class ScoredDatabase : RoomDatabase() {
                     context.applicationContext,
                     ScoredDatabase::class.java,
                     "scored.db"
-                ).build().also { instance = it }
+                )
+                    // Development-phase: destructive migration acceptable while schema evolves.
+                    // Replace with explicit Migration objects before a production release.
+                    .fallbackToDestructiveMigration()
+                    .build().also { instance = it }
             }
     }
 }

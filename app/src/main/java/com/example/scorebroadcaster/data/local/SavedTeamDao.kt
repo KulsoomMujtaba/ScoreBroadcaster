@@ -6,6 +6,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
+import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface SavedTeamDao {
@@ -24,4 +25,8 @@ interface SavedTeamDao {
 
     @Query("SELECT * FROM saved_teams WHERE id = :id")
     suspend fun getById(id: String): SavedTeamEntity?
+
+    /** Reactive stream; emits whenever the saved_teams table changes. */
+    @Query("SELECT * FROM saved_teams ORDER BY name")
+    fun observeAll(): Flow<List<SavedTeamEntity>>
 }

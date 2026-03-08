@@ -176,6 +176,42 @@ Scoring is modelled as an append-only event log:
 
 ## Development Log
 
+### 2026-03-08 – Phase 10: Saved Teams Persistence with Room
+
+Room persistence has been activated for Saved Teams. Teams now survive app restarts — creating a team, killing the app, and reopening it will show the team exactly as saved.
+
+**Persistence approach: TypeConverter for `List<Player>`**
+
+`SavedTeam` holds a `List<Player>` where each `Player` is a lightweight value object (`id`, `name`, `sourceProfileId`). Rather than a separate join table, the player list is stored as a JSON string in a single column using a `@TypeConverter`. This was chosen over the existing `SavedTeamPlayerCrossRef` junction table because:
+- `Player` is a match-level snapshot, not the same entity as `PlayerProfile`
+- Ad-hoc players (no `sourceProfileId`) have no counterpart in `player_profiles`
+- A TypeConverter is simpler and keeps the schema flat while the data is small
+- The `SavedTeamPlayerCrossRef` table is retained for potential future use in a many-to-many profile linkage
+
+**Files added:**
+
+| File | Purpose |
+|------|---------|
+| `data/local/PlayerListTypeConverter.kt` | `@TypeConverter` pair: `List<Player>` ↔ JSON string using `org.json` (no extra deps) |
+
+**Files modified:**
+
+| File | Change |
+|------|--------|
+| `data/local/SavedTeamEntity.kt` | Added `players: List<Player>` column; added `toDomain()` / `SavedTeam.toEntity()` converters |
+| `data/local/SavedTeamDao.kt` | Added `observeAll(): Flow<List<SavedTeamEntity>>` for reactive updates |
+| `data/local/ScoredDatabase.kt` | Added `@TypeConverters(PlayerListTypeConverter::class)`; bumped version to 2; added `fallbackToDestructiveMigration()` (dev-phase only) |
+| `repository/SavedTeamRepository.kt` | Replaced in-memory `object` with Room-backed `class` — mirrors `SavedPlayerRepository` pattern (DAO + CoroutineScope, reactive `teamFlow`, non-suspending mutations) |
+| `viewmodel/MatchSessionViewModel.kt` | Instantiates `SavedTeamRepository` with `savedTeamDao` + `viewModelScope`; `savedTeams` is now a reactive `StateFlow` driven by Room Flow; `refresh()` no longer manually resets saved-teams state |
+
+**What is NOT changed:**
+- `MatchRepository` — still in-memory; Matches migration is a future phase.
+- All screens (`SavedTeamsScreen`, `CreateMatchScreen`, `CreateSavedTeamDialog`, team picker) — zero UX changes.
+- Domain model `SavedTeam` and `Player` — unchanged.
+- Scoring logic, streaming, and all other flows — untouched.
+
+---
+
 ### 2026-03-08 – Phase 9: Room Database Foundation
 
 Room database infrastructure has been introduced alongside the existing in-memory repositories.

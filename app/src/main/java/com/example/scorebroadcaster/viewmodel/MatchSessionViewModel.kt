@@ -24,8 +24,15 @@ import kotlinx.coroutines.flow.stateIn
  */
 class MatchSessionViewModel(application: Application) : AndroidViewModel(application) {
 
+    private val db = ScoredDatabase.getInstance(application)
+
     private val savedPlayerRepository = SavedPlayerRepository(
-        dao = ScoredDatabase.getInstance(application).playerProfileDao(),
+        dao = db.playerProfileDao(),
+        scope = viewModelScope
+    )
+
+    private val savedTeamRepository = SavedTeamRepository(
+        dao = db.savedTeamDao(),
         scope = viewModelScope
     )
 
@@ -40,22 +47,25 @@ class MatchSessionViewModel(application: Application) : AndroidViewModel(applica
     val pendingMatch: StateFlow<Match?> = _pendingMatch.asStateFlow()
 
     // ---------------------------------------------------------------------------
-    // Saved teams
+    // Saved teams — reactive, driven by Room Flow
     // ---------------------------------------------------------------------------
 
-    private val _savedTeams = MutableStateFlow<List<SavedTeam>>(SavedTeamRepository.teams)
-    val savedTeams: StateFlow<List<SavedTeam>> = _savedTeams.asStateFlow()
+    /** Reactive list of saved teams, driven directly by the Room Flow. */
+    val savedTeams: StateFlow<List<SavedTeam>> = savedTeamRepository.teamFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.Eagerly,
+            initialValue = emptyList()
+        )
 
-    /** Persist a new saved team and refresh the observable list. */
+    /** Persist a new saved team. The StateFlow updates automatically via Room. */
     fun addSavedTeam(team: SavedTeam) {
-        SavedTeamRepository.addTeam(team)
-        _savedTeams.value = SavedTeamRepository.teams
+        savedTeamRepository.addTeam(team)
     }
 
-    /** Remove a saved team by id. */
+    /** Remove a saved team by id. The StateFlow updates automatically via Room. */
     fun removeSavedTeam(id: String) {
-        SavedTeamRepository.removeTeam(id)
-        _savedTeams.value = SavedTeamRepository.teams
+        savedTeamRepository.removeTeam(id)
     }
 
     // ---------------------------------------------------------------------------
@@ -107,11 +117,10 @@ class MatchSessionViewModel(application: Application) : AndroidViewModel(applica
         _activeMatch.value = match
     }
 
-    /** Refresh state from the underlying repository (e.g. after returning to My Matches). */
+    /** Refresh match state from the in-memory repository (e.g. after returning to My Matches).
+     *  savedTeams and savedPlayers are driven by Room Flows and update automatically. */
     fun refresh() {
         _matches.value = MatchRepository.matches
         _activeMatch.value = MatchRepository.activeMatch
-        _savedTeams.value = SavedTeamRepository.teams
-        // savedPlayers is driven by the Room Flow — no manual refresh needed
     }
 }
