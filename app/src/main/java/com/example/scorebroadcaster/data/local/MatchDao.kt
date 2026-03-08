@@ -6,6 +6,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
+import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface MatchDao {
@@ -24,4 +25,7 @@ interface MatchDao {
 
     @Query("SELECT * FROM matches WHERE localId = :localId")
     suspend fun getById(localId: String): MatchEntity?
+
+    @Query("SELECT * FROM matches ORDER BY createdAt DESC")
+    fun observeAll(): Flow<List<MatchEntity>>
 }
