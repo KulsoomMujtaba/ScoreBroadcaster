@@ -38,6 +38,7 @@ class MatchSessionViewModel(application: Application) : AndroidViewModel(applica
 
     private val matchRepository = MatchRepository(
         dao = db.matchDao(),
+        ballEventDao = db.ballEventDao(),
         scope = viewModelScope
     ).also { MatchRepository.setInstance(it) }
 

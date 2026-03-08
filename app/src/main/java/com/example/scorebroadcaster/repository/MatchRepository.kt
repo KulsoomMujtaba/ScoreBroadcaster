@@ -2,9 +2,11 @@ package com.example.scorebroadcaster.repository
 
 import android.util.Log
 import com.example.scorebroadcaster.data.entity.Match
+import com.example.scorebroadcaster.data.local.BallEventDao
 import com.example.scorebroadcaster.data.local.MatchDao
 import com.example.scorebroadcaster.data.local.toDomain
 import com.example.scorebroadcaster.data.local.toEntity
+import com.example.scorebroadcaster.domain.BallEvent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -35,6 +37,7 @@ import kotlinx.coroutines.launch
  */
 class MatchRepository(
     private val dao: MatchDao,
+    private val ballEventDao: BallEventDao,
     private val scope: CoroutineScope
 ) {
 
@@ -73,6 +76,56 @@ class MatchRepository(
 
     fun clearActiveMatch() {
         _activeMatch.value = null
+    }
+
+    // ---------------------------------------------------------------------------
+    // BallEvent persistence
+    // ---------------------------------------------------------------------------
+
+    /**
+     * Persist all [events] for a given innings.
+     *
+     * Uses a replace-all strategy: existing rows for [matchLocalId] + [inningsNumber]
+     * are deleted and the full list is written in a single transaction.
+     */
+    suspend fun saveBallEvents(
+        matchLocalId: String,
+        inningsNumber: Int,
+        events: List<BallEvent>
+    ) {
+        ballEventDao.deleteForInnings(matchLocalId, inningsNumber)
+        val entities = events.mapIndexed { index, event ->
+            event.toEntity(matchLocalId, inningsNumber, index)
+        }
+        ballEventDao.insertAll(entities)
+    }
+
+    /**
+     * Load the persisted [BallEvent] list for a single innings.
+     *
+     * Returns an empty list if no events have been saved for the given innings.
+     */
+    suspend fun loadBallEvents(
+        matchLocalId: String,
+        inningsNumber: Int
+    ): List<BallEvent> =
+        ballEventDao.getEventsForInnings(matchLocalId, inningsNumber)
+            .map { it.toDomain() }
+
+    /**
+     * Load all persisted [BallEvent]s for a match, split by innings.
+     *
+     * @return A [Pair] where [Pair.first] is the first-innings event list and
+     *         [Pair.second] is the second-innings event list. Either may be empty.
+     */
+    suspend fun loadAllBallEvents(
+        matchLocalId: String
+    ): Pair<List<BallEvent>, List<BallEvent>> {
+        val all = ballEventDao.getAllEventsForMatch(matchLocalId)
+        val (firstEntities, secondEntities) = all.partition { it.inningsNumber == 1 }
+        val first = firstEntities.map { it.toDomain() }
+        val second = secondEntities.map { it.toDomain() }
+        return Pair(first, second)
     }
 
     companion object {

@@ -17,6 +17,9 @@ import androidx.room.TypeConverters
  * - v2: Added `players` JSON column to `saved_teams`; SavedTeamRepository is now Room-backed
  * - v3: Updated `matches` schema — `title` is now nullable; added `remoteId` and `publishedAt`;
  *       MatchRepository is now Room-backed (Phase 9.3)
+ * - v4: Replaced `ball_events` schema with full delivery model — renamed columns to `matchLocalId`,
+ *       `inningsNumber`, `sequenceNumber`; added dismissal fields, bowler fields, `createdAt`;
+ *       added `toDomain()` / `toEntity()` mapping helpers (Phase 9.4)
  *
  * Use [getInstance] to obtain the singleton database instance.
  */
@@ -28,7 +31,7 @@ import androidx.room.TypeConverters
         MatchEntity::class,
         BallEventEntity::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 @TypeConverters(PlayerListTypeConverter::class)
