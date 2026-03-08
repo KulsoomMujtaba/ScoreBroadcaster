@@ -1,23 +1,33 @@
 package com.example.scorebroadcaster.viewmodel
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import com.example.scorebroadcaster.data.entity.Match
 import com.example.scorebroadcaster.data.entity.MatchStatus
 import com.example.scorebroadcaster.data.entity.PlayerProfile
 import com.example.scorebroadcaster.data.entity.SavedTeam
+import com.example.scorebroadcaster.data.local.ScoredDatabase
 import com.example.scorebroadcaster.repository.MatchRepository
 import com.example.scorebroadcaster.repository.SavedPlayerRepository
 import com.example.scorebroadcaster.repository.SavedTeamRepository
+import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.stateIn
 
 /**
  * Manages the higher-level match lifecycle: creation, player setup, active session, and match list.
  * Also manages saved (reusable) teams and saved (reusable) player profiles.
  * Works alongside [MatchViewModel], which handles ball-by-ball scoring events.
  */
-class MatchSessionViewModel : ViewModel() {
+class MatchSessionViewModel(application: Application) : AndroidViewModel(application) {
+
+    private val savedPlayerRepository = SavedPlayerRepository(
+        dao = ScoredDatabase.getInstance(application).playerProfileDao(),
+        scope = viewModelScope
+    )
 
     private val _matches = MutableStateFlow<List<Match>>(MatchRepository.matches)
     val matches: StateFlow<List<Match>> = _matches.asStateFlow()
@@ -52,19 +62,22 @@ class MatchSessionViewModel : ViewModel() {
     // Saved player profiles
     // ---------------------------------------------------------------------------
 
-    private val _savedPlayers = MutableStateFlow<List<PlayerProfile>>(SavedPlayerRepository.players)
-    val savedPlayers: StateFlow<List<PlayerProfile>> = _savedPlayers.asStateFlow()
+    /** Reactive list of saved player profiles, driven directly by the Room Flow. */
+    val savedPlayers: StateFlow<List<PlayerProfile>> = savedPlayerRepository.playerFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.Eagerly,
+            initialValue = emptyList()
+        )
 
-    /** Persist a new private player profile and refresh the observable list. */
+    /** Persist a new private player profile. The StateFlow updates automatically via Room. */
     fun addSavedPlayer(player: PlayerProfile) {
-        SavedPlayerRepository.addPlayer(player)
-        _savedPlayers.value = SavedPlayerRepository.players
+        savedPlayerRepository.addPlayer(player)
     }
 
-    /** Remove a saved player profile by id. */
+    /** Remove a saved player profile by id. The StateFlow updates automatically via Room. */
     fun removeSavedPlayer(id: String) {
-        SavedPlayerRepository.removePlayer(id)
-        _savedPlayers.value = SavedPlayerRepository.players
+        savedPlayerRepository.removePlayer(id)
     }
 
     // ---------------------------------------------------------------------------
@@ -99,6 +112,6 @@ class MatchSessionViewModel : ViewModel() {
         _matches.value = MatchRepository.matches
         _activeMatch.value = MatchRepository.activeMatch
         _savedTeams.value = SavedTeamRepository.teams
-        _savedPlayers.value = SavedPlayerRepository.players
+        // savedPlayers is driven by the Room Flow — no manual refresh needed
     }
 }

@@ -1,37 +1,63 @@
 package com.example.scorebroadcaster.repository
 
 import com.example.scorebroadcaster.data.entity.PlayerProfile
+import com.example.scorebroadcaster.data.local.PlayerProfileDao
+import com.example.scorebroadcaster.data.local.toDomain
+import com.example.scorebroadcaster.data.local.toEntity
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 
 /**
- * In-memory repository for private (reusable) player profiles.
+ * Room-backed repository for private (reusable) player profiles.
  *
- * Follows the same singleton pattern as [SavedTeamRepository].
- * Will be backed by persistent storage (Room / DataStore) in a future phase.
+ * Replaces the previous in-memory singleton. Profiles now persist across app
+ * restarts via the [PlayerProfileDao] / Room database.
  *
  * Architecture note:
+ * - [players] returns a synchronous snapshot backed by an in-memory StateFlow that
+ *   is kept in sync with Room via [observeAll].
+ * - [playerFlow] exposes a reactive stream for consumers that prefer Flow.
+ * - Mutations ([addPlayer], [removePlayer], [updatePlayer]) are non-suspending;
+ *   Room writes are dispatched on the provided [scope] and the StateFlow updates
+ *   automatically when Room confirms the change.
  * - Only [PlayerProfile.playerSourceType] == PRIVATE profiles are stored here today.
- * - Future APP_USER profiles will be looked up via a network/auth-linked source and
- *   should NOT be stored here — add a separate remote-profile repository at that point.
  */
-object SavedPlayerRepository {
+class SavedPlayerRepository(
+    private val dao: PlayerProfileDao,
+    private val scope: CoroutineScope
+) {
+    /** Reactive stream of all saved profiles, ordered by display name. */
+    val playerFlow: Flow<List<PlayerProfile>> = dao.observeAll()
+        .map { entities -> entities.map { it.toDomain() } }
 
-    private val _players = mutableListOf<PlayerProfile>()
+    private val _state = playerFlow.stateIn(
+        scope = scope,
+        started = SharingStarted.Eagerly,
+        initialValue = emptyList()
+    )
 
+    /** Synchronous snapshot of the current player list (backed by the Room-derived StateFlow). */
     val players: List<PlayerProfile>
-        get() = _players.toList()
+        get() = _state.value
 
     fun addPlayer(player: PlayerProfile) {
-        _players.add(player)
+        scope.launch { dao.insert(player.toEntity()) }
     }
 
     fun removePlayer(id: String) {
-        _players.removeAll { it.id == id }
+        scope.launch {
+            val entity = dao.getById(id) ?: return@launch
+            dao.delete(entity)
+        }
     }
 
     fun updatePlayer(player: PlayerProfile) {
-        val index = _players.indexOfFirst { it.id == player.id }
-        if (index >= 0) _players[index] = player
+        scope.launch { dao.update(player.toEntity()) }
     }
 
-    fun findById(id: String): PlayerProfile? = _players.find { it.id == id }
+    fun findById(id: String): PlayerProfile? = _state.value.find { it.id == id }
 }

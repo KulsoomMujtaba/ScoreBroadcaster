@@ -6,6 +6,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
+import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface PlayerProfileDao {
@@ -24,4 +25,7 @@ interface PlayerProfileDao {
 
     @Query("SELECT * FROM player_profiles WHERE id = :id")
     suspend fun getById(id: String): PlayerProfileEntity?
+
+    @Query("SELECT * FROM player_profiles ORDER BY displayName")
+    fun observeAll(): Flow<List<PlayerProfileEntity>>
 }
