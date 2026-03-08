@@ -1,30 +1,33 @@
 package com.example.scorebroadcaster.data.local
 
 import androidx.room.Dao
-import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
-import androidx.room.Update
 
 @Dao
 interface BallEventDao {
 
+    @Query("""
+        SELECT * FROM ball_events
+        WHERE matchLocalId = :matchId AND inningsNumber = :inningsNumber
+        ORDER BY sequenceNumber ASC
+    """)
+    suspend fun getEventsForInnings(matchId: String, inningsNumber: Int): List<BallEventEntity>
+
+    @Query("""
+        SELECT * FROM ball_events
+        WHERE matchLocalId = :matchId
+        ORDER BY inningsNumber ASC, sequenceNumber ASC
+    """)
+    suspend fun getAllEventsForMatch(matchId: String): List<BallEventEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insert(entity: BallEventEntity)
+    suspend fun insertAll(events: List<BallEventEntity>)
 
-    @Update
-    suspend fun update(entity: BallEventEntity)
+    @Query("DELETE FROM ball_events WHERE matchLocalId = :matchId")
+    suspend fun deleteForMatch(matchId: String)
 
-    @Delete
-    suspend fun delete(entity: BallEventEntity)
-
-    @Query("SELECT * FROM ball_events")
-    suspend fun getAll(): List<BallEventEntity>
-
-    @Query("SELECT * FROM ball_events WHERE id = :id")
-    suspend fun getById(id: String): BallEventEntity?
-
-    @Query("SELECT * FROM ball_events WHERE matchId = :matchId ORDER BY innings, eventIndex")
-    suspend fun getByMatchId(matchId: String): List<BallEventEntity>
+    @Query("DELETE FROM ball_events WHERE matchLocalId = :matchId AND inningsNumber = :inningsNumber")
+    suspend fun deleteForInnings(matchId: String, inningsNumber: Int)
 }
