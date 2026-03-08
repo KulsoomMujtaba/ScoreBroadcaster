@@ -1,57 +1,108 @@
 package com.example.scorebroadcaster.repository
 
+import android.util.Log
 import com.example.scorebroadcaster.data.entity.Match
-import com.example.scorebroadcaster.data.entity.MatchVisibility
+import com.example.scorebroadcaster.data.local.MatchDao
+import com.example.scorebroadcaster.data.local.toDomain
+import com.example.scorebroadcaster.data.local.toEntity
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 
 /**
- * In-memory local repository for matches.
+ * Room-backed repository for matches.
  *
- * Current state: all matches are stored locally on the scoring device.
+ * Matches are persisted to the local Room database and survive app restarts.
+ * [matchFlow] provides a reactive stream ordered newest-first; [matches] offers
+ * synchronous access to the latest snapshot via a shared StateFlow.
  *
- * Future readiness:
- * - [Match.localId] is the stable on-device key used here.
- * - [Match.remoteId] will be populated by a backend sync layer once publishing is implemented.
- * - [Match.visibility] controls whether viewers can see a match; only [MatchVisibility.PRIVATE]
- *   matches are stored here today.  A future remote repository will handle published matches.
- * - [Match.ownerUserId] will identify the scorer/owner once authentication is added; queries
- *   on this field are intentionally deferred to the remote layer.
+ * The active match (the one currently being scored) is kept in memory only;
+ * it is not persisted by this class.
  *
  * Architecture note – one-scorer / many-viewers:
- * Every match has exactly one scorer (the device that calls [addMatch]).  Viewer access will
- * be mediated by the remote backend and gated on [MatchVisibility]; the local repository
- * never needs to enforce viewer permissions.
+ * Every match has exactly one scorer (the device that calls [addMatch]).  Viewer
+ * access will be mediated by a remote backend and gated on [MatchVisibility]; the
+ * local repository never needs to enforce viewer permissions.
+ *
+ * **Companion object bridge**: [MatchViewModel] calls [MatchRepository.updateMatch]
+ * as a static call on the companion object.  The companion delegates to the active
+ * instance set by [MatchSessionViewModel] via [setInstance].  This lets
+ * [MatchViewModel] remain unchanged while the repository gains Room persistence.
  */
-object MatchRepository {
+class MatchRepository(
+    private val dao: MatchDao,
+    private val scope: CoroutineScope
+) {
 
-    private val _matches = mutableListOf<Match>()
+    /** Reactive list of all matches, ordered by creation date (newest first). */
+    val matchFlow: Flow<List<Match>> = dao.observeAll()
+        .map { entities -> entities.map { it.toDomain() } }
+
+    private val _state = matchFlow.stateIn(
+        scope = scope,
+        started = SharingStarted.Eagerly,
+        initialValue = emptyList()
+    )
 
     val matches: List<Match>
-        get() = _matches.toList()
+        get() = _state.value
 
-    private var _activeMatch: Match? = null
+    private val _activeMatch = MutableStateFlow<Match?>(null)
 
     val activeMatch: Match?
-        get() = _activeMatch
+        get() = _activeMatch.value
 
     fun addMatch(match: Match) {
-        _matches.add(match)
+        scope.launch { dao.insert(match.toEntity()) }
     }
 
     fun updateMatch(match: Match) {
-        val index = _matches.indexOfFirst { it.id == match.id }
-        if (index >= 0) {
-            _matches[index] = match
-        }
-        if (_activeMatch?.id == match.id) {
-            _activeMatch = match
+        scope.launch { dao.update(match.toEntity()) }
+        if (_activeMatch.value?.id == match.id) {
+            _activeMatch.value = match
         }
     }
 
     fun setActiveMatch(match: Match) {
-        _activeMatch = match
+        _activeMatch.value = match
     }
 
     fun clearActiveMatch() {
-        _activeMatch = null
+        _activeMatch.value = null
+    }
+
+    companion object {
+
+        @Volatile
+        private var _instance: MatchRepository? = null
+
+        /**
+         * Register the active Room-backed repository instance.
+         * Called once by [MatchSessionViewModel] after the instance is created.
+         */
+        @Synchronized
+        internal fun setInstance(instance: MatchRepository) {
+            _instance = instance
+        }
+
+        /**
+         * Delegates [Match] updates to the active Room-backed instance.
+         *
+         * This static entry point exists solely so that [MatchViewModel] can
+         * call `MatchRepository.updateMatch(match)` without needing a direct
+         * reference to the repository instance.
+         */
+        fun updateMatch(match: Match) {
+            val repo = _instance
+            if (repo == null) {
+                Log.w("MatchRepository", "updateMatch called before repository was initialised; update dropped")
+                return
+            }
+            repo.updateMatch(match)
+        }
     }
 }

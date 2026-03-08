@@ -36,10 +36,20 @@ class MatchSessionViewModel(application: Application) : AndroidViewModel(applica
         scope = viewModelScope
     )
 
-    private val _matches = MutableStateFlow<List<Match>>(MatchRepository.matches)
-    val matches: StateFlow<List<Match>> = _matches.asStateFlow()
+    private val matchRepository = MatchRepository(
+        dao = db.matchDao(),
+        scope = viewModelScope
+    ).also { MatchRepository.setInstance(it) }
 
-    private val _activeMatch = MutableStateFlow<Match?>(MatchRepository.activeMatch)
+    /** Reactive list of all matches, newest first, driven by Room. */
+    val matches: StateFlow<List<Match>> = matchRepository.matchFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.Eagerly,
+            initialValue = emptyList()
+        )
+
+    private val _activeMatch = MutableStateFlow<Match?>(matchRepository.activeMatch)
     val activeMatch: StateFlow<Match?> = _activeMatch.asStateFlow()
 
     /** Draft match being assembled across the Create → Players → Summary flow. */
@@ -100,27 +110,26 @@ class MatchSessionViewModel(application: Application) : AndroidViewModel(applica
     }
 
     /**
-     * Finalise the pending match: persist to the repository, mark it as active, and clear the draft.
+     * Finalise the pending match: persist to Room, mark it as active, and clear the draft.
+     * The [matches] StateFlow updates automatically via the Room-backed flow.
      */
     fun confirmMatch(match: Match) {
         val confirmed = match.copy(status = MatchStatus.IN_PROGRESS)
-        MatchRepository.addMatch(confirmed)
-        MatchRepository.setActiveMatch(confirmed)
-        _matches.value = MatchRepository.matches
+        matchRepository.addMatch(confirmed)
+        matchRepository.setActiveMatch(confirmed)
         _activeMatch.value = confirmed
         _pendingMatch.value = null
     }
 
     /** Switch the active session to a previously created match. */
     fun setActiveMatch(match: Match) {
-        MatchRepository.setActiveMatch(match)
+        matchRepository.setActiveMatch(match)
         _activeMatch.value = match
     }
 
-    /** Refresh match state from the in-memory repository (e.g. after returning to My Matches).
-     *  savedTeams and savedPlayers are driven by Room Flows and update automatically. */
+    /** Refresh active-match state from the repository (e.g. after returning to My Matches).
+     *  [matches] and saved teams/players are driven by Room Flows and update automatically. */
     fun refresh() {
-        _matches.value = MatchRepository.matches
-        _activeMatch.value = MatchRepository.activeMatch
+        _activeMatch.value = matchRepository.activeMatch
     }
 }
