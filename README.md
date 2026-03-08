@@ -176,6 +176,39 @@ Scoring is modelled as an append-only event log:
 
 ## Development Log
 
+### 2026-03-08 – Phase 9: Room Database Foundation
+
+Room database infrastructure has been introduced alongside the existing in-memory repositories.
+The in-memory repositories (`MatchRepository`, `SavedTeamRepository`, `SavedPlayerRepository`) remain the active data sources and are **not yet migrated**. Room is present but dormant — no repository uses it yet.
+
+**New `data/local` package:**
+
+| File | Purpose |
+|------|---------|
+| `PlayerProfileEntity.kt` | Room table for reusable player profiles |
+| `SavedTeamEntity.kt` | Room table for reusable saved team templates |
+| `SavedTeamPlayerCrossRef.kt` | Junction table linking teams to player profiles |
+| `MatchEntity.kt` | Room table for match records (flat publish-ready columns) |
+| `BallEventEntity.kt` | Room table for individual ball delivery events |
+| `PlayerProfileDao.kt` | DAO with insert / update / delete / getAll / getById |
+| `SavedTeamDao.kt` | DAO with insert / update / delete / getAll / getById |
+| `MatchDao.kt` | DAO with insert / update / delete / getAll / getById |
+| `BallEventDao.kt` | DAO with insert / update / delete / getAll / getById |
+| `ScoredDatabase.kt` | `RoomDatabase` singleton — `ScoredDatabase.getInstance(context)` |
+
+**Dependencies added (`libs.versions.toml` + `app/build.gradle.kts`):**
+- `androidx.room:room-runtime:2.6.1`
+- `androidx.room:room-ktx:2.6.1`
+- `androidx.room:room-compiler:2.6.1` (via `kapt`)
+- `kotlin-kapt` plugin enabled
+
+**What is NOT changed:**
+- `MatchRepository`, `SavedTeamRepository`, `SavedPlayerRepository` — all untouched and still in use.
+- No ViewModel, screen, or domain layer is modified.
+- Repository migration to Room is deferred to a future phase.
+
+---
+
 ### 2026-03-07 – Prevent Same Team Match Creation
 
 **Validation rule:**
