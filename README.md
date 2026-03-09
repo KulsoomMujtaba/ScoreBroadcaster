@@ -176,6 +176,28 @@ Scoring is modelled as an append-only event log:
 
 ## Development Log
 
+### 2026-03-09 – UI Improvement: Innings Setup Bottom Sheet
+
+The innings setup flow has been redesigned from a cramped `AlertDialog` to a spacious `ModalBottomSheet`, giving scorers a cleaner, more comfortable surface for picking opening batters and bowler before a new innings begins.
+
+**What changed:**
+- **Replaced dialog with modal bottom sheet** — `SetupOpenersDialog` (using `AlertDialog`) was removed and replaced with `SetupOpenersBottomSheet` (using Material3 `ModalBottomSheet`). The sheet slides up from the bottom of the screen, providing a larger, more ergonomic canvas on a phone.
+- **Clearer batter / bowler grouping** — the sheet is organised into three visually separated sections with labelled headers coloured in the primary theme colour: **Batting Team**, **Batters** (striker + non-striker), and **Opening Bowler** (including the bowling team name). A `HorizontalDivider` cleanly separates the batting section from the bowling section.
+- **Easier player selection** — dropdowns for striker, non-striker, and opening bowler are now given full-width treatment with comfortable vertical spacing. The same player cannot be selected for both the striker and non-striker roles (the opposing dropdown automatically excludes the already-selected player).
+- **Default selections** — when players are already on the roster the first two batting-team players are pre-selected as striker and non-striker, and the first bowling-team player is pre-selected as opening bowler. Scorers can typically confirm in one tap.
+- **"+ Add Player to [Team]" shortcut** — the add-player text fields are now labelled with the actual team name (e.g. `+ Add Player to Mumbai Indians`) so it is immediately clear which roster is being extended. The saved-player picker icon is preserved.
+- **"Start Innings" CTA** — the confirm button now reads "Start 1st Innings" / "Start 2nd Innings" (matching the sheet title) and spans the full width of the sheet. It remains disabled until striker, non-striker, and bowler are all chosen.
+- **Improved mobile usability** — proper padding (24 dp horizontal, 32 dp bottom), consistent 8 dp gaps between controls, and scrollable content ensure the sheet works well on both small and large phone screens.
+- **No logic changes** — `MatchViewModel.setOpeners`, the scoring reducer, pending-action system, and innings-phase logic are untouched. This is a UI-only change.
+
+**Files changed:**
+| File | Action |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/ui/ScoringScreen.kt` | Updated |
+| `README.md` | Updated |
+
+---
+
 ### 2026-03-09 – UI Improvement: Compact Match Header
 
 The scoring screen header has been redesigned into a compact, single-block `CompactMatchHeader` composable that sits above the tab row and remains visible at all times.
