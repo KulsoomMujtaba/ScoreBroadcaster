@@ -1,6 +1,8 @@
 package com.example.scorebroadcaster.ui
 
 import android.Manifest
+import android.app.Activity
+import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.util.Log
 import android.view.ViewGroup
@@ -11,15 +13,16 @@ import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -27,9 +30,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
@@ -38,13 +41,10 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.example.scorebroadcaster.data.ScoreEvent
 import com.example.scorebroadcaster.viewmodel.MatchViewModel
-import com.example.scorebroadcaster.data.entity.DismissalDetail
 
 /**
- * A full-screen camera preview with a [ScoreboardOverlay] anchored to the bottom and a live
- * scoring controls panel anchored to the top.
+ * An immersive full-screen camera preview with a [ScoreboardOverlay] anchored to the bottom.
  *
  * - Uses CameraX [PreviewView] embedded via [AndroidView] inside Compose.
  * - Binds the camera use-case to the host [androidx.lifecycle.LifecycleOwner] so that
@@ -52,20 +52,31 @@ import com.example.scorebroadcaster.data.entity.DismissalDetail
  * - The overlay reacts to every [com.example.scorebroadcaster.data.MatchState] emission
  *   from [MatchViewModel.state] via [collectAsStateWithLifecycle], recomposing whenever
  *   the match state changes.
- * - The scoring controls panel at the top lets the scorer record deliveries without leaving
- *   the camera view; buttons are wired directly to [MatchViewModel] methods.
+ * - No scoring controls are available here; scoring must be done from [ScoringScreen].
+ * - Locks the screen to landscape for a professional broadcast monitor feel.
  * - Requests the CAMERA permission at runtime if it has not already been granted.
+ *
+ * @param onBack called when the user taps the close button to return to the previous screen.
  */
 @Composable
 fun CameraPreviewScreen(
+    onBack: () -> Unit,
     matchViewModel: MatchViewModel = viewModel(),
     modifier: Modifier = Modifier
 ) {
     val state by matchViewModel.state.collectAsStateWithLifecycle()
-    val console by matchViewModel.consoleState.collectAsStateWithLifecycle()
-    val activeMatch by matchViewModel.activeMatch.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+
+    // Lock to landscape while this screen is visible; restore on exit.
+    val activity = context as? Activity
+    DisposableEffect(Unit) {
+        val original = activity?.requestedOrientation ?: ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+        onDispose {
+            activity?.requestedOrientation = original
+        }
+    }
 
     var cameraPermissionGranted by remember {
         mutableStateOf(
@@ -147,92 +158,23 @@ fun CameraPreviewScreen(
             modifier = Modifier.align(Alignment.BottomCenter)
         )
 
-        // Scoring controls panel overlaid at the top of the camera preview
-        var showWicketDialog by remember { mutableStateOf(false) }
-        ScoringControlsPanel(
-            onEvent = { matchViewModel.addEvent(it) },
-            onWicket = { showWicketDialog = true },
-            onUndo = { matchViewModel.undo() },
-            modifier = Modifier.align(Alignment.TopCenter)
-        )
-        if (showWicketDialog) {
-            val bowlingTeamPlayers = if (console.inningsNumber == 1) {
-                activeMatch?.bowlingFirst?.players.orEmpty()
-            } else {
-                activeMatch?.battingFirst?.players.orEmpty()
-            }
-            WicketDetailsDialog(
-                striker = console.striker,
-                nonStriker = console.nonStriker,
-                bowlingTeamPlayers = bowlingTeamPlayers,
-                currentBowler = console.currentBowler,
-                onConfirm = { dismissal: DismissalDetail ->
-                    showWicketDialog = false
-                    matchViewModel.addEvent(ScoreEvent.Wicket(dismissal))
-                },
-                onDismiss = { showWicketDialog = false }
+        // Close button – top-end corner, inside the safe area
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .statusBarsPadding()
+                .padding(8.dp)
+                .size(40.dp)
+                .clip(CircleShape)
+                .background(Color(0x88000000))
+                .clickable { onBack() },
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.Close,
+                contentDescription = "Close preview",
+                tint = Color.White
             )
-        }
-    }
-}
-
-/**
- * A compact row of scoring buttons displayed on top of the camera preview.
- *
- * Buttons: 0, 1, 2, 3, 4, 6, Wicket, Wide (+1), NoBall (+1), Undo.
- * Each button immediately updates [MatchViewModel] so the [ScoreboardOverlay] reflects the
- * new score without leaving the camera view.
- */
-@Composable
-private fun ScoringControlsPanel(
-    onEvent: (ScoreEvent) -> Unit,
-    onWicket: () -> Unit,
-    onUndo: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .background(Color(0xCC000000))
-            .padding(horizontal = 8.dp, vertical = 6.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        listOf(0, 1, 2, 3, 4, 6).forEach { runs ->
-            Button(
-                onClick = { onEvent(ScoreEvent.Run(runs)) },
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 4.dp)
-            ) {
-                Text("$runs")
-            }
-        }
-        Button(
-            onClick = onWicket,
-            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFCC0000)),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 4.dp)
-        ) {
-            Text("W")
-        }
-        Button(
-            onClick = { onEvent(ScoreEvent.Wide(0)) },
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 4.dp)
-        ) {
-            // Wide(0) → reducer always adds +1 penalty run; label shows the outcome
-            Text("Wd+1")
-        }
-        Button(
-            onClick = { onEvent(ScoreEvent.NoBall(0)) },
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 4.dp)
-        ) {
-            // NoBall(0) → reducer always adds +1 penalty run; label shows the outcome
-            Text("NB+1")
-        }
-        Button(
-            onClick = onUndo,
-            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 4.dp)
-        ) {
-            Text("Undo")
         }
     }
 }

@@ -1,6 +1,7 @@
 package com.example.scorebroadcaster.ui
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -100,6 +101,9 @@ private fun topBarTitle(route: String?): String = when (route) {
 /** Routes that are primary tab destinations — show the hamburger menu icon. */
 private val primaryRoutes = setOf("home", "my_matches", "score_tab", "live_hub")
 
+/** Routes that render as immersive full-screen previews — hide all app chrome. */
+private val immersiveRoutes = setOf("live_preview", "stream_preview")
+
 // ---------------------------------------------------------------------------
 // AppShell
 // ---------------------------------------------------------------------------
@@ -111,6 +115,9 @@ private val primaryRoutes = setOf("home", "my_matches", "score_tab", "live_hub")
  * - a [ModalNavigationDrawer] for secondary destinations
  * - a [TopAppBar] with a drawer toggle (primary routes) or back arrow (secondary routes)
  * - a [NavigationBar] with the four primary bottom-nav tabs
+ *
+ * For immersive routes (`live_preview`, `stream_preview`) all chrome is hidden so the
+ * preview occupies the full screen.
  *
  * Navigation logic is left to the caller via [navController].
  */
@@ -127,6 +134,15 @@ fun AppShell(
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
     val isPrimary = currentRoute in primaryRoutes
+    val isImmersive = currentRoute in immersiveRoutes
+
+    if (isImmersive) {
+        // Full-screen immersive mode: no top bar, bottom bar, or drawer chrome.
+        Box(modifier = modifier.fillMaxSize()) {
+            content(PaddingValues())
+        }
+        return
+    }
 
     ModalNavigationDrawer(
         drawerState = drawerState,
