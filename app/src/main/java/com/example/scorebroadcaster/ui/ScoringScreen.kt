@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -696,6 +697,210 @@ private fun BowlerRow(entry: BowlingEntry) {
 // Scoring buttons
 // =============================================================================
 
+/**
+ * A single styled scoring button with a comfortable minimum tap size.
+ */
+@Composable
+private fun ScoringActionButton(
+    text: String,
+    onClick: () -> Unit,
+    enabled: Boolean,
+    modifier: Modifier = Modifier,
+    colors: androidx.compose.material3.ButtonColors = ButtonDefaults.buttonColors()
+) {
+    Button(
+        onClick = onClick,
+        enabled = enabled,
+        colors = colors,
+        modifier = modifier.defaultMinSize(minHeight = 52.dp)
+    ) {
+        Text(text, style = MaterialTheme.typography.labelLarge)
+    }
+}
+
+/**
+ * A labelled container section used to group scoring controls visually.
+ */
+@Composable
+private fun ScoringControlsSection(
+    label: String,
+    content: @Composable () -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+            modifier = Modifier.padding(horizontal = 2.dp)
+        )
+        Surface(
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+            shape = MaterialTheme.shapes.medium,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Box(modifier = Modifier.padding(10.dp)) {
+                content()
+            }
+        }
+    }
+}
+
+/**
+ * 2 × 3 grid of run buttons (0, 1, 2, 3, 4, 6).
+ * Boundary buttons (4 and 6) use theme-aware container colours to stand out.
+ */
+@Composable
+private fun RunButtonsGrid(
+    onEvent: (ScoreEvent) -> Unit,
+    enabled: Boolean
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        // Row 1: 0, 1, 2
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            listOf(0, 1, 2).forEach { run ->
+                ScoringActionButton(
+                    text = "$run",
+                    onClick = { onEvent(ScoreEvent.Run(run)) },
+                    enabled = enabled,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+        // Row 2: 3, 4, 6 — boundary buttons subtly highlighted
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            ScoringActionButton(
+                text = "3",
+                onClick = { onEvent(ScoreEvent.Run(3)) },
+                enabled = enabled,
+                modifier = Modifier.weight(1f)
+            )
+            ScoringActionButton(
+                text = "4",
+                onClick = { onEvent(ScoreEvent.Run(4)) },
+                enabled = enabled,
+                modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                )
+            )
+            ScoringActionButton(
+                text = "6",
+                onClick = { onEvent(ScoreEvent.Run(6)) },
+                enabled = enabled,
+                modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onTertiaryContainer
+                )
+            )
+        }
+    }
+}
+
+/**
+ * 2 × 2 grid of extras buttons (Wide, No Ball, Bye, Leg Bye).
+ * Styled as OutlinedButtons to appear secondary to run buttons.
+ */
+@Composable
+private fun ExtrasButtonsGrid(
+    onExtras: (ExtraType) -> Unit,
+    enabled: Boolean
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            listOf(ExtraType.WIDE, ExtraType.NO_BALL).forEach { type ->
+                OutlinedButton(
+                    onClick = { onExtras(type) },
+                    enabled = enabled,
+                    modifier = Modifier
+                        .weight(1f)
+                        .defaultMinSize(minHeight = 48.dp)
+                ) {
+                    Text(type.label, style = MaterialTheme.typography.labelLarge)
+                }
+            }
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            listOf(ExtraType.BYE, ExtraType.LEG_BYE).forEach { type ->
+                OutlinedButton(
+                    onClick = { onExtras(type) },
+                    enabled = enabled,
+                    modifier = Modifier
+                        .weight(1f)
+                        .defaultMinSize(minHeight = 48.dp)
+                ) {
+                    Text(type.label, style = MaterialTheme.typography.labelLarge)
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Side-by-side Wicket and Undo buttons.
+ * Wicket uses errorContainer for a destructive appearance.
+ * Undo uses secondaryContainer and is always clickable (matches original behaviour).
+ */
+@Composable
+private fun ActionButtonsRow(
+    onWicket: () -> Unit,
+    onUndo: () -> Unit,
+    wicketEnabled: Boolean
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Button(
+            onClick = onWicket,
+            enabled = wicketEnabled,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.errorContainer,
+                contentColor = MaterialTheme.colorScheme.onErrorContainer
+            ),
+            modifier = Modifier
+                .weight(1f)
+                .defaultMinSize(minHeight = 52.dp)
+        ) {
+            Text("Wicket", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+        }
+        OutlinedButton(
+            onClick = onUndo,
+            colors = ButtonDefaults.outlinedButtonColors(
+                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+            ),
+            modifier = Modifier
+                .weight(1f)
+                .defaultMinSize(minHeight = 52.dp)
+        ) {
+            Text("Undo", style = MaterialTheme.typography.labelLarge)
+        }
+    }
+}
+
+/**
+ * Full scoring control pad split into three labelled sections:
+ * Runs → Extras → Actions (Wicket / Undo).
+ */
 @Composable
 private fun ScoringButtonsSection(
     onEvent: (ScoreEvent) -> Unit,
@@ -704,36 +909,21 @@ private fun ScoringButtonsSection(
     onExtras: (ExtraType) -> Unit,
     enabled: Boolean
 ) {
-    // Run buttons: 0 1 2 3 4 6
-    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        listOf(0, 1, 2, 3, 4, 6).forEach { runs ->
-            Button(onClick = { onEvent(ScoreEvent.Run(runs)) }, enabled = enabled) {
-                Text("$runs")
-            }
-        }
-    }
-    Spacer(modifier = Modifier.height(8.dp))
-
-    // Wicket / Extras row
-    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        Button(
-            onClick = onWicket,
-            enabled = enabled,
-            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-        ) { Text("W") }
-        ExtraType.entries.forEach { type ->
-            Button(onClick = { onExtras(type) }, enabled = enabled) { Text(type.label) }
-        }
-    }
-    Spacer(modifier = Modifier.height(8.dp))
-
-    OutlinedButton(
-        onClick = onUndo,
-        colors = ButtonDefaults.outlinedButtonColors(
-            contentColor = MaterialTheme.colorScheme.error
-        )
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Text("Undo")
+        ScoringControlsSection(label = "Runs") {
+            RunButtonsGrid(onEvent = onEvent, enabled = enabled)
+        }
+        ScoringControlsSection(label = "Extras") {
+            ExtrasButtonsGrid(onExtras = onExtras, enabled = enabled)
+        }
+        ScoringControlsSection(label = "Actions") {
+            ActionButtonsRow(onWicket = onWicket, onUndo = onUndo, wicketEnabled = enabled)
+        }
     }
 }
 

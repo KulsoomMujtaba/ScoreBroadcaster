@@ -176,6 +176,57 @@ Scoring is modelled as an append-only event log:
 
 ## Development Log
 
+### 2026-03-09 – UI Improvement: Scoring Buttons Layout
+
+The scoring control area in `ScoringScreen` has been reorganised into a structured scorer pad with three clearly separated sections, making live scoring faster and more comfortable during a real match.
+
+**Sections introduced:**
+
+| Section | Buttons | Layout |
+|---------|---------|--------|
+| Runs | 0, 1, 2, 3, 4, 6 | 2 rows × 3 columns |
+| Extras | Wide, No Ball, Bye, Leg Bye | 2 rows × 2 columns |
+| Actions | Wicket, Undo | Side-by-side |
+
+**What changed:**
+
+- Scoring controls reorganised into **Runs**, **Extras**, and **Actions** sections, each with a small section label and a `Surface`-backed container.
+- Run buttons are larger (52 dp minimum height) for easier one-handed tapping; **4** and **6** use `secondaryContainer`/`tertiaryContainer` to subtly highlight boundaries.
+- Extras buttons use `OutlinedButton` to appear secondary but remain easy to reach.
+- **Wicket** uses `errorContainer` for a clear destructive/important appearance; renamed from "W" to "Wicket" for readability.
+- **Undo** placed alongside Wicket in the Actions section; always enabled (unchanged from original).
+- Full labels used throughout: "Wide", "No Ball", "Bye", "Leg Bye", "Wicket", "Undo".
+- Consistent `6 dp` / `8 dp` spacing between buttons; `12 dp` spacing between sections.
+- No hard-coded colours — all colours sourced from Material3 theme roles.
+
+**New private composables:**
+
+| Composable | Purpose |
+|-----------|---------|
+| `ScoringActionButton` | Single scoring button with minimum tap size |
+| `ScoringControlsSection` | Labelled `Surface` container for a button group |
+| `RunButtonsGrid` | 2 × 3 grid of run buttons |
+| `ExtrasButtonsGrid` | 2 × 2 grid of extras buttons |
+| `ActionButtonsRow` | Side-by-side Wicket + Undo buttons |
+
+**Files modified:**
+
+| File | Change |
+|------|--------|
+| `ui/ScoringScreen.kt` | Replaced `ScoringButtonsSection` body; added four helper composables; added `defaultMinSize` import |
+| `README.md` | Added this Development Log entry |
+
+**What is NOT changed:**
+
+- Scoring logic — zero changes to `MatchViewModel`, `ScoreReducer`, `BallEvent`, or any domain model.
+- Extras dialog flow — tapping an extras button still opens the same entry dialog.
+- Wicket flow — tapping Wicket still opens the same wicket details dialog.
+- Undo behaviour — unchanged.
+- Disabled state logic — all buttons respect the same `scoringEnabled` guard as before.
+- All other screens — no changes.
+
+---
+
 ### 2026-03-09 – UI Improvement: Scoring Screen Tab Navigation
 
 The `ScoringScreen` top navigation has been refactored from `FilterChip`-style buttons to a proper Material3 `ScrollableTabRow`, replacing the old `QuickNavBar` row that wrapped badly on smaller screens.
