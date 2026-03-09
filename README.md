@@ -29,7 +29,7 @@ The core promise is simple: open the app, start a match, score every ball, and s
 | Feature | Status | Screen |
 |---------|--------|--------|
 | Ball-by-ball scoring engine | ✅ Done | `ScoringScreen` |
-| Undo last ball | ✅ Done | `ScoringScreen` / `CameraPreviewScreen` |
+| Undo last ball | ✅ Done | `ScoringScreen` |
 | Match-context header (title, format, innings, teams) | ✅ Done | `ScoringScreen` |
 | Batter / bowler tracking with live stats | ✅ Done | `ScoringScreen` |
 | Opening batters & bowler setup dialog | ✅ Done | `ScoringScreen` |
@@ -61,6 +61,47 @@ The core promise is simple: open the app, start a match, score every ball, and s
 | Publish-ready match model (MatchVisibility, ownerUserId, remoteId, shareCode) | ✅ Done | `data/entity/Match`, `data/entity/MatchVisibility` |
 | Local in-memory repository | ✅ Done | `repository/MatchRepository` |
 | Match session management | ✅ Done | `MatchSessionViewModel` |
+
+---
+
+## Phase 2: Immersive Broadcast Preview
+
+### What changed
+
+- **CameraPreviewScreen** refactored into an immersive broadcast monitor:
+  - Scoring controls panel removed; scoring is only available in `ScoringScreen`.
+  - Screen locked to landscape orientation while open; orientation is restored on exit.
+  - All app chrome (top bar, bottom navigation, drawer) hidden for a true full-screen experience.
+  - Close (×) button added in the top-right corner inside the system safe area — circular, semi-transparent black background.
+
+- **StreamPreviewScreen** refactored to match:
+  - Screen locked to landscape orientation while open; orientation is restored on exit.
+  - All app chrome hidden.
+  - Close (×) button added in the top-right corner (LIVE badge remains top-left).
+
+- **AppShell** updated:
+  - Introduces an `immersiveRoutes` set (`live_preview`, `stream_preview`).
+  - When the current route is immersive the entire scaffold (top bar, bottom bar, drawer) is bypassed and the content fills the screen with zero inset padding.
+  - All other routes are completely unaffected.
+
+- **MainActivity** updated:
+  - Passes `onBack = { navController.popBackStack() }` to both preview screens so the close button correctly pops the back stack and triggers camera/stream cleanup.
+
+### What did NOT change
+
+- Scoring engine, `MatchViewModel`, `LiveStreamViewModel` — untouched.
+- All other screens and their navigation routes — untouched.
+- RTMP streaming pipeline (`RtmpLiveStreamer`, `ScoreboardOverlayRenderer`) — untouched.
+
+### Files changed in Phase 2
+
+| File | Action |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/ui/CameraPreviewScreen.kt` | Updated – removed scoring controls, added close button, added landscape lock |
+| `app/src/main/java/com/example/scorebroadcaster/ui/StreamPreviewScreen.kt` | Updated – added close button, added landscape lock |
+| `app/src/main/java/com/example/scorebroadcaster/ui/AppShell.kt` | Updated – hide top/bottom bars for immersive routes |
+| `app/src/main/java/com/example/scorebroadcaster/MainActivity.kt` | Updated – pass `onBack` to preview screens |
+| `README.md` | Updated – Phase 2 development log |
 
 ---
 

@@ -271,7 +271,10 @@ class MainActivity : ComponentActivity() {
                         // ---- Broadcast ----
 
                         composable("live_preview") {
-                            CameraPreviewScreen(matchViewModel = matchViewModel)
+                            CameraPreviewScreen(
+                                onBack = { navController.popBackStack() },
+                                matchViewModel = matchViewModel
+                            )
                         }
                         composable("stream_setup") {
                             StreamSetupScreen(
@@ -280,7 +283,10 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                         composable("stream_preview") {
-                            StreamPreviewScreen(liveStreamViewModel = liveStreamViewModel)
+                            StreamPreviewScreen(
+                                onBack = { navController.popBackStack() },
+                                liveStreamViewModel = liveStreamViewModel
+                            )
                         }
                     }
                 }

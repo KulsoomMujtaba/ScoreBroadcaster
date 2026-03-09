@@ -1,20 +1,29 @@
 package com.example.scorebroadcaster.ui
 
 import android.Manifest
+import android.app.Activity
+import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.view.ViewGroup
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -27,6 +36,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -45,22 +55,36 @@ private val STREAMING_PERMISSIONS = arrayOf(
 )
 
 /**
- * Full-screen camera preview that streams to an RTMP endpoint.
+ * Immersive full-screen camera preview that streams to an RTMP endpoint.
  *
  * - Uses [RtmpLiveStreamer] (via [LiveStreamViewModel]) to open the camera and push H.264+AAC
  *   to the URL configured in [StreamSetupScreen].
  * - Requests CAMERA and RECORD_AUDIO permissions at runtime if not yet granted.
  * - Shows a red "● LIVE" badge while the stream is active.
  * - Streaming stops automatically when this screen is disposed (back-press / navigation pop).
+ * - Locks the screen to landscape for a professional broadcast monitor feel.
+ *
+ * @param onBack called when the user taps the close button to return to the previous screen.
  */
 @Composable
 fun StreamPreviewScreen(
+    onBack: () -> Unit,
     liveStreamViewModel: LiveStreamViewModel = viewModel(),
     matchViewModel: MatchViewModel = viewModel(),
     modifier: Modifier = Modifier
 ) {
     val streamingStatus by liveStreamViewModel.streamingStatus.collectAsStateWithLifecycle()
     val context = LocalContext.current
+
+    // Lock to landscape while this screen is visible; restore on exit.
+    val activity = context as? Activity
+    DisposableEffect(Unit) {
+        val original = activity?.requestedOrientation ?: ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+        onDispose {
+            activity?.requestedOrientation = original
+        }
+    }
 
     var permissionsGranted by remember {
         mutableStateOf(
@@ -131,6 +155,7 @@ fun StreamPreviewScreen(
             Surface(
                 modifier = Modifier
                     .align(Alignment.TopStart)
+                    .statusBarsPadding()
                     .padding(16.dp),
                 color = Color.Red,
                 shape = RoundedCornerShape(4.dp)
@@ -142,6 +167,25 @@ fun StreamPreviewScreen(
                     style = MaterialTheme.typography.labelMedium
                 )
             }
+        }
+
+        // Close button – top-end corner, inside the safe area
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .statusBarsPadding()
+                .padding(8.dp)
+                .size(40.dp)
+                .clip(CircleShape)
+                .background(Color(0x88000000))
+                .clickable { onBack() },
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.Close,
+                contentDescription = "Close preview",
+                tint = Color.White
+            )
         }
 
         // Status text + Stop button anchored to the bottom
