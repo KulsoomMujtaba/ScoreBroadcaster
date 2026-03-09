@@ -11,10 +11,19 @@ import com.example.scorebroadcaster.data.MatchState
 import com.example.scorebroadcaster.data.ScoringConsoleState
 import com.example.scorebroadcaster.ui.BroadcastOverlayMapper
 import com.example.scorebroadcaster.ui.BroadcastOverlayModel
+import com.example.scorebroadcaster.ui.ballDisplayLabel
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 private const val TAG = "ScoreboardOverlayRenderer"
+
+// ── Named constants for layout dimensions ─────────────────────────────────────
+private const val STRIKER_DOT_OFFSET_X = 10f       // px from section left edge to dot centre
+private const val STRIKER_DOT_VERTICAL_CENTER = 0.5f  // fraction of row height
+private const val STRIKER_DOT_RADIUS = 5f          // px
+
+private const val BALL_INDICATOR_RADIUS = 10f       // px
+private const val BALL_INDICATOR_SPACING = 26f      // px between ball centre points
 
 /**
  * Renders a [MatchState] + [ScoringConsoleState] to a [Bitmap] using Android Canvas/Paint,
@@ -238,7 +247,12 @@ class ScoreboardOverlayRenderer(
 
             // Striker dot
             if (batter.isStriker) {
-                canvas.drawCircle(left + 10f, rowTop + lineH * 0.5f, 5f, strikerDotPaint)
+                canvas.drawCircle(
+                    left + STRIKER_DOT_OFFSET_X,
+                    rowTop + lineH * STRIKER_DOT_VERTICAL_CENTER,
+                    STRIKER_DOT_RADIUS,
+                    strikerDotPaint
+                )
             }
 
             // Name (truncate to fit)
@@ -317,14 +331,12 @@ class ScoreboardOverlayRenderer(
 
         // Ball indicators
         if (model.currentOverBalls.isNotEmpty()) {
-            val ballRadius = 10f
-            val ballSpacing = 26f
-            val totalBallsW = model.currentOverBalls.size * ballSpacing
-            var bx = left + (width - totalBallsW) / 2f + ballRadius
+            val totalBallsW = model.currentOverBalls.size * BALL_INDICATOR_SPACING
+            var bx = left + (width - totalBallsW) / 2f + BALL_INDICATOR_RADIUS
             val by = mainH * 0.72f
             model.currentOverBalls.forEach { ball ->
-                drawBallIndicator(ball, bx, by, ballRadius)
-                bx += ballSpacing
+                drawBallIndicator(ball, bx, by, BALL_INDICATOR_RADIUS)
+                bx += BALL_INDICATOR_SPACING
             }
         }
     }
@@ -341,15 +353,8 @@ class ScoreboardOverlayRenderer(
             else -> canvas.drawCircle(cx, cy, r, ballRunsPaint)
         }
         if (!isDot) {
-            val displayLabel = when {
-                label == "Wd" -> "W+"
-                label == "NB" -> "N+"
-                label.startsWith("LB") -> "L"
-                label.startsWith("B") && !isWicket && !isBoundary -> "B"
-                else -> label
-            }
             ballTextPaint.textAlign = Paint.Align.CENTER
-            canvas.drawText(displayLabel, cx, cy + ballTextPaint.textSize * 0.35f, ballTextPaint)
+            canvas.drawText(ballDisplayLabel(label), cx, cy + ballTextPaint.textSize * 0.35f, ballTextPaint)
         }
     }
 

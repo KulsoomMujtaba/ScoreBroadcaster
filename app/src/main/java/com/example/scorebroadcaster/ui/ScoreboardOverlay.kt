@@ -104,7 +104,7 @@ fun ScoreboardOverlay(
 
             if (showBowler) {
                 BowlerSection(
-                    bowler = model.bowler!!,
+                    bowler = checkNotNull(model.bowler),
                     currentOverBalls = model.currentOverBalls,
                     modifier = Modifier.weight(1f)
                 )
@@ -302,13 +302,7 @@ private fun BallIndicator(label: String) {
         isDot -> DotBorderColor
         else -> Color.White
     }
-    val displayText = when {
-        label == "Wd" -> "W+"
-        label == "NB" -> "N+"
-        label.startsWith("LB") -> "L"
-        label.startsWith("B") && !isWicket && !isBoundary -> "B"
-        else -> label
-    }
+    val displayText = ballDisplayLabel(label)
     val borderModifier = if (isDot) {
         Modifier.border(1.dp, DotBorderColor, CircleShape)
     } else {

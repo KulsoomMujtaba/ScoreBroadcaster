@@ -47,6 +47,21 @@ data class BroadcastOverlayModel(
 )
 
 /**
+ * Converts a raw ball label (from [MatchState.lastBalls]) to a compact display string suitable
+ * for a small ball indicator circle.
+ *
+ * Both [ScoreboardOverlay] and [com.example.scorebroadcaster.streaming.ScoreboardOverlayRenderer]
+ * use this function to keep the label mappings consistent.
+ */
+fun ballDisplayLabel(label: String): String = when {
+    label == "Wd" -> "W+"
+    label == "NB" -> "N+"
+    label.startsWith("LB") -> "L"
+    label.startsWith("B") -> "B"
+    else -> label
+}
+
+/**
  * Converts a [MatchState] + [ScoringConsoleState] pair into a [BroadcastOverlayModel].
  *
  * Returns null during [InningsPhase.SETUP] so the overlay can be hidden before play starts.
@@ -104,6 +119,7 @@ object BroadcastOverlayMapper {
                 } else null
             }
             InningsPhase.SECOND_INNINGS -> {
+                if (console.target <= 0) return null
                 val runsNeeded = console.target - match.runs
                 if (runsNeeded > 0) {
                     val ballsRemaining = matchOvers?.let { it * 6 - totalBalls }
