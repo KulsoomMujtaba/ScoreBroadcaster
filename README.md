@@ -176,6 +176,26 @@ Scoring is modelled as an append-only event log:
 
 ## Development Log
 
+### 2026-03-09 – UX Improvement: Create Match Screen
+
+**Files changed:**
+| File | Action |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/ui/CreateMatchScreen.kt` | Updated |
+| `README.md` | Updated |
+
+**Summary of changes:**
+
+- **Three-section layout:** The screen is now organised into three clearly labelled sections — **Teams**, **Match Format**, and **Toss** — separated by `HorizontalDivider`s, giving the form the feel of a short guided setup rather than a long scroll.
+- **Swap Teams button:** An `IconButton` with a `SwapVert` icon sits between the Team A and Team B fields. Tapping it swaps both team names and any associated saved-team references and pre-loaded player lists so the UI recomposes correctly.
+- **Format selection with chips:** The format dropdown menu has been replaced with `FilterChip`s displaying concise labels (T20, T10, ODI, Tape Ball, Custom). This lets scorers select a format in one tap without opening a menu.
+- **Custom overs field shown conditionally:** The "Overs per side" text input is only visible when the **Custom** chip is selected; it is hidden for all predefined formats, reducing visual clutter.
+- **Toss section clarified:** The toss winner prompt was relabelled "Who won the toss?" and the decision prompt was relabelled "Decision" for plain-language clarity.
+- **Bottom summary:** A compact read-only summary (e.g. *Falcons vs Strikers · T20 • Toss: Falcons chose to bat*) is shown above the CTA button using `bodySmall` / `onSurfaceVariant` so scorers can review the setup at a glance before proceeding.
+- **No logic changes:** All existing ViewModel APIs, navigation routes, saved-team behaviour, and match-creation logic are unchanged; this is a purely presentational refactor.
+
+---
+
 ### 2026-03-09 – Bug Fix: Innings setup dialog incorrectly reopening during wicket flow
 
 **Root cause:** The `needsInningsSetup` derived value in `ScoringScreen.kt` fired `true` whenever `console.striker` or `console.nonStriker` was `null`.  After a wicket falls, `updateConsoleAfterEvent` deliberately sets the dismissed batter's slot to `null` (so the incoming batter can fill it) while simultaneously placing a `PendingAction.SelectNextBatter` on the console state.  Because the null-check ran *before* the pending-action check, `needsInningsSetup` became `true` momentarily, and the `LaunchedEffect(needsInningsSetup)` triggered `setupDialogVisible = true` — incorrectly reopening the innings-setup bottom sheet in the middle of the wicket replacement flow.

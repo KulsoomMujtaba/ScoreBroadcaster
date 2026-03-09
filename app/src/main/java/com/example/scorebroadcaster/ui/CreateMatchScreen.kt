@@ -1,7 +1,10 @@
 package com.example.scorebroadcaster.ui
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -11,6 +14,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -18,6 +23,8 @@ import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedTextField
@@ -28,6 +35,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -40,7 +48,16 @@ import com.example.scorebroadcaster.data.entity.Team
 import com.example.scorebroadcaster.data.entity.TossDecision
 import com.example.scorebroadcaster.viewmodel.MatchSessionViewModel
 
-@OptIn(ExperimentalMaterial3Api::class)
+/** Short chip labels used for format selection — avoids repeating the overs count in the chip. */
+private val FORMAT_CHIP_LABELS = mapOf(
+    MatchFormat.T20 to "T20",
+    MatchFormat.T10 to "T10",
+    MatchFormat.ODI to "ODI",
+    MatchFormat.TAPE_BALL to "Tape Ball",
+    MatchFormat.CUSTOM to "Custom"
+)
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun CreateMatchScreen(
     matchSessionViewModel: MatchSessionViewModel,
@@ -66,7 +83,6 @@ fun CreateMatchScreen(
     var customOvers by remember { mutableStateOf("") }
     var tossWinnerIsA by remember { mutableStateOf(true) }
     var tossDecision by remember { mutableStateOf(TossDecision.BAT) }
-    var formatMenuExpanded by remember { mutableStateOf(false) }
 
     val savedTeams by matchSessionViewModel.savedTeams.collectAsState()
 
@@ -86,6 +102,13 @@ fun CreateMatchScreen(
         selectedFormat.defaultOvers
     }
     val customOversError = selectedFormat == MatchFormat.CUSTOM && oversValue <= 0
+    val canProceed = teamAReady && teamBReady && !customOversError && !sameTeamError
+
+    // Summary line shown above the CTA button
+    val formatSummary = FORMAT_CHIP_LABELS[selectedFormat] ?: selectedFormat.label
+    val tossSummary = if (tossWinnerIsA) teamALabel else teamBLabel
+    val decisionSummary = tossDecision.label.lowercase()
+    val summaryText = "$teamALabel vs $teamBLabel\n$formatSummary • Toss: $tossSummary chose to $decisionSummary"
 
     Column(
         modifier = modifier
@@ -104,9 +127,9 @@ fun CreateMatchScreen(
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next)
         )
 
-        // ── Team A ────────────────────────────────────────────────────────────
+        // ── SECTION 1: Teams ──────────────────────────────────────────────────
         HorizontalDivider()
-        Text("Team A", style = MaterialTheme.typography.titleMedium)
+        Text("Teams", style = MaterialTheme.typography.titleMedium)
 
         TeamSelectorField(
             label = "Team A name *",
@@ -127,9 +150,27 @@ fun CreateMatchScreen(
             }
         )
 
-        // ── Team B ────────────────────────────────────────────────────────────
-        HorizontalDivider()
-        Text("Team B", style = MaterialTheme.typography.titleMedium)
+        // Swap Teams button
+        Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+            IconButton(
+                onClick = {
+                    val tmpName = teamAName
+                    val tmpPlayers = teamAPlayers
+                    val tmpSaved = teamASelectedSaved
+                    teamAName = teamBName
+                    teamAPlayers = teamBPlayers
+                    teamASelectedSaved = teamBSelectedSaved
+                    teamBName = tmpName
+                    teamBPlayers = tmpPlayers
+                    teamBSelectedSaved = tmpSaved
+                }
+            ) {
+                Icon(
+                    imageVector = Icons.Default.SwapVert,
+                    contentDescription = "Swap teams"
+                )
+            }
+        }
 
         TeamSelectorField(
             label = "Team B name *",
@@ -158,36 +199,19 @@ fun CreateMatchScreen(
             )
         }
 
+        // ── SECTION 2: Match Format ───────────────────────────────────────────
         HorizontalDivider()
+        Text("Match Format", style = MaterialTheme.typography.titleMedium)
 
-        // Match format
-        ExposedDropdownMenuBox(
-            expanded = formatMenuExpanded,
-            onExpandedChange = { formatMenuExpanded = it }
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            OutlinedTextField(
-                value = selectedFormat.label,
-                onValueChange = {},
-                readOnly = true,
-                label = { Text("Format") },
-                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = formatMenuExpanded) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .menuAnchor(type = MenuAnchorType.PrimaryNotEditable)
-            )
-            ExposedDropdownMenu(
-                expanded = formatMenuExpanded,
-                onDismissRequest = { formatMenuExpanded = false }
-            ) {
-                MatchFormat.entries.forEach { format ->
-                    DropdownMenuItem(
-                        text = { Text(format.label) },
-                        onClick = {
-                            selectedFormat = format
-                            formatMenuExpanded = false
-                        }
-                    )
-                }
+            MatchFormat.entries.forEach { format ->
+                FilterChip(
+                    selected = selectedFormat == format,
+                    onClick = { selectedFormat = format },
+                    label = { Text(FORMAT_CHIP_LABELS[format] ?: format.label) }
+                )
             }
         }
 
@@ -195,7 +219,7 @@ fun CreateMatchScreen(
             OutlinedTextField(
                 value = customOvers,
                 onValueChange = { customOvers = it.filter { c -> c.isDigit() } },
-                label = { Text("Number of overs *") },
+                label = { Text("Overs per side *") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
                 isError = customOversError,
@@ -209,8 +233,11 @@ fun CreateMatchScreen(
             )
         }
 
-        // Toss winner
-        Text("Toss won by", style = MaterialTheme.typography.labelLarge)
+        // ── SECTION 3: Toss ───────────────────────────────────────────────────
+        HorizontalDivider()
+        Text("Toss", style = MaterialTheme.typography.titleMedium)
+
+        Text("Who won the toss?", style = MaterialTheme.typography.labelLarge)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip(
                 selected = tossWinnerIsA,
@@ -224,8 +251,7 @@ fun CreateMatchScreen(
             )
         }
 
-        // Toss decision
-        Text("Chose to", style = MaterialTheme.typography.labelLarge)
+        Text("Decision", style = MaterialTheme.typography.labelLarge)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             TossDecision.entries.forEach { decision ->
                 FilterChip(
@@ -236,9 +262,15 @@ fun CreateMatchScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
+        // ── Summary ───────────────────────────────────────────────────────────
+        HorizontalDivider()
+        Text(
+            text = summaryText,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
 
-        val canProceed = teamAReady && teamBReady && !customOversError && !sameTeamError
+        Spacer(modifier = Modifier.height(8.dp))
 
         Button(
             onClick = {
