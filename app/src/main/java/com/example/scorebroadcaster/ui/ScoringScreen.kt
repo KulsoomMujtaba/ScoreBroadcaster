@@ -18,6 +18,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenuItem
@@ -423,7 +425,7 @@ fun ScoringScreen(
                               else activeMatch.bowlingFirst
             val bowlingTeam = if (console.inningsNumber == 1) activeMatch.bowlingFirst
                               else activeMatch.battingFirst
-            SetupOpenersDialog(
+            SetupOpenersBottomSheet(
                 inningsNumber = console.inningsNumber,
                 battingTeam = battingTeam,
                 bowlingTeam = bowlingTeam,
@@ -1702,12 +1704,12 @@ private fun AddPlayerToMatchDialog(
 }
 
 // =============================================================================
-// Opening batters + bowler setup dialog
+// Opening batters + bowler setup bottom sheet
 // =============================================================================
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SetupOpenersDialog(
+private fun SetupOpenersBottomSheet(
     inningsNumber: Int,
     battingTeam: Team,
     bowlingTeam: Team,
@@ -1723,142 +1725,225 @@ private fun SetupOpenersDialog(
      */
     onPickFromSaved: ((profile: PlayerProfile, isNew: Boolean, forBatting: Boolean) -> Unit)? = null
 ) {
-    var striker by remember { mutableStateOf<Player?>(null) }
-    var nonStriker by remember { mutableStateOf<Player?>(null) }
-    var bowler by remember { mutableStateOf<Player?>(null) }
+    // Auto-select defaults on first composition; when the roster changes later,
+    // keep the current selection if it is still valid rather than resetting.
+    var striker by remember { mutableStateOf(battingTeam.players.getOrNull(0)) }
+    var nonStriker by remember { mutableStateOf(battingTeam.players.getOrNull(1)) }
+    var bowler by remember { mutableStateOf(bowlingTeam.players.getOrNull(0)) }
+
+    // When batting team roster changes (e.g. a new player was added mid-setup),
+    // refresh the selection only if the previously chosen player is no longer present.
+    LaunchedEffect(battingTeam.players) {
+        if (striker == null || battingTeam.players.none { it.id == striker?.id }) {
+            striker = battingTeam.players.firstOrNull { it.id != nonStriker?.id }
+        }
+        if (nonStriker == null || battingTeam.players.none { it.id == nonStriker?.id }) {
+            nonStriker = battingTeam.players.firstOrNull { it.id != striker?.id }
+        }
+    }
+    LaunchedEffect(bowlingTeam.players) {
+        if (bowler == null || bowlingTeam.players.none { it.id == bowler?.id }) {
+            bowler = bowlingTeam.players.firstOrNull()
+        }
+    }
     var newBatterName by remember { mutableStateOf("") }
     var newBowlerName by remember { mutableStateOf("") }
     // Which picker is open: true = batting team, false = bowling team, null = closed
     var pickerForBatting by remember { mutableStateOf<Boolean?>(null) }
 
-    val inningsSuffix = if (inningsNumber == 1) "st" else "nd"
+    val inningsLabel = when (inningsNumber) {
+        1 -> "Start 1st Innings"
+        2 -> "Start 2nd Innings"
+        else -> "Start Innings"
+    }
     val needsMoreBatters = battingTeam.players.size < 2
     val needsMoreBowlers = bowlingTeam.players.isEmpty()
+    val canStart = striker != null && nonStriker != null && bowler != null
 
-    AlertDialog(
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    ModalBottomSheet(
         onDismissRequest = onDismiss,
-        title = { Text("$inningsNumber$inningsSuffix Innings Setup") },
-        text = {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier.verticalScroll(rememberScrollState())
+        sheetState = sheetState,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 32.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(0.dp)
+        ) {
+            // Title
+            Text(
+                text = inningsLabel,
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(bottom = 20.dp)
+            )
+
+            // ── Batting Team ──────────────────────────────────────────────
+            Text(
+                text = "Batting Team",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(bottom = 4.dp)
+            )
+            Text(
+                text = battingTeam.name,
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(bottom = 12.dp)
+            )
+
+            // ── Batters ───────────────────────────────────────────────────
+            Text(
+                text = "Batters",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(bottom = 4.dp)
+            )
+            if (needsMoreBatters) {
+                Text(
+                    text = "You need at least 2 batters to start the innings.",
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+            }
+            PlayerDropdown(
+                label = "Striker",
+                players = battingTeam.players.filter { it.id != nonStriker?.id },
+                selected = striker,
+                onSelected = { striker = it }
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            PlayerDropdown(
+                label = "Non-striker",
+                players = battingTeam.players.filter { it.id != striker?.id },
+                selected = nonStriker,
+                onSelected = { nonStriker = it }
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            // Add batter row
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Text(
-                    text = "Batting: ${battingTeam.name}",
-                    style = MaterialTheme.typography.labelMedium
+                OutlinedTextField(
+                    value = newBatterName,
+                    onValueChange = { newBatterName = it },
+                    label = { Text("+ Add Player to ${battingTeam.name}") },
+                    singleLine = true,
+                    modifier = Modifier.weight(1f)
                 )
-                if (needsMoreBatters) {
-                    Text(
-                        text = "You need at least 2 batters to start the innings.",
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                }
-                PlayerDropdown(
-                    label = "Striker",
-                    players = battingTeam.players.filter { it.id != nonStriker?.id },
-                    selected = striker,
-                    onSelected = { striker = it }
-                )
-                PlayerDropdown(
-                    label = "Non-striker",
-                    players = battingTeam.players.filter { it.id != striker?.id },
-                    selected = nonStriker,
-                    onSelected = { nonStriker = it }
-                )
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    OutlinedTextField(
-                        value = newBatterName,
-                        onValueChange = { newBatterName = it },
-                        label = { Text("Add batter") },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f)
-                    )
-                    Button(
-                        onClick = {
-                            val name = newBatterName.trim()
-                            if (name.isNotBlank()) {
-                                onAddPlayerToBattingTeam(name)
-                                newBatterName = ""
-                            }
-                        },
-                        enabled = newBatterName.isNotBlank()
-                    ) { Text("Add") }
-                    if (onPickFromSaved != null) {
-                        IconButton(
-                            onClick = { pickerForBatting = true }
-                        ) {
-                            Icon(Icons.Default.Person, contentDescription = "Pick batter from saved players")
+                Button(
+                    onClick = {
+                        val name = newBatterName.trim()
+                        if (name.isNotBlank()) {
+                            onAddPlayerToBattingTeam(name)
+                            newBatterName = ""
                         }
-                    }
-                }
-                HorizontalDivider()
-                Text(
-                    text = "Bowling: ${bowlingTeam.name}",
-                    style = MaterialTheme.typography.labelMedium
-                )
-                if (needsMoreBowlers) {
-                    Text(
-                        text = "You need at least 1 bowler to start the innings.",
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                }
-                PlayerDropdown(
-                    label = "Opening bowler",
-                    players = bowlingTeam.players,
-                    selected = bowler,
-                    onSelected = { bowler = it }
-                )
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    OutlinedTextField(
-                        value = newBowlerName,
-                        onValueChange = { newBowlerName = it },
-                        label = { Text("Add bowler") },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f)
-                    )
-                    Button(
-                        onClick = {
-                            val name = newBowlerName.trim()
-                            if (name.isNotBlank()) {
-                                onAddPlayerToBowlingTeam(name)
-                                newBowlerName = ""
-                            }
-                        },
-                        enabled = newBowlerName.isNotBlank()
-                    ) { Text("Add") }
-                    if (onPickFromSaved != null) {
-                        IconButton(
-                            onClick = { pickerForBatting = false }
-                        ) {
-                            Icon(Icons.Default.Person, contentDescription = "Pick bowler from saved players")
-                        }
+                    },
+                    enabled = newBatterName.isNotBlank()
+                ) { Text("Add") }
+                if (onPickFromSaved != null) {
+                    IconButton(onClick = { pickerForBatting = true }) {
+                        Icon(Icons.Default.Person, contentDescription = "Pick batter from saved players")
                     }
                 }
             }
-        },
-        confirmButton = {
+
+            Spacer(modifier = Modifier.height(20.dp))
+            HorizontalDivider()
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // ── Bowling Team ──────────────────────────────────────────────
+            Text(
+                text = "Bowling Team",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(bottom = 4.dp)
+            )
+            Text(
+                text = bowlingTeam.name,
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(bottom = 12.dp)
+            )
+
+            // ── Bowler ────────────────────────────────────────────────────
+            Text(
+                text = "Opening Bowler",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(bottom = 4.dp)
+            )
+            if (needsMoreBowlers) {
+                Text(
+                    text = "You need at least 1 bowler to start the innings.",
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+            }
+            PlayerDropdown(
+                label = "Opening bowler",
+                players = bowlingTeam.players,
+                selected = bowler,
+                onSelected = { bowler = it }
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            // Add bowler row
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                OutlinedTextField(
+                    value = newBowlerName,
+                    onValueChange = { newBowlerName = it },
+                    label = { Text("+ Add Player to ${bowlingTeam.name}") },
+                    singleLine = true,
+                    modifier = Modifier.weight(1f)
+                )
+                Button(
+                    onClick = {
+                        val name = newBowlerName.trim()
+                        if (name.isNotBlank()) {
+                            onAddPlayerToBowlingTeam(name)
+                            newBowlerName = ""
+                        }
+                    },
+                    enabled = newBowlerName.isNotBlank()
+                ) { Text("Add") }
+                if (onPickFromSaved != null) {
+                    IconButton(onClick = { pickerForBatting = false }) {
+                        Icon(Icons.Default.Person, contentDescription = "Pick bowler from saved players")
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // ── CTA ───────────────────────────────────────────────────────
             Button(
                 onClick = {
                     val s = striker; val ns = nonStriker; val b = bowler
                     if (s != null && ns != null && b != null) onConfirm(s, ns, b)
                 },
-                enabled = striker != null && nonStriker != null && bowler != null
+                enabled = canStart,
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Text("Start")
+                Text(inningsLabel)
             }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Later") }
+            TextButton(
+                onClick = onDismiss,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Later")
+            }
         }
-    )
+    }
 
     // Player picker for batting or bowling team
     val pickerTarget = pickerForBatting
