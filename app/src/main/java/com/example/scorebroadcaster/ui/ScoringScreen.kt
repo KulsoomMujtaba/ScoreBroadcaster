@@ -117,9 +117,17 @@ fun ScoringScreen(
     //  - The innings is active (FIRST_INNINGS / SECOND_INNINGS) but the current striker,
     //    non-striker, or bowler is missing — e.g. after an app restart where the live
     //    player references cannot be reconstructed from the persisted event log alone.
+    //
+    // IMPORTANT: exclude the transient null produced by a wicket falling.  After a wicket
+    // updateConsoleAfterEvent sets striker (or nonStriker) to null and simultaneously sets
+    // pendingAction = SelectNextBatter.  That null is intentional — the next batter has not
+    // yet been chosen — and must NOT be treated as "innings not initialised".  If we did not
+    // check for this, the LaunchedEffect below would fire and re-open the innings-setup sheet
+    // every time the scorer records a wicket.
     val needsInningsSetup = console.phase == InningsPhase.SETUP ||
             ((console.phase == InningsPhase.FIRST_INNINGS ||
                     console.phase == InningsPhase.SECOND_INNINGS) &&
+                    console.pendingAction !is PendingAction.SelectNextBatter &&
                     (console.striker == null ||
                             console.nonStriker == null ||
                             console.currentBowler == null))

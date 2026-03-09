@@ -176,6 +176,40 @@ Scoring is modelled as an append-only event log:
 
 ## Development Log
 
+### 2026-03-09 – Bug Fix: Innings setup dialog incorrectly reopening during wicket flow
+
+**Root cause:** The `needsInningsSetup` derived value in `ScoringScreen.kt` fired `true` whenever `console.striker` or `console.nonStriker` was `null`.  After a wicket falls, `updateConsoleAfterEvent` deliberately sets the dismissed batter's slot to `null` (so the incoming batter can fill it) while simultaneously placing a `PendingAction.SelectNextBatter` on the console state.  Because the null-check ran *before* the pending-action check, `needsInningsSetup` became `true` momentarily, and the `LaunchedEffect(needsInningsSetup)` triggered `setupDialogVisible = true` — incorrectly reopening the innings-setup bottom sheet in the middle of the wicket replacement flow.
+
+**What was corrected:** A single guard clause was added to the `needsInningsSetup` condition:
+```kotlin
+// before
+val needsInningsSetup = console.phase == InningsPhase.SETUP ||
+        ((console.phase == InningsPhase.FIRST_INNINGS || …) &&
+                (console.striker == null || console.nonStriker == null || …))
+
+// after
+val needsInningsSetup = console.phase == InningsPhase.SETUP ||
+        ((console.phase == InningsPhase.FIRST_INNINGS || …) &&
+                console.pendingAction !is PendingAction.SelectNextBatter &&   // ← new guard
+                (console.striker == null || console.nonStriker == null || …))
+```
+When a wicket pending action is already in progress the null batter slot is expected and intentional; setup should not be shown.
+
+**Confirmation:** After a wicket the flow is now:
+1. `WicketDetailsDialog` — scorer picks dismissal type.
+2. `SelectPlayerDialog` (next batter) — scorer picks incoming batter.
+3. Scoring resumes normally. No innings-setup bottom sheet appears.
+
+Genuine first- and second-innings setup (phase == `SETUP`, or batter/bowler genuinely absent after an app restart) is unaffected.
+
+**Files changed:**
+| File | Action |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/ui/ScoringScreen.kt` | Added `PendingAction.SelectNextBatter` guard to `needsInningsSetup` |
+| `README.md` | Added this log entry |
+
+---
+
 ### 2026-03-09 – Bug Fix: Home tab in bottom navigation
 
 **Problem:** After tapping any bottom-nav tab other than Home, tapping the Home tab no longer navigated back to the home screen. The root cause was that `popUpTo(startDestination) { saveState = true }` saves the popped back-stack entries under the start destination's ID as the key. When the Home tab was then tapped with `restoreState = true`, the NavController found that saved state (keyed to the home route) and incorrectly restored the previously-popped destinations on top of the home screen — leaving the user on the wrong screen instead of Home.
