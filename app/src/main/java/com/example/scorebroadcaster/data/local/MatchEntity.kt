@@ -12,26 +12,33 @@ import com.example.scorebroadcaster.data.entity.TossDecision
 /**
  * Room entity for a cricket match stored locally.
  *
- * Persists match metadata only. Complex nested objects (teams with players,
- * toss details, innings) are not stored in this phase; [toDomain] reconstructs
- * them with placeholder values sufficient for the match list UI.
+ * Persists all metadata required to fully rebuild the [Match] domain object,
+ * including toss details and the overs limit.
  *
- * [MatchFormat], [MatchStatus], and [MatchVisibility] are stored as their
- * enum name strings.
+ * [MatchFormat], [MatchStatus], [MatchVisibility], and [TossDecision] are stored
+ * as their enum name strings. [tossWinner] stores the winning team's name and is
+ * matched against [teamAName] / [teamBName] on read.
  */
 @Entity(tableName = "matches")
 data class MatchEntity(
     @PrimaryKey val localId: String,
+    val remoteId: String?,
+    val ownerUserId: String?,
+    val visibility: String,
+
     val title: String?,
+    val format: String,
+    val oversLimit: Int,
+
     val teamAName: String,
     val teamBName: String,
-    val format: String,
-    val overs: Int,
+
+    val tossWinner: String,
+    val tossDecision: String,
+
     val status: String,
+
     val createdAt: Long,
-    val visibility: String,
-    val ownerUserId: String?,
-    val remoteId: String?,
     val publishedAt: Long?,
     val shareCode: String?
 )
@@ -39,26 +46,31 @@ data class MatchEntity(
 /**
  * Reconstructs a [Match] from persisted metadata.
  *
- * Fields not stored in this phase (tossWinner, tossDecision, battingFirst,
- * bowlingFirst, innings) are given sensible placeholder values. These are
- * sufficient for the match list UI; a full match state restore is out of
- * scope until ball events are also persisted.
+ * [tossWinner] is matched by name against [teamAName] / [teamBName] to obtain
+ * the correct [Team] reference. [battingFirst] and [bowlingFirst] are derived
+ * from the persisted [tossDecision].
  */
 fun MatchEntity.toDomain(): Match {
     val teamA = Team(name = teamAName)
     val teamB = Team(name = teamBName)
+    // Default to teamB when the stored name matches neither — handles corrupt data gracefully.
+    val tossWinnerTeam = if (tossWinner == teamAName) teamA else teamB
+    val tossDecisionEnum = runCatching { TossDecision.valueOf(tossDecision) }.getOrDefault(TossDecision.BAT)
+    val battingFirst = if (tossDecisionEnum == TossDecision.BAT) tossWinnerTeam
+                       else if (tossWinnerTeam == teamA) teamB else teamA
+    val bowlingFirst = if (battingFirst == teamA) teamB else teamA
     return Match(
         id = localId,
         localId = localId,
-        title = title ?: "",  // Match.title is non-nullable; empty string matches the domain default
+        title = title ?: "",
         teamA = teamA,
         teamB = teamB,
         format = runCatching { MatchFormat.valueOf(format) }.getOrDefault(MatchFormat.CUSTOM),
-        overs = overs,
-        tossWinner = teamA,
-        tossDecision = TossDecision.BAT,
-        battingFirst = teamA,
-        bowlingFirst = teamB,
+        overs = oversLimit,
+        tossWinner = tossWinnerTeam,
+        tossDecision = tossDecisionEnum,
+        battingFirst = battingFirst,
+        bowlingFirst = bowlingFirst,
         status = runCatching { MatchStatus.valueOf(status) }.getOrDefault(MatchStatus.NOT_STARTED),
         createdAt = createdAt,
         visibility = runCatching { MatchVisibility.valueOf(visibility) }.getOrDefault(MatchVisibility.PRIVATE),
@@ -71,16 +83,18 @@ fun MatchEntity.toDomain(): Match {
 
 fun Match.toEntity(): MatchEntity = MatchEntity(
     localId = localId,
+    remoteId = remoteId,
+    ownerUserId = ownerUserId,
+    visibility = visibility.name,
     title = title.ifBlank { null },
+    format = format.name,
+    oversLimit = overs,
     teamAName = teamA.name,
     teamBName = teamB.name,
-    format = format.name,
-    overs = overs,
+    tossWinner = tossWinner.name,
+    tossDecision = tossDecision.name,
     status = status.name,
     createdAt = createdAt,
-    visibility = visibility.name,
-    ownerUserId = ownerUserId,
-    remoteId = remoteId,
     publishedAt = publishedAt,
     shareCode = shareCode
 )
