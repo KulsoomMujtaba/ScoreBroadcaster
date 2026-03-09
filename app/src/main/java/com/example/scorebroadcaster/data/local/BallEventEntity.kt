@@ -76,7 +76,7 @@ fun BallEventEntity.toDomain(): BallEvent {
     )
 
     val dismissal: DismissalDetail? = if (wicket && dismissalType != null) {
-        val type = runCatching { DismissalType.valueOf(dismissalType) }.getOrNull()
+        val type = runCatching { DismissalType.valueOf(dismissalType ?: "") }.getOrNull()
         if (type != null && dismissedBatterName != null) {
             DismissalDetail(
                 batter = Player(name = dismissedBatterName),
