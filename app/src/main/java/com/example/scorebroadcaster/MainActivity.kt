@@ -48,6 +48,7 @@ class MainActivity : ComponentActivity() {
                 val navController = rememberNavController()
 
                 val activeMatch by matchSessionViewModel.activeMatch.collectAsState()
+                val resumableMatch by matchSessionViewModel.resumableMatch.collectAsState()
                 val savedPlayers by matchSessionViewModel.savedPlayers.collectAsState()
                 val scoringState by matchViewModel.state.collectAsState()
                 val scoringConsole by matchViewModel.consoleState.collectAsState()
@@ -103,7 +104,16 @@ class MainActivity : ComponentActivity() {
                                 onResetMatchClick = { matchViewModel.resetMatch() },
                                 onViewMatchDetails = { navController.navigate("match_details") },
                                 onViewScorecard = { navController.navigate("scorecard") },
+                                onResumeMatchClick = {
+                                    val match = matchSessionViewModel.resumableMatch.value
+                                    if (match != null) {
+                                        matchSessionViewModel.setActiveMatch(match)
+                                        matchViewModel.initFromMatch(match)
+                                        navController.navigate("scoring_only")
+                                    }
+                                },
                                 activeMatch = activeMatch,
+                                resumableMatch = if (activeMatch == null) resumableMatch else null,
                                 scoreSummary = scoreSummary
                             )
                         }

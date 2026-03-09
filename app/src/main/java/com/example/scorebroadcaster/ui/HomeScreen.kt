@@ -24,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.scorebroadcaster.data.entity.Match
+import com.example.scorebroadcaster.data.entity.MatchStatus
 
 /**
  * Home dashboard — the first screen users see after launching Scored.
@@ -33,7 +34,10 @@ import com.example.scorebroadcaster.data.entity.Match
  * - Provides quick-action buttons: Resume Scoring, Match Details, Scorecard,
  *   Camera Preview, Go Live, and Reset Match.
  *
- * When there is no active match:
+ * When there is no [activeMatch] but there is a [resumableMatch] (e.g. after an app restart):
+ * - Shows a "Resume In-Progress Match" card so the scorer can continue instantly.
+ *
+ * When there is no active match at all:
  * - Shows a welcome / empty-state section with a primary "Create Match" CTA
  *   and a secondary "My Matches" link.
  */
@@ -47,7 +51,9 @@ fun HomeScreen(
     onResetMatchClick: () -> Unit,
     onViewMatchDetails: () -> Unit = {},
     onViewScorecard: () -> Unit = {},
+    onResumeMatchClick: () -> Unit = {},
     activeMatch: Match? = null,
+    resumableMatch: Match? = null,
     scoreSummary: String? = null,
     modifier: Modifier = Modifier
 ) {
@@ -67,6 +73,13 @@ fun HomeScreen(
                 onCameraPreviewClick = onCameraPreviewClick,
                 onGoLiveClick = onGoLiveClick,
                 onResetMatchClick = onResetMatchClick
+            )
+        } else if (resumableMatch != null) {
+            ResumableMatchDashboard(
+                resumableMatch = resumableMatch,
+                onResumeMatchClick = onResumeMatchClick,
+                onCreateMatchClick = onCreateMatchClick,
+                onMyMatchesClick = onMyMatchesClick
             )
         } else {
             EmptyStateDashboard(
@@ -206,6 +219,76 @@ private fun ActiveMatchDashboard(
         modifier = Modifier.fillMaxWidth()
     ) {
         Text(text = "Reset Match")
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Resumable match dashboard (shown after app restart when no scoring is active)
+// ---------------------------------------------------------------------------
+
+@Composable
+private fun ResumableMatchDashboard(
+    resumableMatch: Match,
+    onResumeMatchClick: () -> Unit,
+    onCreateMatchClick: () -> Unit,
+    onMyMatchesClick: () -> Unit
+) {
+    val statusLabel = when (resumableMatch.status) {
+        MatchStatus.INNINGS_BREAK -> "Innings Break"
+        else -> "In Progress"
+    }
+
+    Surface(
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        shape = MaterialTheme.shapes.large,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                text = "Match In Progress",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.secondary,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = resumableMatch.displayTitle,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                text = "${resumableMatch.format.label.substringBefore(" (")} • ${resumableMatch.overs} overs • $statusLabel",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
+            )
+        }
+    }
+
+    Spacer(Modifier.height(16.dp))
+
+    Button(
+        onClick = onResumeMatchClick,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Text(text = "Resume Match", style = MaterialTheme.typography.titleMedium)
+    }
+
+    Spacer(Modifier.height(24.dp))
+    HorizontalDivider()
+    Spacer(Modifier.height(16.dp))
+
+    OutlinedButton(
+        onClick = onCreateMatchClick,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Text(text = "Create New Match")
+    }
+    Spacer(Modifier.height(8.dp))
+    TextButton(
+        onClick = onMyMatchesClick,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Text(text = "My Matches")
     }
 }
 

@@ -73,4 +73,18 @@ data class Match(
      */
     val isPubliclyListed: Boolean
         get() = visibility == MatchVisibility.PUBLISHED && publishedAt != null
+
+    /**
+     * True when this match can be resumed by the scorer.
+     *
+     * A match is resumable when it is persisted in local storage and has not yet finished:
+     * - [MatchStatus.IN_PROGRESS] — scoring is actively under way.
+     * - [MatchStatus.INNINGS_BREAK] — between innings; second innings has not yet started.
+     *
+     * [MatchStatus.COMPLETED] matches are excluded because they are final.
+     * [MatchStatus.NOT_STARTED] matches are excluded because they have not been confirmed yet
+     * and therefore have no meaningful state to restore.
+     */
+    val isResumable: Boolean
+        get() = status == MatchStatus.IN_PROGRESS || status == MatchStatus.INNINGS_BREAK
 }
