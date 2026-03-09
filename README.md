@@ -227,6 +227,27 @@ Genuine first- and second-innings setup (phase == `SETUP`, or batter/bowler genu
 
 ---
 
+### 2026-03-09 – UX Improvement: Simplified Innings Setup Add-Player Flow
+
+The inline player-creation fields inside the innings setup bottom sheet have been replaced with clean, single-tap buttons that open purpose-built dialogs.
+
+**What changed:**
+- **Inline fields removed** — the `OutlinedTextField` + "Add" button rows that previously cluttered the batting and bowling sections of `SetupOpenersBottomSheet` have been removed.
+- **"+ Add Batter" / "+ Add Bowler" buttons added** — a single `OutlinedButton` now sits below each section's dropdowns. Tapping it opens a focused dialog instead of cluttering the sheet with a persistent text field.
+- **`AddPlayerChoiceDialog`** — a small `AlertDialog` offering two options: **"Pick from saved players"** or **"Add new player"**, plus a Cancel button. Replaces the previous icon-button-to-picker shortcut.
+- **`AddNewPlayerDialog`** — a minimal `AlertDialog` with a single name text field and an **"Add"** confirm button (disabled until name is non-blank). Replaces the inline text field + button pattern.
+- **`PlayerPickerDialog` reused** — the existing picker (search + saved-player list + inline create) is still used when the scorer chooses "Pick from saved players", preserving that flow without duplication.
+- **Newly added players appear immediately** — the existing `LaunchedEffect` on `battingTeam.players` / `bowlingTeam.players` inside the bottom sheet refreshes the striker/non-striker/bowler dropdowns as soon as a player is added, unchanged.
+- **No logic changes** — `MatchViewModel.setOpeners`, the scoring reducer, pending-action system, wicket flow, and bowler-change flow are completely untouched. This is a pure UI/UX improvement.
+
+**Files changed:**
+| File | Action |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/ui/ScoringScreen.kt` | Replaced inline add-player rows with buttons; added `AddPlayerChoiceDialog` and `AddNewPlayerDialog` composables |
+| `README.md` | Updated |
+
+---
+
 ### 2026-03-09 – UI Improvement: Innings Setup Bottom Sheet
 
 The innings setup flow has been redesigned from a cramped `AlertDialog` to a spacious `ModalBottomSheet`, giving scorers a cleaner, more comfortable surface for picking opening batters and bowler before a new innings begins.

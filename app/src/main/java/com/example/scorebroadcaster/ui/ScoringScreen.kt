@@ -1754,9 +1754,12 @@ private fun SetupOpenersBottomSheet(
             bowler = bowlingTeam.players.firstOrNull()
         }
     }
-    var newBatterName by remember { mutableStateOf("") }
-    var newBowlerName by remember { mutableStateOf("") }
-    // Which picker is open: true = batting team, false = bowling team, null = closed
+    // Dialog-chain state:
+    // addPlayerChoiceFor: true = show choice dialog for batting team, false = bowling team
+    // addPlayerNewFor:    true = show "add new player" dialog for batting, false = bowling
+    // pickerForBatting:   true = show saved-player picker for batting, false = bowling
+    var addPlayerChoiceFor by remember { mutableStateOf<Boolean?>(null) }
+    var addPlayerNewFor by remember { mutableStateOf<Boolean?>(null) }
     var pickerForBatting by remember { mutableStateOf<Boolean?>(null) }
 
     val inningsLabel = when (inningsNumber) {
@@ -1832,35 +1835,11 @@ private fun SetupOpenersBottomSheet(
                 onSelected = { nonStriker = it }
             )
             Spacer(modifier = Modifier.height(8.dp))
-            // Add batter row
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
+            // Add Batter button
+            OutlinedButton(
+                onClick = { addPlayerChoiceFor = true },
                 modifier = Modifier.fillMaxWidth()
-            ) {
-                OutlinedTextField(
-                    value = newBatterName,
-                    onValueChange = { newBatterName = it },
-                    label = { Text("+ Add Player to ${battingTeam.name}") },
-                    singleLine = true,
-                    modifier = Modifier.weight(1f)
-                )
-                Button(
-                    onClick = {
-                        val name = newBatterName.trim()
-                        if (name.isNotBlank()) {
-                            onAddPlayerToBattingTeam(name)
-                            newBatterName = ""
-                        }
-                    },
-                    enabled = newBatterName.isNotBlank()
-                ) { Text("Add") }
-                if (onPickFromSaved != null) {
-                    IconButton(onClick = { pickerForBatting = true }) {
-                        Icon(Icons.Default.Person, contentDescription = "Pick batter from saved players")
-                    }
-                }
-            }
+            ) { Text("+ Add Batter") }
 
             Spacer(modifier = Modifier.height(20.dp))
             HorizontalDivider()
@@ -1901,35 +1880,11 @@ private fun SetupOpenersBottomSheet(
                 onSelected = { bowler = it }
             )
             Spacer(modifier = Modifier.height(8.dp))
-            // Add bowler row
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
+            // Add Bowler button
+            OutlinedButton(
+                onClick = { addPlayerChoiceFor = false },
                 modifier = Modifier.fillMaxWidth()
-            ) {
-                OutlinedTextField(
-                    value = newBowlerName,
-                    onValueChange = { newBowlerName = it },
-                    label = { Text("+ Add Player to ${bowlingTeam.name}") },
-                    singleLine = true,
-                    modifier = Modifier.weight(1f)
-                )
-                Button(
-                    onClick = {
-                        val name = newBowlerName.trim()
-                        if (name.isNotBlank()) {
-                            onAddPlayerToBowlingTeam(name)
-                            newBowlerName = ""
-                        }
-                    },
-                    enabled = newBowlerName.isNotBlank()
-                ) { Text("Add") }
-                if (onPickFromSaved != null) {
-                    IconButton(onClick = { pickerForBatting = false }) {
-                        Icon(Icons.Default.Person, contentDescription = "Pick bowler from saved players")
-                    }
-                }
-            }
+            ) { Text("+ Add Bowler") }
 
             Spacer(modifier = Modifier.height(24.dp))
 
@@ -1953,7 +1908,40 @@ private fun SetupOpenersBottomSheet(
         }
     }
 
-    // Player picker for batting or bowling team
+    // ── Add-player dialog chain ───────────────────────────────────────────────
+    val choiceTarget = addPlayerChoiceFor
+    if (choiceTarget != null) {
+        val teamName = if (choiceTarget) battingTeam.name else bowlingTeam.name
+        AddPlayerChoiceDialog(
+            teamName = teamName,
+            showSavedOption = onPickFromSaved != null,
+            onPickFromSaved = {
+                addPlayerChoiceFor = null
+                pickerForBatting = choiceTarget
+            },
+            onAddNew = {
+                addPlayerChoiceFor = null
+                addPlayerNewFor = choiceTarget
+            },
+            onDismiss = { addPlayerChoiceFor = null }
+        )
+    }
+
+    val newTarget = addPlayerNewFor
+    if (newTarget != null) {
+        val teamName = if (newTarget) battingTeam.name else bowlingTeam.name
+        AddNewPlayerDialog(
+            teamName = teamName,
+            onAdd = { name ->
+                if (newTarget) onAddPlayerToBattingTeam(name)
+                else onAddPlayerToBowlingTeam(name)
+                addPlayerNewFor = null
+            },
+            onDismiss = { addPlayerNewFor = null }
+        )
+    }
+
+    // Saved-player picker for batting or bowling team
     val pickerTarget = pickerForBatting
     if (pickerTarget != null && onPickFromSaved != null) {
         PlayerPickerDialog(
@@ -2001,6 +1989,81 @@ private fun PlayerDropdown(
             }
         }
     }
+}
+
+// =============================================================================
+// Add-player dialogs (used in SetupOpenersBottomSheet)
+// =============================================================================
+
+/**
+ * Choice dialog shown when the scorer taps "+ Add Batter" or "+ Add Bowler".
+ * Offers two paths: pick from saved players or create a new one inline.
+ */
+@Composable
+private fun AddPlayerChoiceDialog(
+    teamName: String,
+    showSavedOption: Boolean,
+    onPickFromSaved: () -> Unit,
+    onAddNew: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Add Player to $teamName") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (showSavedOption) {
+                    TextButton(
+                        onClick = onPickFromSaved,
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Pick from saved players") }
+                }
+                TextButton(
+                    onClick = onAddNew,
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("Add new player") }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
+}
+
+/**
+ * Small dialog that lets the scorer type a name and add a brand-new player
+ * to a specific team during innings setup.
+ */
+@Composable
+private fun AddNewPlayerDialog(
+    teamName: String,
+    onAdd: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var name by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("New Player – $teamName") },
+        text = {
+            OutlinedTextField(
+                value = name,
+                onValueChange = { name = it },
+                label = { Text("Player name") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+        },
+        confirmButton = {
+            Button(
+                onClick = { onAdd(name.trim()) },
+                enabled = name.trim().isNotBlank()
+            ) { Text("Add") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
 }
 
 // =============================================================================
