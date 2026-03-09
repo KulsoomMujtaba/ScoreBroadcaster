@@ -128,6 +128,7 @@ class MainActivity : ComponentActivity() {
                                 }
                                 ScoringScreen(
                                     matchViewModel = matchViewModel,
+                                    matchSessionViewModel = matchSessionViewModel,
                                     savedPlayers = savedPlayers,
                                     onSavePrivatePlayer = { matchSessionViewModel.addSavedPlayer(it) },
                                     onMatchDetails = { navController.navigate("match_details") },
@@ -254,6 +255,7 @@ class MainActivity : ComponentActivity() {
                         composable("scoring_only") {
                             ScoringScreen(
                                 matchViewModel = matchViewModel,
+                                matchSessionViewModel = matchSessionViewModel,
                                 savedPlayers = savedPlayers,
                                 onSavePrivatePlayer = { matchSessionViewModel.addSavedPlayer(it) },
                                 onMatchDetails = { navController.navigate("match_details") },

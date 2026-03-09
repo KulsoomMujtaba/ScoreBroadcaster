@@ -176,6 +176,44 @@ Scoring is modelled as an append-only event log:
 
 ## Development Log
 
+### 2026-03-09 – UI Improvement: Scoring Screen Tab Navigation
+
+The `ScoringScreen` top navigation has been refactored from `FilterChip`-style buttons to a proper Material3 `ScrollableTabRow`, replacing the old `QuickNavBar` row that wrapped badly on smaller screens.
+
+**Tabs introduced:**
+
+| Tab | Content |
+|-----|---------|
+| Score | Existing ball-by-ball scoring console |
+| Timeline | Inline `BallTimelineScreen` — ball-by-ball delivery history |
+| Scorecard | Inline `ScorecardScreen` — full batting/bowling table |
+
+**What changed:**
+
+- `FilterChip` / `OutlinedButton` chip row (`QuickNavBar`) removed from `ScoringScreen`.
+- Three tabs — **Score**, **Timeline**, **Scorecard** — rendered via `ScrollableTabRow` at the top of `ScoringScreen`.
+- **Camera is not included** in the tab bar; broadcasting/live streaming remains accessible only through the separate **Live** section and existing navigation routes.
+- Tab switching is instant and stays within `ScoringScreen` — no navigation events are fired.
+- `MatchViewModel` state (score, innings, batters, bowler, pending actions) is fully preserved when switching tabs because the ViewModel is never recreated.
+- Tab selection uses `rememberSaveable` so it survives recomposition.
+
+**Files modified:**
+
+| File | Change |
+|------|--------|
+| `ui/ScoringScreen.kt` | Added `ScoringScreenTab` enum; added `matchSessionViewModel` param; added `selectedTab` state; replaced `QuickNavBar` with `ScrollableTabRow`; renders `BallTimelineScreen` / `ScorecardScreen` inline per tab; removed private `QuickNavBar` composable |
+| `MainActivity.kt` | Passes `matchSessionViewModel` to both `ScoringScreen` call sites (`score_tab`, `scoring_only`) |
+| `README.md` | Added this Development Log entry |
+
+**What is NOT changed:**
+
+- Scoring logic — zero changes to `MatchViewModel`, `ScoreReducer`, or any domain model.
+- Navigation routes `scorecard` and `ball_timeline` — still registered and used by `MatchDetailsScreen`, `HomeScreen`, and the navigation drawer.
+- Camera / Live / streaming flow — entirely untouched.
+- All other screens — no changes.
+
+---
+
 ### 2026-03-08 – Phase 11: Saved Player Profiles Persistence with Room
 
 Room persistence has been activated for Saved Player Profiles. Profiles now survive app restarts — creating a player profile, killing the app, and reopening it will show the profile exactly as saved.
