@@ -217,6 +217,27 @@ Scoring is modelled as an append-only event log:
 
 ## Development Log
 
+### 2026-03-09 – UI Improvement: Broadcast Overlay Compacted to TV Lower-Third Strip
+
+**Files changed:**
+| File | Action |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/ui/ScoreboardOverlay.kt` | Updated |
+| `app/src/main/java/com/example/scorebroadcaster/streaming/ScoreboardOverlayRenderer.kt` | Updated |
+| `app/src/main/java/com/example/scorebroadcaster/ui/CameraPreviewScreen.kt` | Updated |
+| `README.md` | Updated |
+
+**Explanation:**
+Overlay compacted further to feel like a real cricket TV lower-third bar.
+
+- **Overlay redesigned into left / center / right broadcast strip** closer to TV style: a single slim `Row` replaces the previous two-row `Column`; the second row (balls + context + innings badge) is eliminated.
+- **Left block** – striker and non-striker, name (11 sp) + runs/balls (10 sp), stacked two lines, 1 dp gap.
+- **Center capsule** – match short title and innings badge on one line (9 sp), large score (18 sp, amber), overs (9 sp), run rate / chase info (9 sp) all stacked; this is the visual focus.
+- **Right block** – bowler name (11 sp) + figures (10 sp), then a compact row of 9 dp ball circles directly below.
+- **Outer strip padding** reduced to 4 dp vertical / 10 dp horizontal (was 6 dp / 12 dp); inter-element spacing 1 dp.
+- **Canvas renderer** (`ScoreboardOverlayRenderer`) default height reduced from 130 px to 90 px; all paint text sizes reduced proportionally; ball indicators shrunk from 10 px radius to 7 px; `drawRow2` removed; context line and innings badge drawn inside `drawCentreSection`; ball circles drawn inside `drawBowlerSection` right-aligned.
+- **CameraPreviewScreen** overlay given an 8 dp bottom safe margin so the strip sits just above the very bottom edge of the preview.
+
 ### 2026-03-09 – UX Improvement: Create Match Screen
 
 **Files changed:**

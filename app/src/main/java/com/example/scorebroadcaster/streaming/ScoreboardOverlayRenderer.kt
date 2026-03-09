@@ -16,22 +16,21 @@ import kotlinx.coroutines.sync.withLock
 private const val TAG = "ScoreboardOverlayRenderer"
 
 // ── Named constants for layout dimensions ─────────────────────────────────────
-private const val STRIKER_DOT_OFFSET_X = 10f       // px from section left edge to dot centre
+private const val STRIKER_DOT_OFFSET_X = 8f        // px from section left edge to dot centre
 private const val STRIKER_DOT_VERTICAL_CENTER = 0.5f  // fraction of row height
-private const val STRIKER_DOT_RADIUS = 5f          // px
+private const val STRIKER_DOT_RADIUS = 4f           // px
 
-private const val BALL_INDICATOR_RADIUS = 10f       // px
-private const val BALL_INDICATOR_SPACING = 24f      // px between ball centre points
+private const val BALL_INDICATOR_RADIUS = 7f        // px
+private const val BALL_INDICATOR_SPACING = 16f      // px between ball centre points
 
 /**
  * Renders a [MatchState] + [ScoringConsoleState] to a [Bitmap] using Android Canvas/Paint,
  * matching the TV-style broadcast lower-third layout of the Compose [ScoreboardOverlay].
  *
- * Layout (two rows, single background):
- * - **Row 1** (~60 % of height): striker/non-striker (left), match title + score + overs (centre),
- *   bowler name + figures (right)
- * - **Row 2** (~40 % of height): current-over ball circles (left), run rate / chase info (centre),
- *   innings indicator (right)
+ * Layout (single slim strip):
+ * - **Left** (~36 % width): striker/non-striker name + runs/balls (two lines)
+ * - **Centre** (~28 % width): match title + innings badge, score (large), overs, run rate / chase
+ * - **Right** (~36 % width): bowler name + figures, then a compact row of current-over ball circles
  *
  * A single [Bitmap] buffer ([streamWidth] × [overlayHeight], ARGB_8888) is allocated once
  * and reused across renders to minimise GC pressure. The buffer is erased to transparent
@@ -39,11 +38,11 @@ private const val BALL_INDICATOR_SPACING = 24f      // px between ball centre po
  * from a background coroutine.
  *
  * @param streamWidth   Width of the video stream in pixels (default 1280).
- * @param overlayHeight Height of the overlay strip in pixels (default 130).
+ * @param overlayHeight Height of the overlay strip in pixels (default 90).
  */
 class ScoreboardOverlayRenderer(
     private val streamWidth: Int = 1280,
-    private val overlayHeight: Int = 130
+    private val overlayHeight: Int = 90
 ) {
 
     /** Single reused bitmap buffer; erased to transparent before each render. */
@@ -59,37 +58,47 @@ class ScoreboardOverlayRenderer(
         style = Paint.Style.FILL
     }
 
-    // Text paints
+    // Text paints – sizes reduced to match compact 90 px strip
     private val titlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.parseColor("#FFCCCCCC")
-        textSize = 18f
+        textSize = 13f
+    }
+    private val inningsBadgePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.parseColor("#FFFFCC00")
+        textSize = 13f
+        typeface = Typeface.DEFAULT_BOLD
     }
     private val scorePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.parseColor("#FFFFCC00")
-        textSize = 36f
+        textSize = 26f
         typeface = Typeface.DEFAULT_BOLD
     }
     private val oversPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.parseColor("#FFCCCCCC")
-        textSize = 16f
+        textSize = 12f
+    }
+    private val contextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.parseColor("#FFFFCC00")
+        textSize = 12f
+        typeface = Typeface.DEFAULT_BOLD
     }
     private val batterNameBoldPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.WHITE
-        textSize = 20f
+        textSize = 15f
         typeface = Typeface.DEFAULT_BOLD
     }
     private val batterNamePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.parseColor("#FFCCCCCC")
-        textSize = 20f
+        textSize = 15f
     }
     private val batterStatsBoldPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.WHITE
-        textSize = 18f
+        textSize = 13f
         typeface = Typeface.DEFAULT_BOLD
     }
     private val batterStatsPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.parseColor("#FFCCCCCC")
-        textSize = 18f
+        textSize = 13f
     }
     private val strikerDotPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.parseColor("#FFFFCC00")
@@ -97,21 +106,12 @@ class ScoreboardOverlayRenderer(
     }
     private val bowlerNamePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.WHITE
-        textSize = 20f
+        textSize = 15f
         typeface = Typeface.DEFAULT_BOLD
     }
     private val bowlerFiguresPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.parseColor("#FFCCCCCC")
-        textSize = 18f
-    }
-    private val contextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.parseColor("#FFFFCC00")
-        textSize = 18f
-        typeface = Typeface.DEFAULT_BOLD
-    }
-    private val inningsPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.parseColor("#FFCCCCCC")
-        textSize = 18f
+        textSize = 13f
     }
 
     // Ball indicator paints
@@ -130,7 +130,7 @@ class ScoreboardOverlayRenderer(
     private val ballDotBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.parseColor("#FF888888")
         style = Paint.Style.STROKE
-        strokeWidth = 2f
+        strokeWidth = 1.5f
     }
 
     // ── Public API ────────────────────────────────────────────────────────────
@@ -153,17 +153,15 @@ class ScoreboardOverlayRenderer(
 
         val fw = streamWidth.toFloat()
         val fh = overlayHeight.toFloat()
-        val mainRowH = fh * 0.60f
-        val row2H = fh - mainRowH
 
-        // Single background rect
+        // Single background rect for the full strip
         canvas.drawRect(0f, 0f, fw, fh, bgPaint)
 
-        // ── Row 1: Main scoreboard columns ────────────────────────────────────
+        // ── Single-row: Left batters | Centre score | Right bowler+balls ──────
         val showBatters = model.striker != null || model.nonStriker != null
         val showBowler = model.bowler != null
 
-        val pad = 12f
+        val pad = 10f
 
         when {
             showBatters && showBowler -> {
@@ -171,30 +169,25 @@ class ScoreboardOverlayRenderer(
                 val rightW = fw * 0.36f
                 val centreX = leftW
                 val centreW = fw - leftW - rightW
-                drawBattersSection(model, pad, mainRowH, leftW - pad * 2)
-                drawCentreSection(model, centreX + pad, mainRowH, centreW - pad * 2)
-                drawBowlerSection(model, centreX + centreW + pad, mainRowH, rightW - pad * 2)
+                drawBattersSection(model, pad, fh, leftW - pad * 2)
+                drawCentreSection(model, centreX + pad, fh, centreW - pad * 2)
+                drawBowlerSection(model, centreX + centreW + pad, fh, rightW - pad * 2)
             }
             showBatters -> {
                 val leftW = fw * 0.50f
                 val centreW = fw - leftW
-                drawBattersSection(model, pad, mainRowH, leftW - pad * 2)
-                drawCentreSection(model, leftW + pad, mainRowH, centreW - pad * 2)
+                drawBattersSection(model, pad, fh, leftW - pad * 2)
+                drawCentreSection(model, leftW + pad, fh, centreW - pad * 2)
             }
             showBowler -> {
                 val rightW = fw * 0.50f
                 val centreW = fw - rightW
-                drawCentreSection(model, pad, mainRowH, centreW - pad * 2)
-                drawBowlerSection(model, centreW + pad, mainRowH, rightW - pad * 2)
+                drawCentreSection(model, pad, fh, centreW - pad * 2)
+                drawBowlerSection(model, centreW + pad, fh, rightW - pad * 2)
             }
             else -> {
-                drawCentreSection(model, pad, mainRowH, fw - pad * 2)
+                drawCentreSection(model, pad, fh, fw - pad * 2)
             }
-        }
-
-        // ── Row 2: Ball indicators | context | innings indicator ───────────────
-        if (model.currentOverBalls.isNotEmpty() || model.contextLine != null) {
-            drawRow2(model, mainRowH, row2H, fw, pad)
         }
 
         bitmap
@@ -205,16 +198,16 @@ class ScoreboardOverlayRenderer(
     private fun drawBattersSection(
         model: BroadcastOverlayModel,
         left: Float,
-        mainH: Float,
+        totalH: Float,
         width: Float
     ) {
-        val nameMaxWidth = width * 0.60f
-        val lineH = (mainH - 8f) / 2f
+        val nameMaxWidth = width * 0.58f
+        val lineH = (totalH - 8f) / 2f
         listOf(model.striker, model.nonStriker).forEachIndexed { i, batter ->
             batter ?: return@forEachIndexed
             val rowTop = 4f + i * lineH
-            val baselineY = rowTop + lineH * 0.65f
-            val xText = left + 22f
+            val baselineY = rowTop + lineH * 0.70f
+            val xText = left + 18f
 
             // Striker dot
             if (batter.isStriker) {
@@ -234,7 +227,7 @@ class ScoreboardOverlayRenderer(
             // Stats right-aligned within section
             val statText = "${batter.runs}(${batter.balls})"
             val statPaint = if (batter.isStriker) batterStatsBoldPaint else batterStatsPaint
-            val statX = left + width - statPaint.measureText(statText) - 8f
+            val statX = left + width - statPaint.measureText(statText) - 6f
             canvas.drawText(statText, statX, baselineY, statPaint)
         }
     }
@@ -242,72 +235,69 @@ class ScoreboardOverlayRenderer(
     private fun drawCentreSection(
         model: BroadcastOverlayModel,
         left: Float,
-        mainH: Float,
+        totalH: Float,
         width: Float
     ) {
         val cx = left + width / 2f
 
-        // Match title
+        // Title + innings badge side by side, centred
         titlePaint.textAlign = Paint.Align.CENTER
-        canvas.drawText(model.matchTitle, cx, mainH * 0.25f, titlePaint)
+        inningsBadgePaint.textAlign = Paint.Align.CENTER
+        val titleText = model.matchTitle
+        val badgeText = " ${model.inningsBadge}"
+        val titleW = titlePaint.measureText(titleText)
+        val badgeW = inningsBadgePaint.measureText(badgeText)
+        val combinedLeft = cx - (titleW + badgeW) / 2f
+        canvas.drawText(titleText, combinedLeft, totalH * 0.20f, titlePaint.apply { textAlign = Paint.Align.LEFT })
+        canvas.drawText(badgeText, combinedLeft + titleW, totalH * 0.20f, inningsBadgePaint.apply { textAlign = Paint.Align.LEFT })
 
-        // Score (large)
+        // Score (large, centred)
         scorePaint.textAlign = Paint.Align.CENTER
-        canvas.drawText(model.score, cx, mainH * 0.62f, scorePaint)
+        canvas.drawText(model.score, cx, totalH * 0.58f, scorePaint)
 
         // Overs
         oversPaint.textAlign = Paint.Align.CENTER
-        canvas.drawText(model.overs, cx, mainH * 0.85f, oversPaint)
+        canvas.drawText(model.overs, cx, totalH * 0.78f, oversPaint)
+
+        // Context line (run rate / chase info)
+        if (model.contextLine != null) {
+            contextPaint.textAlign = Paint.Align.CENTER
+            canvas.drawText(model.contextLine, cx, totalH * 0.95f, contextPaint)
+        }
     }
 
     private fun drawBowlerSection(
         model: BroadcastOverlayModel,
         left: Float,
-        mainH: Float,
+        totalH: Float,
         width: Float
     ) {
         val bowler = model.bowler ?: return
 
-        val nameMaxWidth = width * 0.60f
+        val nameMaxWidth = width * 0.58f
         val nameText = truncateText(bowler.name, bowlerNamePaint, nameMaxWidth)
         val figuresText = "${bowler.wickets}-${bowler.runs}"
 
-        val nameY = mainH * 0.42f
+        // Name at ~20 % height, figures at ~45 % height
+        val nameY = totalH * 0.28f
+        val figuresY = totalH * 0.52f
         bowlerNamePaint.textAlign = Paint.Align.LEFT
-        canvas.drawText(nameText, left + 8f, nameY, bowlerNamePaint)
+        canvas.drawText(nameText, left + 6f, nameY, bowlerNamePaint)
 
-        bowlerFiguresPaint.textAlign = Paint.Align.RIGHT
-        canvas.drawText(figuresText, left + width - 8f, nameY, bowlerFiguresPaint)
-    }
+        bowlerFiguresPaint.textAlign = Paint.Align.LEFT
+        canvas.drawText(figuresText, left + 6f, figuresY, bowlerFiguresPaint)
 
-    private fun drawRow2(
-        model: BroadcastOverlayModel,
-        top: Float,
-        height: Float,
-        fw: Float,
-        pad: Float
-    ) {
-        val baselineY = top + height * 0.72f
-
-        // Left: Ball indicators
+        // Ball indicators – compact row at ~78 % height, right-aligned within section
         if (model.currentOverBalls.isNotEmpty()) {
-            var bx = pad + BALL_INDICATOR_RADIUS
-            val by = top + height / 2f
-            model.currentOverBalls.forEach { ball ->
+            val by = totalH * 0.80f
+            val rightEdge = left + width - 6f
+            // Draw right-to-left so last ball is on the right
+            var bx = rightEdge - BALL_INDICATOR_RADIUS
+            model.currentOverBalls.reversed().forEach { ball ->
                 drawBallIndicator(ball, bx, by, BALL_INDICATOR_RADIUS)
-                bx += BALL_INDICATOR_SPACING
+                bx -= BALL_INDICATOR_SPACING
             }
         }
-
-        // Center: Context line
-        if (model.contextLine != null) {
-            contextPaint.textAlign = Paint.Align.CENTER
-            canvas.drawText(model.contextLine, fw / 2f, baselineY, contextPaint)
-        }
-
-        // Right: Innings indicator
-        inningsPaint.textAlign = Paint.Align.RIGHT
-        canvas.drawText(model.inningsBadge, fw - pad, baselineY, inningsPaint)
     }
 
     private fun drawBallIndicator(label: String, cx: Float, cy: Float, r: Float) {
