@@ -176,6 +176,24 @@ Scoring is modelled as an append-only event log:
 
 ## Development Log
 
+### 2026-03-09 – UI Improvement: Compact Match Header
+
+The scoring screen header has been redesigned into a compact, single-block `CompactMatchHeader` composable that sits above the tab row and remains visible at all times.
+
+- **Score and overs prioritised** — the batting team name, runs/wickets score, and current overs are displayed in a single prominent line, making the live score instantly readable.
+- **Vertical space reduced** — small vertical padding (10 dp) and minimal line spacing replace the previous multi-row stacked layout, moving the tab row and scoring controls higher on the screen.
+- **Chase information shown as subtitle** — during the second innings a concise subtitle line (e.g. "Need 23 runs from 15 balls") appears directly below the score; during the innings break "Target N" is shown instead. The subtitle is hidden when not relevant.
+- **Improves scorer visibility and control access** — the more compact header means scoring buttons are reachable without scrolling on small Android devices.
+- **No scoring logic changes** — this is a UI-only refactor. All existing `MatchState` and `ScoringConsoleState` flows are observed unchanged; the header updates automatically on every `BallEvent`.
+
+**Files changed:**
+| File | Action |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/ui/ScoringScreen.kt` | Updated |
+| `README.md` | Updated |
+
+---
+
 ### 2026-03-09 – UI Improvement: Scoring Buttons Layout
 
 The scoring control area in `ScoringScreen` has been reorganised into a structured scorer pad with three clearly separated sections, making live scoring faster and more comfortable during a real match.

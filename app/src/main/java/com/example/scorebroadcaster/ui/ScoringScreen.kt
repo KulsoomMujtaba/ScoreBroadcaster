@@ -48,6 +48,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.scorebroadcaster.data.InningsPhase
@@ -137,6 +138,13 @@ fun ScoringScreen(
 
     Box(modifier = modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize()) {
+            // --- Compact match header (always visible above tabs) ---
+            CompactMatchHeader(
+                match = activeMatch,
+                state = state,
+                consoleState = console
+            )
+
             // --- Tab navigation ---
             if (activeMatch != null) {
                 ScrollableTabRow(selectedTabIndex = selectedTab.ordinal) {
@@ -168,28 +176,6 @@ fun ScoringScreen(
                             .padding(16.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-
-            // --- Match header ---
-            if (activeMatch != null) {
-                MatchHeaderSection(match = activeMatch, console = console)
-                Spacer(modifier = Modifier.height(8.dp))
-            }
-
-            // --- Score display ---
-            ScoreDisplaySection(state = state)
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // --- Chase info (2nd innings only) ---
-            if (console.phase == InningsPhase.SECOND_INNINGS && activeMatch != null) {
-                ChaseInfoSection(
-                    runsScored = state.runs,
-                    target = console.target,
-                    overs = state.overs,
-                    balls = state.balls,
-                    oversLimit = activeMatch.overs
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-            }
 
             // --- Innings break ---
             if (console.phase == InningsPhase.INNINGS_BREAK && activeMatch != null) {
@@ -462,6 +448,84 @@ fun ScoringScreen(
                     matchViewModel.addPlayerToTeam(profile.toMatchPlayer(), addToBattingTeam = forBatting)
                 }
             )
+        }
+    }
+}
+
+// =============================================================================
+// Compact match header (shown above tabs)
+// =============================================================================
+
+@Composable
+private fun CompactMatchHeader(
+    match: Match?,
+    state: MatchState,
+    consoleState: ScoringConsoleState
+) {
+    if (match == null) return
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            // --- Score line ---
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = consoleState.battingTeamName,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "${state.runs}/${state.wickets}",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "(${state.overs}.${state.balls})",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                    )
+                }
+            }
+            // --- Chase subtitle (2nd innings only) ---
+            if (consoleState.phase == InningsPhase.SECOND_INNINGS) {
+                val runsNeeded = (consoleState.target - state.runs).coerceAtLeast(0)
+                val ballsBowled = state.overs * 6 + state.balls
+                val totalBalls = match.overs * 6
+                val ballsRemaining = (totalBalls - ballsBowled).coerceAtLeast(0)
+                val chaseText = if (state.runs >= consoleState.target) {
+                    "Target ${consoleState.target} reached"
+                } else {
+                    "Need $runsNeeded runs from $ballsRemaining balls"
+                }
+                Text(
+                    text = chaseText,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                )
+            } else if (consoleState.phase == InningsPhase.INNINGS_BREAK) {
+                Text(
+                    text = "Target ${consoleState.target}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                )
+            }
         }
     }
 }
