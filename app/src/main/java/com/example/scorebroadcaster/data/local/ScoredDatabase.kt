@@ -20,6 +20,8 @@ import androidx.room.TypeConverters
  * - v4: Replaced `ball_events` schema with full delivery model — renamed columns to `matchLocalId`,
  *       `inningsNumber`, `sequenceNumber`; added dismissal fields, bowler fields, `createdAt`;
  *       added `toDomain()` / `toEntity()` mapping helpers (Phase 9.4)
+ * - v5: Finalised `matches` schema — renamed `overs` to `oversLimit`; added `tossWinner` and
+ *       `tossDecision` columns so the full toss result survives app restarts
  *
  * Use [getInstance] to obtain the singleton database instance.
  */
@@ -31,7 +33,7 @@ import androidx.room.TypeConverters
         MatchEntity::class,
         BallEventEntity::class
     ],
-    version = 4,
+    version = 5,
     exportSchema = false
 )
 @TypeConverters(PlayerListTypeConverter::class)
