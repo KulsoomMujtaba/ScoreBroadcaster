@@ -176,6 +176,23 @@ Scoring is modelled as an append-only event log:
 
 ## Development Log
 
+### 2026-03-09 – Bug Fix: Home tab in bottom navigation
+
+**Problem:** After tapping any bottom-nav tab other than Home, tapping the Home tab no longer navigated back to the home screen. The root cause was that `popUpTo(startDestination) { saveState = true }` saves the popped back-stack entries under the start destination's ID as the key. When the Home tab was then tapped with `restoreState = true`, the NavController found that saved state (keyed to the home route) and incorrectly restored the previously-popped destinations on top of the home screen — leaving the user on the wrong screen instead of Home.
+
+**What changed:**
+- **Home now always navigates correctly after switching tabs** — `restoreState` is set to `false` for the Home tab (the start destination) so the NavController never finds and incorrectly restores previously-popped tab back stacks when returning to Home. All other tabs continue to use `restoreState = true` (which, in this flat-graph setup, is a no-op but correctly signals intent for future nested-graph adoption).
+- **Selected-tab state fixed** — `selectedTab()` now references `BottomNavTab.route` directly for the primary tab routes instead of duplicating the route strings as bare literals. This makes the selection logic and the click-target routing share a single source of truth (`BottomNavTab.route`), preventing them from drifting apart if routes are ever renamed.
+- **Bottom-nav back stack handling improved** — `popUpTo(findStartDestination().id) { saveState = true }` with `launchSingleTop = true` is preserved for all tabs, ensuring each tab switch clears the back stack down to the start destination without unnecessary duplicate entries.
+
+**Files changed:**
+| File | Action |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/ui/AppShell.kt` | Updated – `restoreState` conditional on non-HOME tab; `selectedTab()` references `BottomNavTab.route` |
+| `README.md` | Updated |
+
+---
+
 ### 2026-03-09 – UI Improvement: Innings Setup Bottom Sheet
 
 The innings setup flow has been redesigned from a cramped `AlertDialog` to a spacious `ModalBottomSheet`, giving scorers a cleaner, more comfortable surface for picking opening batters and bowler before a new innings begins.
