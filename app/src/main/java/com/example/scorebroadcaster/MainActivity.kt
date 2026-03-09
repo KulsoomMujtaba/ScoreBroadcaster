@@ -101,7 +101,10 @@ class MainActivity : ComponentActivity() {
                                     else navController.navigate("create_match")
                                 },
                                 onGoLiveClick = { navController.navigate("stream_setup") },
-                                onResetMatchClick = { matchViewModel.resetMatch() },
+                                onResetMatchClick = {
+                                    matchViewModel.resetMatch()
+                                    matchSessionViewModel.clearActiveMatch()
+                                },
                                 onViewMatchDetails = { navController.navigate("match_details") },
                                 onViewScorecard = { navController.navigate("scorecard") },
                                 onResumeMatchClick = {

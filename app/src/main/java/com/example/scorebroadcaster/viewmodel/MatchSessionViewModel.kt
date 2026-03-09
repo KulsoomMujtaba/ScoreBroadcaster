@@ -147,6 +147,19 @@ class MatchSessionViewModel(application: Application) : AndroidViewModel(applica
         _activeMatch.value = match
     }
 
+    /**
+     * Clear the active match, ending the current scoring session.
+     *
+     * Called by reset flows to ensure the Home screen no longer shows a stale active-match
+     * banner after scoring state has been cleared.  The match itself remains in local storage
+     * and may still appear in [resumableMatch] if its status is still [MatchStatus.IN_PROGRESS]
+     * or [MatchStatus.INNINGS_BREAK].
+     */
+    fun clearActiveMatch() {
+        matchRepository.clearActiveMatch()
+        _activeMatch.value = null
+    }
+
     /** Refresh active-match state from the repository (e.g. after returning to My Matches).
      *  [matches] and saved teams/players are driven by Room Flows and update automatically. */
     fun refresh() {

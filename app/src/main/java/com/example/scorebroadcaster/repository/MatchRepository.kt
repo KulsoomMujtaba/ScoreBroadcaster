@@ -113,6 +113,17 @@ class MatchRepository(
             .map { it.toDomain() }
 
     /**
+     * Delete all persisted [BallEvent]s for a match (both innings).
+     *
+     * Called by reset flows to fully clear the scoring history from the database so
+     * that a subsequent [loadAllBallEvents] returns empty lists and does not restore
+     * stale state.
+     */
+    suspend fun deleteAllBallEvents(matchId: String) {
+        ballEventDao.deleteForMatch(matchId)
+    }
+
+    /**
      * Load all persisted [BallEvent]s for a match, split by innings.
      *
      * @return A [Pair] where [Pair.first] is the first-innings event list and
@@ -188,6 +199,17 @@ class MatchRepository(
         ): Pair<List<BallEvent>, List<BallEvent>> {
             val repo = _instance ?: return Pair(emptyList(), emptyList())
             return repo.loadAllBallEvents(matchId)
+        }
+
+        /**
+         * Delete all persisted [BallEvent]s for a match (both innings).
+         *
+         * Delegates to the active instance.  No-ops if called before the repository is
+         * initialised.  Used by reset flows to clear stale scoring history from the DB.
+         */
+        suspend fun deleteAllBallEvents(matchId: String) {
+            val repo = _instance ?: return
+            repo.deleteAllBallEvents(matchId)
         }
     }
 }
