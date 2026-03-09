@@ -536,8 +536,25 @@ private fun CompactMatchHeader(
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
                 )
             }
+            // --- Current over/ball indicator (active innings only) ---
+            if (consoleState.phase == InningsPhase.FIRST_INNINGS ||
+                consoleState.phase == InningsPhase.SECOND_INNINGS
+            ) {
+                Text(
+                    text = formatCurrentBallIndicator(state),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
     }
+}
+
+/** Returns a compact string showing the current over and ball position, e.g. "Over 1 • Ball 3 of 6". */
+private fun formatCurrentBallIndicator(matchState: MatchState): String {
+    val currentOverNumber = matchState.overs + 1
+    val currentBallNumber = matchState.balls + 1
+    return "Over $currentOverNumber • Ball $currentBallNumber of 6"
 }
 
 // =============================================================================
