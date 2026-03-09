@@ -65,6 +65,8 @@ fun CameraPreviewScreen(
     modifier: Modifier = Modifier
 ) {
     val state by matchViewModel.state.collectAsStateWithLifecycle()
+    val console by matchViewModel.consoleState.collectAsStateWithLifecycle()
+    val activeMatch by matchViewModel.activeMatch.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
 
@@ -152,9 +154,11 @@ fun CameraPreviewScreen(
             )
         }
 
-        // ScoreboardOverlay updates automatically whenever MatchState changes
+        // ScoreboardOverlay updates automatically whenever MatchState or ScoringConsoleState changes
         ScoreboardOverlay(
             state = state,
+            console = console,
+            matchOvers = activeMatch?.overs,
             modifier = Modifier.align(Alignment.BottomCenter)
         )
 

@@ -1556,6 +1556,43 @@ Added a `HomeScreen` composable as the new app entry point, presenting two large
 
 ---
 
+### 2026-03-09 – UI Improvement: TV-Style Broadcast Score Overlay
+
+**Feature:** Redesigned the live scoreboard overlay to match a professional TV cricket broadcast lower-third graphic.
+
+**Files created/modified:**
+| File | Action |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/ui/BroadcastOverlayMapper.kt` | Created |
+| `app/src/main/java/com/example/scorebroadcaster/ui/ScoreboardOverlay.kt` | Rewritten |
+| `app/src/main/java/com/example/scorebroadcaster/ui/CameraPreviewScreen.kt` | Updated |
+| `app/src/main/java/com/example/scorebroadcaster/streaming/ScoreboardOverlayRenderer.kt` | Rewritten |
+| `app/src/main/java/com/example/scorebroadcaster/viewmodel/LiveStreamViewModel.kt` | Updated |
+| `app/src/main/java/com/example/scorebroadcaster/ui/StreamPreviewScreen.kt` | Updated |
+| `README.md` | Updated |
+
+**Explanation:**
+
+The scoreboard overlay was replaced with a compact landscape-optimised lower-third in the style of live cricket broadcasts on television.
+
+**`BroadcastOverlayMapper`** (`ui/BroadcastOverlayMapper.kt`) — a new shared mapper object that converts a `MatchState` + `ScoringConsoleState` pair into a `BroadcastOverlayModel` (UI-only data class). The mapper returns `null` during `InningsPhase.SETUP` to hide the overlay before play starts, and computes a context line: run rate (`"RUN RATE 6.21"`) for the first innings, a chase line (`"Need 23 from 15"`) for the second innings using `matchOvers` to compute remaining balls, a target announcement (`"Target: 201"`) at the innings break, and a result line at `MATCH_COMPLETE`. This logic is shared by both the Compose overlay and the Canvas stream renderer.
+
+**Batter section** (left column): Displays the striker and non-striker with name, runs, and balls in the format `57 (60)`. A small amber dot sits next to the striker's name. Names are ellipsised when too long to preserve the fixed layout.
+
+**Center score block** (middle column): Shows the match title (`LIO v FAL`), the current score in a large amber font (`177-2`), the over count (`28.5 overs`), and a small blue innings badge (`1st` / `2nd`).
+
+**Bowler section** (right column): Shows the bowler's name and figures (`1-18`) on one line and a row of small colour-coded ball circles below — red fill for wickets, blue fill for boundaries, outline only for dot balls, and grey fill for scored runs. `Wd` and `NB` deliveries are abbreviated to `W+` / `N+` to fit the circle.
+
+**Context strip** (full-width thin bar below the main row): Shows the run rate (`RUN RATE 6.21`) during the first innings and the chase requirement (`Need 23 from 15`) during the second innings. Hidden when no data is available (e.g. at the innings break the strip shows the target instead).
+
+**`ScoreboardOverlay` composable** signature extended with `console: ScoringConsoleState` and `matchOvers: Int?` optional parameters; the old single-parameter form still compiles without changes. `CameraPreviewScreen` now collects `matchViewModel.consoleState` and `matchViewModel.activeMatch` (for the over count) and forwards both to the overlay.
+
+**`ScoreboardOverlayRenderer`** (Canvas / RTMP path) rewritten to draw the same three-column layout at 1280 × 190 px using Android Paint. Sections adapt when batter or bowler data is absent. The `render()` signature adds optional `console` and `matchOvers` parameters; callers that pass only `MatchState` continue to work.
+
+**`LiveStreamViewModel.startStreaming`** now accepts an optional `consoleStateFlow` and `matchOvers` and combines the two flows with `kotlinx.coroutines.flow.combine` before debouncing, so both state streams feed the overlay renderer. `StreamPreviewScreen` was updated to pass these values.
+
+---
+
 ### 2026-03-04 (4)
 
 **Feature:** Live score overlay updates and scoring controls panel in `CameraPreviewScreen`

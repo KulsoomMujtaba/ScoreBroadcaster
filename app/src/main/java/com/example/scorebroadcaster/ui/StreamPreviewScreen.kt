@@ -74,6 +74,7 @@ fun StreamPreviewScreen(
     modifier: Modifier = Modifier
 ) {
     val streamingStatus by liveStreamViewModel.streamingStatus.collectAsStateWithLifecycle()
+    val activeMatch by matchViewModel.activeMatch.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     // Lock to landscape while this screen is visible; restore on exit.
@@ -121,7 +122,12 @@ fun StreamPreviewScreen(
     if (permissionsGranted) {
         DisposableEffect(Unit) {
             openGlView.post {
-                liveStreamViewModel.startStreaming(openGlView, matchViewModel.state)
+                liveStreamViewModel.startStreaming(
+                    openGlView,
+                    matchViewModel.state,
+                    matchViewModel.consoleState,
+                    activeMatch?.overs
+                )
             }
             onDispose { liveStreamViewModel.stopStreaming() }
         }

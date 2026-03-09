@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import com.example.scorebroadcaster.data.MatchState
+import com.example.scorebroadcaster.data.ScoringConsoleState
 import com.example.scorebroadcaster.data.StreamConfig
 import com.example.scorebroadcaster.data.StreamingStatus
 import com.example.scorebroadcaster.streaming.RtmpLiveStreamer
@@ -20,6 +21,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -77,14 +79,19 @@ class LiveStreamViewModel(application: Application) : AndroidViewModel(applicati
      * Creates an [RtmpLiveStreamer] using the [OpenGlView] from `StreamPreviewScreen`
      * and the config staged by [prepareStreaming], then begins camera preview + RTMP.
      *
-     * While streaming, [matchStateFlow] is collected (debounced to ≤ 10 updates/s) and
-     * each new [MatchState] is rendered to a bitmap on [Dispatchers.Default] before being
-     * pushed into the stream as a scoreboard overlay.
+     * While streaming, [matchStateFlow] and [consoleStateFlow] are combined and collected
+     * (debounced to ≤ 10 updates/s). Each pair is rendered to a bitmap on [Dispatchers.Default]
+     * before being pushed into the stream as a scoreboard overlay.
      *
      * Status transitions: Connecting → Streaming (on connect) / Reconnecting / Error.
      */
     @OptIn(FlowPreview::class)
-    fun startStreaming(openGlView: OpenGlView, matchStateFlow: StateFlow<MatchState>) {
+    fun startStreaming(
+        openGlView: OpenGlView,
+        matchStateFlow: StateFlow<MatchState>,
+        consoleStateFlow: StateFlow<ScoringConsoleState> = MutableStateFlow(ScoringConsoleState()),
+        matchOvers: Int? = null
+    ) {
         val config = pendingConfig ?: run {
             _streamingStatus.value = StreamingStatus.Error("No stream configuration set")
             return
@@ -108,14 +115,14 @@ class LiveStreamViewModel(application: Application) : AndroidViewModel(applicati
         }
         streamer = activeStreamer
 
-        // Collect MatchState changes and burn the scoreboard into each RTMP frame.
+        // Collect MatchState + ScoringConsoleState changes and burn the scoreboard into each RTMP frame.
         overlayJob?.cancel()
         overlayJob = viewModelScope.launch {
-            matchStateFlow
+            combine(matchStateFlow, consoleStateFlow) { match, console -> Pair(match, console) }
                 .debounce(100L) // throttle to max ~10 updates/second
-                .collect { state ->
+                .collect { (match, console) ->
                     val bitmap = withContext(Dispatchers.Default) {
-                        overlayRenderer.render(state)
+                        overlayRenderer.render(match, console, matchOvers)
                     }
                     activeStreamer.updateOverlayBitmap(bitmap)
                 }
