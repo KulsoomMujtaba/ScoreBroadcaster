@@ -1591,6 +1591,12 @@ The scoreboard overlay was replaced with a compact landscape-optimised lower-thi
 
 **`LiveStreamViewModel.startStreaming`** now accepts an optional `consoleStateFlow` and `matchOvers` and combines the two flows with `kotlinx.coroutines.flow.combine` before debouncing, so both state streams feed the overlay renderer. `StreamPreviewScreen` was updated to pass these values.
 
+#### Overlay Redesign Log – Layout Compression
+
+- **Overlay height reduced**: Compose overlay compressed to ≤ ~110 dp (was uncapped and grew with content); Canvas renderer default reduced from 1280 × 190 px to 1280 × 130 px, keeping the bar within 12–16 % of a 720-line stream frame.
+- **Layout compressed to two rows**: The previous three-column bar + full-width context strip was replaced with a two-row structure. Row 1 carries the main scoreboard (batters left, match title/score/overs centre, bowler right). Row 2 carries secondary info (ball-by-ball circles left, run rate or chase info centre, innings indicator right). This eliminates the extra height consumed by the standalone context strip.
+- **Less screen coverage for better camera visibility**: Stacked inner section cards (each with their own background and padding) were removed in favour of a single rounded-corner container, vertical padding reduced to 6 dp (top/bottom) and 12 dp (sides), inter-row gap set to 4 dp, and typography scaled down (score 20 sp, player names 13 sp, secondary labels 10–11 sp). Ball indicator circles reduced to 11 dp with no text labels. Together these changes leave the majority of the camera preview unobscured.
+
 ---
 
 ### 2026-03-04 (4)
