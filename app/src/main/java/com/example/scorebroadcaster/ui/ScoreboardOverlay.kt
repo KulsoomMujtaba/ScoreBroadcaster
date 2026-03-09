@@ -19,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -33,7 +34,6 @@ import com.example.scorebroadcaster.data.entity.Player
 // ─── Overlay colour palette ───────────────────────────────────────────────────
 
 private val OverlayBackground = Color(0xCC000000)
-private val SectionBackground = Color(0xBB000000)
 private val PrimaryText = Color.White
 private val SecondaryText = Color(0xFFCCCCCC)
 private val AccentColor = Color(0xFFFFCC00)      // amber/gold – score headline
@@ -47,14 +47,11 @@ private val StrikerDotColor = Color(0xFFFFCC00)  // amber indicator next to stri
 /**
  * TV-style broadcast lower-third scoreboard overlay.
  *
- * Renders a compact three-column bar:
- *  - **Left**: current batters (striker and non-striker) with runs and balls
- *  - **Center**: match title, score, overs, innings badge
- *  - **Right**: current bowler figures and current-over ball-by-ball indicators
+ * Renders a compact two-row bar inside a single rounded container:
+ *  - **Row 1**: Striker/non-striker (left), match title + score + overs (center), bowler (right)
+ *  - **Row 2**: Current over ball indicators (left), run rate / chase info (center),
+ *               innings indicator (right)
  *
- * A thin context strip below shows run rate (first innings) or chase target (second innings).
- *
- * Sections are hidden automatically when their data is unavailable (e.g. between innings).
  * The overlay renders nothing during [InningsPhase.SETUP].
  *
  * @param state         Live [MatchState] from the scoring engine.
@@ -75,54 +72,90 @@ fun ScoreboardOverlay(
 
     val showBatters = model.striker != null || model.nonStriker != null
     val showBowler = model.bowler != null
+    val showSecondRow = model.contextLine != null || model.currentOverBalls.isNotEmpty()
 
     Column(
         modifier = modifier
             .fillMaxWidth()
+            .clip(RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp))
             .background(OverlayBackground)
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        // ── Main three-column row ──────────────────────────────────────────────
+        // ── Row 1: Main scoreboard row ─────────────────────────────────────────
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 6.dp),
+            modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             if (showBatters) {
                 BattersSection(
                     striker = model.striker,
                     nonStriker = model.nonStriker,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1.3f)
                 )
             }
 
             CenterScoreSection(
                 model = model,
-                modifier = Modifier.weight(if (showBatters || showBowler) 0.85f else 1f)
+                modifier = Modifier.weight(if (showBatters || showBowler) 0.9f else 1f)
             )
 
             if (showBowler) {
                 BowlerSection(
                     bowler = checkNotNull(model.bowler),
-                    currentOverBalls = model.currentOverBalls,
                     modifier = Modifier.weight(1f)
                 )
             }
         }
 
-        // ── Context strip (run rate / chase) ──────────────────────────────────
-        if (model.contextLine != null) {
-            Text(
-                text = model.contextLine,
-                color = AccentColor,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(Color(0xAA000000))
-                    .padding(horizontal = 12.dp, vertical = 3.dp)
-            )
+        // ── Row 2: Compact info row ────────────────────────────────────────────
+        if (showSecondRow) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                // Left: Over ball indicators
+                Row(
+                    modifier = Modifier.weight(1.3f),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    model.currentOverBalls.forEach { ballLabel -> BallIndicator(label = ballLabel) }
+                }
+
+                // Center: Run rate / chase info
+                Box(
+                    modifier = Modifier.weight(0.9f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    model.contextLine?.let { line ->
+                        Text(
+                            text = line,
+                            color = AccentColor,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            textAlign = TextAlign.Center,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+
+                // Right: Innings indicator
+                Box(
+                    modifier = Modifier.weight(1f),
+                    contentAlignment = Alignment.CenterEnd
+                ) {
+                    Text(
+                        text = model.inningsBadge,
+                        color = SecondaryText,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
         }
     }
 }
@@ -136,11 +169,8 @@ private fun BattersSection(
     modifier: Modifier = Modifier
 ) {
     Column(
-        modifier = modifier
-            .clip(RoundedCornerShape(4.dp))
-            .background(SectionBackground)
-            .padding(horizontal = 8.dp, vertical = 4.dp),
-        verticalArrangement = Arrangement.spacedBy(3.dp)
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(2.dp)
     ) {
         striker?.let { BatterRow(batter = it) }
         nonStriker?.let { BatterRow(batter = it) }
@@ -149,6 +179,8 @@ private fun BattersSection(
 
 @Composable
 private fun BatterRow(batter: BatterOverlayInfo) {
+    val nameColor = if (batter.isStriker) PrimaryText else SecondaryText
+    val weight = if (batter.isStriker) FontWeight.Bold else FontWeight.Normal
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp)
@@ -163,19 +195,19 @@ private fun BatterRow(batter: BatterOverlayInfo) {
 
         Text(
             text = batter.name,
-            color = PrimaryText,
-            fontSize = 12.sp,
-            fontWeight = if (batter.isStriker) FontWeight.Bold else FontWeight.Normal,
+            color = nameColor,
+            fontSize = 13.sp,
+            fontWeight = weight,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f)
         )
 
         Text(
-            text = "${batter.runs} (${batter.balls})",
-            color = if (batter.isStriker) PrimaryText else SecondaryText,
+            text = "${batter.runs}(${batter.balls})",
+            color = nameColor,
             fontSize = 12.sp,
-            fontWeight = if (batter.isStriker) FontWeight.Bold else FontWeight.Normal
+            fontWeight = weight
         )
     }
 }
@@ -188,10 +220,7 @@ private fun CenterScoreSection(
     modifier: Modifier = Modifier
 ) {
     Column(
-        modifier = modifier
-            .clip(RoundedCornerShape(4.dp))
-            .background(SectionBackground)
-            .padding(horizontal = 8.dp, vertical = 4.dp),
+        modifier = modifier,
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(1.dp)
     ) {
@@ -206,7 +235,7 @@ private fun CenterScoreSection(
         Text(
             text = model.score,
             color = AccentColor,
-            fontSize = 22.sp,
+            fontSize = 20.sp,
             fontWeight = FontWeight.ExtraBold
         )
         Text(
@@ -214,20 +243,6 @@ private fun CenterScoreSection(
             color = SecondaryText,
             fontSize = 10.sp
         )
-        // Innings badge pill
-        Box(
-            modifier = Modifier
-                .clip(RoundedCornerShape(2.dp))
-                .background(Color(0xFF005599))
-                .padding(horizontal = 5.dp, vertical = 1.dp)
-        ) {
-            Text(
-                text = model.inningsBadge,
-                color = Color.White,
-                fontSize = 9.sp,
-                fontWeight = FontWeight.Bold
-            )
-        }
     }
 }
 
@@ -236,52 +251,30 @@ private fun CenterScoreSection(
 @Composable
 private fun BowlerSection(
     bowler: BowlerOverlayInfo,
-    currentOverBalls: List<String>,
     modifier: Modifier = Modifier
 ) {
     Column(
-        modifier = modifier
-            .clip(RoundedCornerShape(4.dp))
-            .background(SectionBackground)
-            .padding(horizontal = 8.dp, vertical = 4.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp)
+        modifier = modifier,
+        horizontalAlignment = Alignment.End,
+        verticalArrangement = Arrangement.spacedBy(2.dp)
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            Text(
-                text = bowler.name,
-                color = PrimaryText,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f)
-            )
-            Text(
-                text = "${bowler.wickets}-${bowler.runs}",
-                color = SecondaryText,
-                fontSize = 12.sp
-            )
-        }
-        if (currentOverBalls.isNotEmpty()) {
-            OverBallIndicators(balls = currentOverBalls)
-        }
+        Text(
+            text = bowler.name,
+            color = PrimaryText,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        Text(
+            text = "${bowler.wickets}-${bowler.runs}",
+            color = SecondaryText,
+            fontSize = 12.sp
+        )
     }
 }
 
-// ─── Over ball indicators ─────────────────────────────────────────────────────
-
-@Composable
-private fun OverBallIndicators(balls: List<String>) {
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(3.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        balls.forEach { ball -> BallIndicator(label = ball) }
-    }
-}
+// ─── Ball indicator ───────────────────────────────────────────────────────────
 
 @Composable
 private fun BallIndicator(label: String) {
@@ -298,11 +291,6 @@ private fun BallIndicator(label: String) {
         isWide || isNoBall -> Color(0xFF886600)
         else -> Color(0xFF444444)
     }
-    val textColor = when {
-        isDot -> DotBorderColor
-        else -> Color.White
-    }
-    val displayText = ballDisplayLabel(label)
     val borderModifier = if (isDot) {
         Modifier.border(1.dp, DotBorderColor, CircleShape)
     } else {
@@ -311,20 +299,10 @@ private fun BallIndicator(label: String) {
 
     Box(
         modifier = Modifier
-            .size(16.dp)
+            .size(11.dp)
             .background(bgColor, CircleShape)
-            .then(borderModifier),
-        contentAlignment = Alignment.Center
-    ) {
-        if (!isDot) {
-            Text(
-                text = displayText,
-                color = textColor,
-                fontSize = 7.sp,
-                fontWeight = FontWeight.Bold
-            )
-        }
-    }
+            .then(borderModifier)
+    )
 }
 
 // ─── Previews ─────────────────────────────────────────────────────────────────
