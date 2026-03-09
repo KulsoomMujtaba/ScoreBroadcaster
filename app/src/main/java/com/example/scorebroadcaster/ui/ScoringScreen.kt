@@ -31,7 +31,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -40,6 +42,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -63,6 +66,14 @@ import com.example.scorebroadcaster.data.entity.Team
 import com.example.scorebroadcaster.data.entity.toMatchPlayer
 import com.example.scorebroadcaster.domain.BallEvent
 import com.example.scorebroadcaster.viewmodel.MatchViewModel
+import com.example.scorebroadcaster.viewmodel.MatchSessionViewModel
+
+/** Tabs shown in the top navigation of [ScoringScreen]. */
+enum class ScoringScreenTab(val title: String) {
+    SCORE("Score"),
+    TIMELINE("Timeline"),
+    SCORECARD("Scorecard")
+}
 
 /** Identifies which type of extra delivery the scorer is entering. */
 enum class ExtraType(val label: String) {
@@ -75,6 +86,7 @@ enum class ExtraType(val label: String) {
 @Composable
 fun ScoringScreen(
     matchViewModel: MatchViewModel = viewModel(),
+    matchSessionViewModel: MatchSessionViewModel = viewModel(),
     /** Saved private player profiles to offer in the picker during match-time flows. */
     savedPlayers: List<PlayerProfile> = emptyList(),
     /**
@@ -103,24 +115,42 @@ fun ScoringScreen(
         }
     }
 
+    // Tab selection state — survives recomposition without resetting scoring state
+    var selectedTab by rememberSaveable { mutableStateOf(ScoringScreenTab.SCORE) }
+
     Box(modifier = modifier.fillMaxSize()) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            // --- Quick navigation bar ---
+        Column(modifier = Modifier.fillMaxSize()) {
+            // --- Tab navigation ---
             if (activeMatch != null) {
-                QuickNavBar(
-                    onMatchDetails = onMatchDetails,
-                    onViewScorecard = onViewScorecard,
-                    onCameraPreview = onCameraPreview,
-                    onViewTimeline = onViewTimeline
-                )
-                Spacer(modifier = Modifier.height(8.dp))
+                ScrollableTabRow(selectedTabIndex = selectedTab.ordinal) {
+                    ScoringScreenTab.entries.forEach { tab ->
+                        Tab(
+                            selected = selectedTab == tab,
+                            onClick = { selectedTab = tab },
+                            text = { Text(tab.title) }
+                        )
+                    }
+                }
             }
+
+            Box(modifier = Modifier.weight(1f)) {
+                when (selectedTab) {
+                    ScoringScreenTab.TIMELINE -> BallTimelineScreen(
+                        matchViewModel = matchViewModel,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                    ScoringScreenTab.SCORECARD -> ScorecardScreen(
+                        matchViewModel = matchViewModel,
+                        matchSessionViewModel = matchSessionViewModel,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                    ScoringScreenTab.SCORE -> Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(rememberScrollState())
+                            .padding(16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
 
             // --- Match header ---
             if (activeMatch != null) {
@@ -326,7 +356,10 @@ fun ScoringScreen(
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                 )
             }
-        }
+                    } // closes ScoringScreenTab.SCORE Column
+                } // closes when (selectedTab)
+            } // closes Box(weight(1f))
+        } // closes outer Column
 
         // --- Pending action dialogs (rendered on top of everything) ---
         when (val action = console.pendingAction) {
@@ -1601,40 +1634,6 @@ private fun PlayerDropdown(
                 )
             }
         }
-    }
-}
-
-// =============================================================================
-// Quick navigation bar
-// =============================================================================
-
-@Composable
-private fun QuickNavBar(
-    onMatchDetails: () -> Unit,
-    onViewScorecard: () -> Unit,
-    onCameraPreview: () -> Unit,
-    onViewTimeline: () -> Unit
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        OutlinedButton(
-            onClick = onMatchDetails,
-            modifier = Modifier.weight(1f)
-        ) { Text("Match Hub", style = MaterialTheme.typography.labelSmall) }
-        OutlinedButton(
-            onClick = onViewScorecard,
-            modifier = Modifier.weight(1f)
-        ) { Text("Scorecard", style = MaterialTheme.typography.labelSmall) }
-        OutlinedButton(
-            onClick = onCameraPreview,
-            modifier = Modifier.weight(1f)
-        ) { Text("Camera", style = MaterialTheme.typography.labelSmall) }
-        OutlinedButton(
-            onClick = onViewTimeline,
-            modifier = Modifier.weight(1f)
-        ) { Text("Timeline", style = MaterialTheme.typography.labelSmall) }
     }
 }
 
