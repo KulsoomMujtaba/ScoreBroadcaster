@@ -70,11 +70,11 @@ enum class BottomNavTab(
 }
 
 private fun selectedTab(route: String?): BottomNavTab? = when (route) {
-    "home" -> BottomNavTab.HOME
-    "my_matches", "create_match", "player_setup", "match_summary", "match_details"
+    BottomNavTab.HOME.route -> BottomNavTab.HOME
+    BottomNavTab.MATCHES.route, "create_match", "player_setup", "match_summary", "match_details"
         -> BottomNavTab.MATCHES
-    "score_tab", "scoring_only", "scorecard", "ball_timeline" -> BottomNavTab.SCORE
-    "live_hub", "live_preview", "stream_setup", "stream_preview" -> BottomNavTab.LIVE
+    BottomNavTab.SCORE.route, "scoring_only", "scorecard", "ball_timeline" -> BottomNavTab.SCORE
+    BottomNavTab.LIVE.route, "live_preview", "stream_setup", "stream_preview" -> BottomNavTab.LIVE
     else -> null
 }
 
@@ -177,7 +177,12 @@ fun AppShell(
                                         saveState = true
                                     }
                                     launchSingleTop = true
-                                    restoreState = true
+                                    // restoreState must be false for the HOME/start-destination tab.
+                                    // popUpTo(startDest) { saveState = true } saves state keyed to
+                                    // the start destination's ID; navigating to HOME with
+                                    // restoreState = true would find that saved state and incorrectly
+                                    // re-add the previously-popped tab destinations on top of HOME.
+                                    restoreState = tab != BottomNavTab.HOME
                                 }
                             },
                             icon = { Icon(tab.icon, contentDescription = tab.label) },
