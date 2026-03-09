@@ -15,7 +15,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.SwapVert
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -166,7 +166,7 @@ fun CreateMatchScreen(
                 }
             ) {
                 Icon(
-                    imageVector = Icons.Default.SwapVert,
+                    imageVector = Icons.Default.Star,
                     contentDescription = "Swap teams"
                 )
             }
