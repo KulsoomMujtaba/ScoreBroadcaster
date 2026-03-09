@@ -2,6 +2,7 @@ package com.example.scorebroadcaster.viewmodel
 
 import android.util.Log
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import com.example.scorebroadcaster.data.InningsPhase
 import com.example.scorebroadcaster.data.MatchState
 import com.example.scorebroadcaster.data.PendingAction
@@ -11,6 +12,7 @@ import com.example.scorebroadcaster.data.entity.BattingEntry
 import com.example.scorebroadcaster.data.entity.BowlingEntry
 import com.example.scorebroadcaster.data.entity.FallOfWicket
 import com.example.scorebroadcaster.data.entity.Match
+import com.example.scorebroadcaster.data.entity.MatchStatus
 import com.example.scorebroadcaster.data.entity.Partnership
 import com.example.scorebroadcaster.data.entity.Player
 import com.example.scorebroadcaster.data.entity.Team
@@ -19,9 +21,13 @@ import com.example.scorebroadcaster.domain.BallEvent
 import com.example.scorebroadcaster.domain.MaidenOverCalculator
 import com.example.scorebroadcaster.domain.reduce
 import com.example.scorebroadcaster.repository.MatchRepository
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 class MatchViewModel : ViewModel() {
 
@@ -72,6 +78,13 @@ class MatchViewModel : ViewModel() {
     private var currentTeamAName = "Team A"
     private var currentTeamBName = "Team B"
 
+    // Job reference for in-flight state-resumption coroutine; cancelled on re-init.
+    private var resumeJob: Job? = null
+
+    // Mutex serialises ball-event persistence writes so rapid mutations (add/undo)
+    // never produce a stale database row order.
+    private val persistMutex = Mutex()
+
     // ---------------------------------------------------------------------------
     // Core scoring
     // ---------------------------------------------------------------------------
@@ -112,6 +125,7 @@ class MatchViewModel : ViewModel() {
             _fallOfWickets.value = computeFallOfWickets(_events.value)
         }
         updateConsoleAfterEvent(stamped, prevState, newState)
+        persistCurrentInningsEvents()
     }
 
     private fun updateConsoleAfterEvent(
@@ -315,6 +329,7 @@ class MatchViewModel : ViewModel() {
             // Console state is not fully rolled back (other stats require a full replay),
             // but maiden counts are derived from the event log and can always be kept correct.
             refreshMaidensFromEvents(_events.value)
+            persistCurrentInningsEvents()
         }
     }
 
@@ -337,6 +352,7 @@ class MatchViewModel : ViewModel() {
             val updated = current.toMutableList().apply { set(globalIndex, updatedEvent) }
             _firstInningsEvents.value = updated
             rebuildFirstInningsSnapshot(updated)
+            persistFirstInningsEvents()
         } else {
             val current = _events.value
             if (globalIndex < 0 || globalIndex >= current.size) return
@@ -345,6 +361,7 @@ class MatchViewModel : ViewModel() {
                 .copy(teamAName = currentTeamAName, teamBName = currentTeamBName)
             _fallOfWickets.value = computeFallOfWickets(_events.value)
             refreshMaidensFromEvents(_events.value)
+            persistCurrentInningsEvents()
         }
     }
 
@@ -366,6 +383,7 @@ class MatchViewModel : ViewModel() {
             val updated = current.filterIndexed { index, _ -> index != globalIndex }
             _firstInningsEvents.value = updated
             rebuildFirstInningsSnapshot(updated)
+            persistFirstInningsEvents()
         } else {
             val current = _events.value
             if (globalIndex < 0 || globalIndex >= current.size) return
@@ -374,6 +392,7 @@ class MatchViewModel : ViewModel() {
                 .copy(teamAName = currentTeamAName, teamBName = currentTeamBName)
             _fallOfWickets.value = computeFallOfWickets(_events.value)
             refreshMaidensFromEvents(_events.value)
+            persistCurrentInningsEvents()
         }
     }
 
@@ -567,6 +586,9 @@ class MatchViewModel : ViewModel() {
      * Saves the first-innings totals and scorecard snapshot, then enters the
      * [InningsPhase.INNINGS_BREAK] state so the UI can display the target
      * before the scorer explicitly starts the second innings.
+     *
+     * Also persists the match status as [MatchStatus.INNINGS_BREAK] so that
+     * [initFromMatch] can correctly restore the innings-break UI after an app restart.
      */
     fun endFirstInnings() {
         val state = _state.value
@@ -595,6 +617,12 @@ class MatchViewModel : ViewModel() {
             _completedPartnerships.value + listOfNotNull(ongoing)
         _currentPartnership.value = null
         _completedPartnerships.value = emptyList()
+        // Persist match status so innings-break state survives app restart.
+        _activeMatch.value?.let { match ->
+            val updated = match.copy(status = MatchStatus.INNINGS_BREAK)
+            _activeMatch.value = updated
+            MatchRepository.updateMatch(updated)
+        }
     }
 
     /**
@@ -635,11 +663,25 @@ class MatchViewModel : ViewModel() {
             firstInningsBowlingEntries = console.firstInningsBowlingEntries,
             target = console.target
         )
+        // Restore match status to IN_PROGRESS for the second innings.
+        val updated = match.copy(status = MatchStatus.IN_PROGRESS)
+        _activeMatch.value = updated
+        MatchRepository.updateMatch(updated)
     }
 
-    /** Mark the match as complete. */
+    /**
+     * Mark the match as complete.
+     *
+     * Also persists the match status as [MatchStatus.COMPLETED] so that the match list
+     * correctly reflects the outcome after an app restart.
+     */
     fun endMatch() {
         _consoleState.value = _consoleState.value.copy(phase = InningsPhase.MATCH_COMPLETE)
+        _activeMatch.value?.let { match ->
+            val updated = match.copy(status = MatchStatus.COMPLETED)
+            _activeMatch.value = updated
+            MatchRepository.updateMatch(updated)
+        }
     }
 
     /**
@@ -671,6 +713,10 @@ class MatchViewModel : ViewModel() {
      * Initialise (or re-initialise) the scoring session from a [Match] entity.
      * Clears the current event log and seeds [MatchState] with the team names
      * derived from the match's batting/bowling order.
+     *
+     * After clearing state, launches a coroutine to load any persisted [BallEvent]s for this
+     * match and replays them through the reducer, so an in-progress match is fully restored
+     * after an app restart without requiring manual re-entry of events.
      */
     fun initFromMatch(match: Match) {
         _activeMatch.value = match
@@ -694,6 +740,104 @@ class MatchViewModel : ViewModel() {
             battingTeamName = match.battingFirst.name,
             bowlingTeamName = match.bowlingFirst.name
         )
+
+        // Load persisted events and rebuild state so the match can be resumed after restart.
+        // Cancel any in-flight resumption from a previous initFromMatch call.
+        resumeJob?.cancel()
+        resumeJob = viewModelScope.launch {
+            val (firstEvents, secondEvents) = MatchRepository.loadAllBallEvents(match.localId)
+            if (firstEvents.isEmpty() && secondEvents.isEmpty()) return@launch
+            resumePersistedState(match, firstEvents, secondEvents)
+        }
+    }
+
+    /**
+     * Rebuild scoring state from persisted [BallEvent] lists after an app restart.
+     *
+     * Replays events through [reduce] to produce the correct aggregate [MatchState], restores
+     * the fall-of-wickets list, and sets [ScoringConsoleState] to [InningsPhase.SETUP] so the
+     * scorer can re-select the current batters and bowler before resuming.
+     *
+     * Three resume scenarios are handled:
+     * 1. **Second innings in progress** — both innings have events.
+     * 2. **Innings break** — only first-innings events, match status is [MatchStatus.INNINGS_BREAK].
+     * 3. **First innings in progress** — only first-innings events, match still [MatchStatus.IN_PROGRESS].
+     */
+    private fun resumePersistedState(
+        match: Match,
+        firstEvents: List<BallEvent>,
+        secondEvents: List<BallEvent>
+    ) {
+        when {
+            secondEvents.isNotEmpty() -> {
+                // Second innings in progress: restore both innings logs.
+                val firstState = reduce(firstEvents)
+                _firstInningsEvents.value = firstEvents
+
+                // In the second innings the batting team is the one that bowled first.
+                // teamA/teamB are swapped relative to the first-innings setup so that
+                // the MatchState team names reflect the current batting/bowling order.
+                currentTeamAName = match.bowlingFirst.name
+                currentTeamBName = match.battingFirst.name
+                _events.value = secondEvents
+                _state.value = reduce(secondEvents)
+                    .copy(teamAName = currentTeamAName, teamBName = currentTeamBName)
+                _fallOfWickets.value = computeFallOfWickets(secondEvents)
+
+                _consoleState.value = ScoringConsoleState(
+                    inningsNumber = 2,
+                    phase = InningsPhase.SETUP,
+                    battingTeamName = match.bowlingFirst.name,
+                    bowlingTeamName = match.battingFirst.name,
+                    firstInningsRuns = firstState.runs,
+                    firstInningsWickets = firstState.wickets,
+                    firstInningsExtras = firstState.extras,
+                    firstInningsWides = firstState.wides,
+                    firstInningsNoBalls = firstState.noBalls,
+                    firstInningsByes = firstState.byes,
+                    firstInningsLegByes = firstState.legByes,
+                    firstInningsOvers = firstState.overs,
+                    firstInningsBalls = firstState.balls,
+                    target = firstState.runs + 1
+                )
+            }
+            firstEvents.isNotEmpty() && match.status == MatchStatus.INNINGS_BREAK -> {
+                // Innings break: first innings done, second not yet started.
+                val firstState = reduce(firstEvents)
+                _firstInningsEvents.value = firstEvents
+
+                _consoleState.value = ScoringConsoleState(
+                    inningsNumber = 1,
+                    phase = InningsPhase.INNINGS_BREAK,
+                    battingTeamName = match.battingFirst.name,
+                    bowlingTeamName = match.bowlingFirst.name,
+                    firstInningsRuns = firstState.runs,
+                    firstInningsWickets = firstState.wickets,
+                    firstInningsExtras = firstState.extras,
+                    firstInningsWides = firstState.wides,
+                    firstInningsNoBalls = firstState.noBalls,
+                    firstInningsByes = firstState.byes,
+                    firstInningsLegByes = firstState.legByes,
+                    firstInningsOvers = firstState.overs,
+                    firstInningsBalls = firstState.balls,
+                    target = firstState.runs + 1
+                )
+            }
+            firstEvents.isNotEmpty() -> {
+                // First innings in progress: restore event log and aggregate score.
+                _events.value = firstEvents
+                _state.value = reduce(firstEvents)
+                    .copy(teamAName = currentTeamAName, teamBName = currentTeamBName)
+                _fallOfWickets.value = computeFallOfWickets(firstEvents)
+
+                _consoleState.value = ScoringConsoleState(
+                    inningsNumber = 1,
+                    phase = InningsPhase.SETUP,
+                    battingTeamName = match.battingFirst.name,
+                    bowlingTeamName = match.bowlingFirst.name
+                )
+            }
+        }
     }
 
     // ---------------------------------------------------------------------------
@@ -728,6 +872,46 @@ class MatchViewModel : ViewModel() {
         val lastBowlerId = console.currentBowler?.id
         // The same bowler cannot bowl consecutive overs
         return bowlingTeam.players.filter { it.id != lastBowlerId }
+    }
+
+    /**
+     * Fire-and-forget persistence of the current-innings event log.
+     *
+     * Saves [_events] for the innings indicated by [ScoringConsoleState.inningsNumber].
+     * Called after every mutation that changes the active-innings event log
+     * (add, undo, replace, delete).
+     *
+     * A [persistMutex] ensures successive saves are serialised so rapid mutations
+     * (e.g. undo spam) cannot produce an out-of-order write.
+     */
+    private fun persistCurrentInningsEvents() {
+        val match = _activeMatch.value ?: return
+        val inningsNumber = _consoleState.value.inningsNumber
+        val events = _events.value
+        viewModelScope.launch {
+            persistMutex.withLock {
+                MatchRepository.saveBallEvents(match.localId, inningsNumber, events)
+            }
+        }
+    }
+
+    /**
+     * Fire-and-forget persistence of the first-innings event log.
+     *
+     * Saves [_firstInningsEvents] as inningsNumber 1.
+     * Called after a [replaceBallEvent] or [deleteBallEvent] that modifies the
+     * archived first-innings log.
+     *
+     * A [persistMutex] ensures successive saves are serialised.
+     */
+    private fun persistFirstInningsEvents() {
+        val match = _activeMatch.value ?: return
+        val events = _firstInningsEvents.value
+        viewModelScope.launch {
+            persistMutex.withLock {
+                MatchRepository.saveBallEvents(match.localId, 1, events)
+            }
+        }
     }
 
     private fun incrementBall(overs: Int, balls: Int): Pair<Int, Int> =

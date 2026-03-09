@@ -157,5 +157,37 @@ class MatchRepository(
             }
             repo.updateMatch(match)
         }
+
+        /**
+         * Persist all [events] for the given innings to Room.
+         *
+         * Delegates to the active instance.  Logs a warning and no-ops if called before the
+         * repository is initialised (should not happen during normal scoring).
+         */
+        suspend fun saveBallEvents(
+            matchId: String,
+            inningsNumber: Int,
+            events: List<BallEvent>
+        ) {
+            val repo = _instance
+            if (repo == null) {
+                Log.w("MatchRepository", "saveBallEvents called before repository was initialised; save dropped")
+                return
+            }
+            repo.saveBallEvents(matchId, inningsNumber, events)
+        }
+
+        /**
+         * Load all persisted [BallEvent]s for a match, split by innings.
+         *
+         * Delegates to the active instance.  Returns empty lists if called before the
+         * repository is initialised or if no events have been saved yet.
+         */
+        suspend fun loadAllBallEvents(
+            matchId: String
+        ): Pair<List<BallEvent>, List<BallEvent>> {
+            val repo = _instance ?: return Pair(emptyList(), emptyList())
+            return repo.loadAllBallEvents(matchId)
+        }
     }
 }
