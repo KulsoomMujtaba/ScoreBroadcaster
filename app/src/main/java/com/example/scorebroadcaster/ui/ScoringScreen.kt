@@ -108,11 +108,27 @@ fun ScoringScreen(
     // Capture a non-nullable snapshot so inner lambdas and blocks can smart-cast.
     val activeMatch: Match? = match
 
-    // Show openers-setup dialog when the innings phase is SETUP
+    // Show openers-setup dialog when setup is genuinely required.
+    // Setup is required when:
+    //  - The innings phase is SETUP (fresh innings, never started), OR
+    //  - The innings is active (FIRST_INNINGS / SECOND_INNINGS) but the current striker,
+    //    non-striker, or bowler is missing — e.g. after an app restart where the live
+    //    player references cannot be reconstructed from the persisted event log alone.
+    val needsInningsSetup = console.phase == InningsPhase.SETUP ||
+            ((console.phase == InningsPhase.FIRST_INNINGS ||
+                    console.phase == InningsPhase.SECOND_INNINGS) &&
+                    (console.striker == null ||
+                            console.nonStriker == null ||
+                            console.currentBowler == null))
+
     var setupDialogVisible by remember { mutableStateOf(false) }
-    LaunchedEffect(console.phase) {
-        if (console.phase == InningsPhase.SETUP && activeMatch != null) {
+    LaunchedEffect(needsInningsSetup) {
+        if (needsInningsSetup && activeMatch != null) {
             setupDialogVisible = true
+            Log.d("SetupFlow", "Setup required: phase=${console.phase}, " +
+                    "striker=${console.striker?.name}, " +
+                    "nonStriker=${console.nonStriker?.name}, " +
+                    "bowler=${console.currentBowler?.name}")
         }
     }
 
@@ -201,7 +217,7 @@ fun ScoringScreen(
             }
 
             // --- Innings setup required banner ---
-            if (console.phase == InningsPhase.SETUP && !setupDialogVisible && activeMatch != null) {
+            if (needsInningsSetup && !setupDialogVisible && activeMatch != null) {
                 Surface(
                     color = MaterialTheme.colorScheme.errorContainer,
                     shape = MaterialTheme.shapes.medium,
@@ -232,9 +248,12 @@ fun ScoringScreen(
             }
 
             // --- Scoring buttons ---
+            // Scoring is disabled when setup is still pending (players not identified) to
+            // prevent silent no-ops in addBallEvent when striker is null.
             val scoringEnabled = (console.phase == InningsPhase.FIRST_INNINGS ||
                     console.phase == InningsPhase.SECOND_INNINGS) &&
-                    console.pendingAction == null
+                    console.pendingAction == null &&
+                    console.striker != null
             // Wicket details dialog state — shown before dispatching the Wicket event
             var showWicketDialog by remember { mutableStateOf(false) }
             // Extras entry dialog state
@@ -413,7 +432,7 @@ fun ScoringScreen(
         }
 
         // --- Openers setup dialog ---
-        if (setupDialogVisible && activeMatch != null && console.phase == InningsPhase.SETUP) {
+        if (setupDialogVisible && activeMatch != null && needsInningsSetup) {
             val battingTeam = if (console.inningsNumber == 1) activeMatch.battingFirst
                               else activeMatch.bowlingFirst
             val bowlingTeam = if (console.inningsNumber == 1) activeMatch.bowlingFirst

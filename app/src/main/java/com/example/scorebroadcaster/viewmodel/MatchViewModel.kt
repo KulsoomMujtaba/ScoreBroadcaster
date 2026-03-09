@@ -450,7 +450,11 @@ class MatchViewModel : ViewModel() {
     }
 
     fun resetMatch() {
+        val matchId = _activeMatch.value?.localId
+        Log.d("ResetFlow", "Reset requested for active match: ${_activeMatch.value?.displayTitle} (id=$matchId)")
+        resumeJob?.cancel()
         _events.value = emptyList()
+        _firstInningsEvents.value = emptyList()
         _state.value = MatchState()
         _consoleState.value = ScoringConsoleState()
         _fallOfWickets.value = emptyList()
@@ -460,6 +464,13 @@ class MatchViewModel : ViewModel() {
         _firstInningsCompletedPartnerships.value = emptyList()
         currentTeamAName = "Team A"
         currentTeamBName = "Team B"
+        if (matchId != null) {
+            viewModelScope.launch {
+                MatchRepository.deleteAllBallEvents(matchId)
+                Log.d("ResetFlow", "Ball events cleared from DB for match: $matchId")
+            }
+        }
+        Log.d("ResetFlow", "In-memory scoring state cleared")
     }
 
     // ---------------------------------------------------------------------------
@@ -732,21 +743,27 @@ class MatchViewModel : ViewModel() {
             teamAName = currentTeamAName,
             teamBName = currentTeamBName
         )
-        val hasPlayers = match.battingFirst.players.isNotEmpty() &&
-                match.bowlingFirst.players.isNotEmpty()
+        // Start with FIRST_INNINGS phase so that the setup dialog is driven by
+        // needsInningsSetup (missing players) rather than by phase alone.
+        // resumePersistedState will correct the phase to INNINGS_BREAK / SECOND_INNINGS /
+        // MATCH_COMPLETE if the persisted match status requires it.
         _consoleState.value = ScoringConsoleState(
             inningsNumber = 1,
-            phase = if (hasPlayers) InningsPhase.SETUP else InningsPhase.FIRST_INNINGS,
+            phase = InningsPhase.FIRST_INNINGS,
             battingTeamName = match.battingFirst.name,
             bowlingTeamName = match.bowlingFirst.name
         )
+        Log.d("ResumeFlow", "initFromMatch: ${match.displayTitle}, status=${match.status}")
 
         // Load persisted events and rebuild state so the match can be resumed after restart.
         // Cancel any in-flight resumption from a previous initFromMatch call.
         resumeJob?.cancel()
         resumeJob = viewModelScope.launch {
             val (firstEvents, secondEvents) = MatchRepository.loadAllBallEvents(match.localId)
-            if (firstEvents.isEmpty() && secondEvents.isEmpty()) return@launch
+            if (firstEvents.isEmpty() && secondEvents.isEmpty()) {
+                Log.d("ResumeFlow", "No persisted events — fresh match, awaiting setup")
+                return@launch
+            }
             resumePersistedState(match, firstEvents, secondEvents)
         }
     }
@@ -755,38 +772,93 @@ class MatchViewModel : ViewModel() {
      * Rebuild scoring state from persisted [BallEvent] lists after an app restart.
      *
      * Replays events through [reduce] to produce the correct aggregate [MatchState], restores
-     * the fall-of-wickets list, and sets [ScoringConsoleState] to [InningsPhase.SETUP] so the
-     * scorer can re-select the current batters and bowler before resuming.
+     * the fall-of-wickets list, and sets [ScoringConsoleState] to the correct [InningsPhase]
+     * so that the UI reflects the saved match state rather than forcing a fresh openers
+     * selection every time.
      *
-     * Three resume scenarios are handled:
-     * 1. **Second innings in progress** — both innings have events.
-     * 2. **Innings break** — only first-innings events, match status is [MatchStatus.INNINGS_BREAK].
-     * 3. **First innings in progress** — only first-innings events, match still [MatchStatus.IN_PROGRESS].
+     * The current bowler is reconstructed from the last event that carries a bowler reference.
+     * Striker and non-striker cannot be reliably derived from [BallEvent]s alone; when they
+     * are absent [ScoringScreen] will detect the missing players via [needsInningsSetup] and
+     * show the setup dialog so the scorer can identify who is currently at the crease.
+     *
+     * Four resume scenarios are handled:
+     * 1. **Match completed** — match.status is [MatchStatus.COMPLETED]; phase restored to
+     *    [InningsPhase.MATCH_COMPLETE] so no setup dialog is shown.
+     * 2. **Second innings in progress** — both innings have events; phase restored to
+     *    [InningsPhase.SECOND_INNINGS].
+     * 3. **Innings break** — only first-innings events, match status is [MatchStatus.INNINGS_BREAK].
+     * 4. **First innings in progress** — only first-innings events, match still [MatchStatus.IN_PROGRESS];
+     *    phase restored to [InningsPhase.FIRST_INNINGS].
      */
     private fun resumePersistedState(
         match: Match,
         firstEvents: List<BallEvent>,
         secondEvents: List<BallEvent>
     ) {
+        Log.d("ResumeFlow", "resumePersistedState: status=${match.status}, " +
+                "firstEvents=${firstEvents.size}, secondEvents=${secondEvents.size}")
         when {
+            // ── 1. Match already completed ────────────────────────────────────────────
+            match.status == MatchStatus.COMPLETED -> {
+                if (secondEvents.isNotEmpty()) {
+                    val firstState = reduce(firstEvents)
+                    _firstInningsEvents.value = firstEvents
+                    currentTeamAName = match.bowlingFirst.name
+                    currentTeamBName = match.battingFirst.name
+                    _events.value = secondEvents
+                    _state.value = reduce(secondEvents)
+                        .copy(teamAName = currentTeamAName, teamBName = currentTeamBName)
+                    _fallOfWickets.value = computeFallOfWickets(secondEvents)
+                    _consoleState.value = ScoringConsoleState(
+                        inningsNumber = 2,
+                        phase = InningsPhase.MATCH_COMPLETE,
+                        battingTeamName = match.bowlingFirst.name,
+                        bowlingTeamName = match.battingFirst.name,
+                        firstInningsRuns = firstState.runs,
+                        firstInningsWickets = firstState.wickets,
+                        firstInningsExtras = firstState.extras,
+                        firstInningsWides = firstState.wides,
+                        firstInningsNoBalls = firstState.noBalls,
+                        firstInningsByes = firstState.byes,
+                        firstInningsLegByes = firstState.legByes,
+                        firstInningsOvers = firstState.overs,
+                        firstInningsBalls = firstState.balls,
+                        target = firstState.runs + 1
+                    )
+                } else if (firstEvents.isNotEmpty()) {
+                    _events.value = firstEvents
+                    _state.value = reduce(firstEvents)
+                        .copy(teamAName = currentTeamAName, teamBName = currentTeamBName)
+                    _fallOfWickets.value = computeFallOfWickets(firstEvents)
+                    _consoleState.value = ScoringConsoleState(
+                        inningsNumber = 1,
+                        phase = InningsPhase.MATCH_COMPLETE,
+                        battingTeamName = match.battingFirst.name,
+                        bowlingTeamName = match.bowlingFirst.name
+                    )
+                }
+                Log.d("ResumeFlow", "Restored: match complete")
+            }
+
+            // ── 2. Second innings in progress ─────────────────────────────────────────
             secondEvents.isNotEmpty() -> {
-                // Second innings in progress: restore both innings logs.
                 val firstState = reduce(firstEvents)
                 _firstInningsEvents.value = firstEvents
-
                 // In the second innings the batting team is the one that bowled first.
-                // teamA/teamB are swapped relative to the first-innings setup so that
-                // the MatchState team names reflect the current batting/bowling order.
                 currentTeamAName = match.bowlingFirst.name
                 currentTeamBName = match.battingFirst.name
                 _events.value = secondEvents
                 _state.value = reduce(secondEvents)
                     .copy(teamAName = currentTeamAName, teamBName = currentTeamBName)
                 _fallOfWickets.value = computeFallOfWickets(secondEvents)
-
+                // Reconstruct the current bowler from the last stamped ball event.
+                val currentBowler = secondEvents.lastOrNull { it.bowler != null }?.bowler
                 _consoleState.value = ScoringConsoleState(
                     inningsNumber = 2,
-                    phase = InningsPhase.SETUP,
+                    // Use SECOND_INNINGS so the UI does not force a fresh openers setup.
+                    // needsInningsSetup in ScoringScreen will detect missing striker/bowler
+                    // and show the restore-players dialog if required.
+                    phase = InningsPhase.SECOND_INNINGS,
                     battingTeamName = match.bowlingFirst.name,
                     bowlingTeamName = match.battingFirst.name,
                     firstInningsRuns = firstState.runs,
@@ -798,14 +870,17 @@ class MatchViewModel : ViewModel() {
                     firstInningsLegByes = firstState.legByes,
                     firstInningsOvers = firstState.overs,
                     firstInningsBalls = firstState.balls,
-                    target = firstState.runs + 1
+                    target = firstState.runs + 1,
+                    currentBowler = currentBowler
                 )
+                Log.d("ResumeFlow", "Restored: 2nd innings in progress " +
+                        "(${secondEvents.size} balls), bowler=${currentBowler?.name}")
             }
+
+            // ── 3. Innings break ──────────────────────────────────────────────────────
             firstEvents.isNotEmpty() && match.status == MatchStatus.INNINGS_BREAK -> {
-                // Innings break: first innings done, second not yet started.
                 val firstState = reduce(firstEvents)
                 _firstInningsEvents.value = firstEvents
-
                 _consoleState.value = ScoringConsoleState(
                     inningsNumber = 1,
                     phase = InningsPhase.INNINGS_BREAK,
@@ -822,20 +897,30 @@ class MatchViewModel : ViewModel() {
                     firstInningsBalls = firstState.balls,
                     target = firstState.runs + 1
                 )
+                Log.d("ResumeFlow", "Restored: innings break, " +
+                        "1st inn total=${firstState.runs}/${firstState.wickets}")
             }
+
+            // ── 4. First innings in progress ──────────────────────────────────────────
             firstEvents.isNotEmpty() -> {
-                // First innings in progress: restore event log and aggregate score.
                 _events.value = firstEvents
                 _state.value = reduce(firstEvents)
                     .copy(teamAName = currentTeamAName, teamBName = currentTeamBName)
                 _fallOfWickets.value = computeFallOfWickets(firstEvents)
-
+                // Reconstruct the current bowler from the last stamped ball event.
+                val currentBowler = firstEvents.lastOrNull { it.bowler != null }?.bowler
                 _consoleState.value = ScoringConsoleState(
                     inningsNumber = 1,
-                    phase = InningsPhase.SETUP,
+                    // Use FIRST_INNINGS so the UI does not force a fresh openers setup.
+                    // needsInningsSetup in ScoringScreen will detect missing striker/bowler
+                    // and show the restore-players dialog if required.
+                    phase = InningsPhase.FIRST_INNINGS,
                     battingTeamName = match.battingFirst.name,
-                    bowlingTeamName = match.bowlingFirst.name
+                    bowlingTeamName = match.bowlingFirst.name,
+                    currentBowler = currentBowler
                 )
+                Log.d("ResumeFlow", "Restored: 1st innings in progress " +
+                        "(${firstEvents.size} balls), bowler=${currentBowler?.name}")
             }
         }
     }
