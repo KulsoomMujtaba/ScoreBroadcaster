@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 
 /**
@@ -52,6 +53,24 @@ class MatchSessionViewModel(application: Application) : AndroidViewModel(applica
 
     private val _activeMatch = MutableStateFlow<Match?>(matchRepository.activeMatch)
     val activeMatch: StateFlow<Match?> = _activeMatch.asStateFlow()
+
+    /**
+     * The most recent non-completed match from local storage that can be resumed.
+     *
+     * Derived reactively from the Room-backed [matchFlow] so it survives app restarts:
+     * as soon as the database emits a match with [Match.isResumable] == true, this
+     * StateFlow updates — no explicit call is required on app open.
+     *
+     * Useful for driving the "Resume In-Progress Match" card on the Home screen when
+     * [activeMatch] is null (e.g. immediately after an app restart).
+     */
+    val resumableMatch: StateFlow<Match?> = matchRepository.matchFlow
+        .map { list -> list.firstOrNull { it.isResumable } }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.Eagerly,
+            initialValue = null
+        )
 
     /** Draft match being assembled across the Create → Players → Summary flow. */
     private val _pendingMatch = MutableStateFlow<Match?>(null)
