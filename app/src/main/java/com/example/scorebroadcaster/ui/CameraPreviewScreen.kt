@@ -162,7 +162,6 @@ fun CameraPreviewScreen(
             matchOvers = activeMatch?.overs,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = 8.dp)
         )
 
         // Close button – top-end corner, inside the safe area

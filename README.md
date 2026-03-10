@@ -217,7 +217,25 @@ Scoring is modelled as an append-only event log:
 
 ## Development Log
 
-### 2026-03-09 – UI Improvement: Broadcast Overlay Compacted to TV Lower-Third Strip
+### 2026-03-10 – UI Improvement: Broadcast Overlay Restructured into Left / Middle / Right Lower-Third
+
+**Files changed:**
+| File | Action |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/ui/BroadcastOverlayMapper.kt` | Updated – added `oversText` field to `BowlerOverlayInfo` |
+| `app/src/main/java/com/example/scorebroadcaster/ui/ScoreboardOverlay.kt` | Updated – restructured center and bowler sections, added ball label text |
+| `app/src/main/java/com/example/scorebroadcaster/streaming/ScoreboardOverlayRenderer.kt` | Updated – restructured center and bowler sections to match Compose overlay |
+| `app/src/main/java/com/example/scorebroadcaster/ui/CameraPreviewScreen.kt` | Updated – removed bottom padding so overlay sits flush to screen edge |
+| `README.md` | Updated |
+
+**Explanation:**
+
+The broadcast overlay was restructured into a slimmer three-part horizontal lower-third layout with tighter spacing:
+
+- **Broadcast overlay restructured into left / middle / right layout.** Batter, score, bowler, and current-over balls are now aligned into a compact two-row lower-third. The left section shows striker and non-striker (name + runs/balls with a small amber strike indicator). The middle section is exactly two lines: line 1 shows team names, score, and overs all on the same row with the score slightly bolder; line 2 shows the run rate or chase info. The right section shows bowler name, figures, and overs all on one line, with compact ball-indicator circles below.
+- **Ball indicators now show result labels.** Each circle in the current-over row displays the delivery outcome (0, 1, 2, 4, 6, W, W+, N+) in a small label. Colour coding is preserved: red for wickets, blue for boundaries, outlined-only for dots, amber for extras, grey for other runs.
+- **Overlay now sits flush to the bottom with reduced height and tighter spacing.** The bottom padding that previously left a visible gap under the overlay has been removed. The center section was reduced from four stacked elements to two lines, significantly lowering the overall strip height toward the 64–80 dp target.
+
 
 **Files changed:**
 | File | Action |
