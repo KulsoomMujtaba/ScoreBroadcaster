@@ -217,6 +217,23 @@ Scoring is modelled as an append-only event log:
 
 ## Development Log
 
+### 2026-03-10 – UI Improvement: Broadcast Overlay Visual Refinement (Ball Centering + Blue/Gold Palette)
+
+**Files changed:**
+| File | Action |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/ui/ScoreboardOverlay.kt` | Updated – ball indicator text properly centered; overlay color scheme updated |
+| `app/src/main/java/com/example/scorebroadcaster/streaming/ScoreboardOverlayRenderer.kt` | Updated – ball color palette updated; wide/no-ball handling added |
+| `README.md` | Updated |
+
+**Explanation:**
+
+Two targeted visual fixes applied to both the Compose overlay and the Canvas stream renderer:
+
+- **Ball indicator text properly centered.** Each ball indicator circle in the current-over row is now a fixed 20 dp container using `clip(CircleShape)` + `background()` with `contentAlignment = Alignment.Center`, ensuring the label is exactly centred both horizontally and vertically. Font size updated to 8 sp to fit comfortably inside the larger circle. The renderer already used the correct `cy - (ascent + descent) / 2` formula for vertical centering; no change needed there.
+- **Overlay color scheme updated from single yellow to blue + gold broadcast palette.** Background strip changed from plain black to deep blue (`#1F3A5F`, 80 % opacity). Score text changed from amber to white for maximum contrast. Run-rate / context line changed from amber to light gray. Ball indicators now use a two-tone scheme: boundary 4 uses warm gold (`#F2C94C`), six uses a stronger gold (`#FFAA00`), wide and no-ball use a lighter amber (`#F5A623`), regular run deliveries use a dark blue-neutral (`#2A3A4A`), wickets remain red, and dot balls remain an outlined circle. The striker indicator dot and accent color use warm gold throughout.
+- **Improved readability for live preview and stream overlay.** The new palette avoids large areas of yellow, uses high contrast white text on dark blue, and produces a TV-broadcast aesthetic that is easier to read over camera video.
+
 ### 2026-03-10 – UI Improvement: Broadcast Overlay Restructured into Left / Middle / Right Lower-Third
 
 **Files changed:**
