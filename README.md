@@ -1135,6 +1135,27 @@ The original `ScoreEvent` sealed class modelled each delivery as a single, flat 
 - The `InningsPhase.SETUP` phase continues to disable scoring controls (no change to reducer or phase logic).
 - Wicket flow, bowler-change flow, camera preview, and Facebook Live flow are unaffected.
 
+### 2026-03-10 – Run Out Dismissal Now Supports Two Fielders
+
+**Feature:** Run Out dismissal now supports one or two fielders. Scorecards render as `"run out (Fielder)"` or `"run out (Fielder / Fielder)"` to match real cricket scoring conventions.
+
+**Files modified:**
+| File | Change |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/data/entity/DismissalDetail.kt` | Replaced `fielder: Player?` with `fielders: List<Player>`; updated `toScorecardString()` for Run Out to join up to two fielder names with ` / ` |
+| `app/src/main/java/com/example/scorebroadcaster/data/local/BallEventEntity.kt` | Added `fielder2Name` column; updated `toDomain()` and `toEntity()` mapping helpers |
+| `app/src/main/java/com/example/scorebroadcaster/data/local/ScoredDatabase.kt` | Bumped schema version to 7 |
+| `app/src/main/java/com/example/scorebroadcaster/ui/ScoringScreen.kt` | `WicketDetailsDialog` now shows a second optional fielder selector for Run Out; `buildExtrasEvent` updated to use `fielders` list |
+| `app/src/main/java/com/example/scorebroadcaster/ui/EditBallDialog.kt` | Updated to use `fielders` list in `buildEvent()` and `buildExtrasEventForEdit()` |
+| `README.md` | Added this log entry |
+
+**What was added/refactored:**
+
+- **`DismissalDetail.fielders`** — replaces the single `fielder: Player?` with `fielders: List<Player>`. Rules: Bowled/LBW → empty list; Caught/Stumped → one player; Run Out → one or two players.
+- **`toScorecardString()` update** — Run Out now renders as `"run out (Smith)"` or `"run out (Smith / Khan)"` using `joinToString(" / ")`.
+- **`WicketDetailsDialog` update** — When dismissal type is Run Out, the dialog shows a required "Fielder 1" selector and an optional "+ Add second fielder" button. Selecting a second fielder shows a "Fielder 2" selector (excluding the already-chosen Fielder 1). The second fielder can be removed with a "Remove second fielder" button.
+- **DB schema v7** — New `fielder2Name` column in `ball_events` stores the optional second fielder's name for Run Out dismissals.
+
 ### 2026-03-06 – Wicket Dismissal Detail Support
 
 **Feature:** Proper wicket detail capture for realistic MVP scoring — dismissal type, fielder, and bowler credit.

@@ -24,6 +24,8 @@ import androidx.room.TypeConverters
  * - v6: Added `eventStrikerName`, `eventStrikerSourceProfileId`, `eventNonStrikerName`,
  *       `eventNonStrikerSourceProfileId` columns to `ball_events` so batting state can be
  *       restored after an app restart without re-opening the innings-setup dialog.
+ * - v7: Added `fielder2Name` column to `ball_events` to support run-out dismissals
+ *       involving two fielders.
  *
  * Use [getInstance] to obtain the singleton database instance.
  */
@@ -35,7 +37,7 @@ import androidx.room.TypeConverters
         MatchEntity::class,
         BallEventEntity::class
     ],
-    version = 6,
+    version = 7,
     exportSchema = false
 )
 @TypeConverters(PlayerListTypeConverter::class)

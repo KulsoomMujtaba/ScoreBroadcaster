@@ -1303,6 +1303,8 @@ internal fun WicketDetailsDialog(
     var batterOut by remember { mutableStateOf(striker ?: nonStriker) }
     var selectedType by remember { mutableStateOf(DismissalType.BOWLED) }
     var selectedFielder by remember { mutableStateOf<Player?>(null) }
+    var selectedFielder2 by remember { mutableStateOf<Player?>(null) }
+    var showSecondFielder by remember { mutableStateOf(false) }
 
     // Fielder is relevant for Caught, Stumped, and Run Out dismissals.
     val requiresFielder = selectedType in listOf(
@@ -1350,6 +1352,8 @@ internal fun WicketDetailsDialog(
                                 onClick = {
                                     selectedType = type
                                     selectedFielder = null
+                                    selectedFielder2 = null
+                                    showSecondFielder = false
                                 },
                                 label = { Text(type.label) }
                             )
@@ -1362,6 +1366,8 @@ internal fun WicketDetailsDialog(
                                 onClick = {
                                     selectedType = type
                                     selectedFielder = null
+                                    selectedFielder2 = null
+                                    showSecondFielder = false
                                 },
                                 label = { Text(type.label) }
                             )
@@ -1375,7 +1381,7 @@ internal fun WicketDetailsDialog(
                     val fielderLabel = when (selectedType) {
                         DismissalType.CAUGHT -> "Catcher"
                         DismissalType.STUMPED -> "Wicketkeeper"
-                        DismissalType.RUN_OUT -> "Fielder (optional)"
+                        DismissalType.RUN_OUT -> "Fielder 1"
                         else -> "Fielder"
                     }
                     Text(fielderLabel, style = MaterialTheme.typography.labelMedium)
@@ -1391,9 +1397,56 @@ internal fun WicketDetailsDialog(
                                 selected = selectedFielder?.id == player.id,
                                 onClick = {
                                     selectedFielder = if (selectedFielder?.id == player.id) null else player
+                                    // If first fielder cleared, also clear second
+                                    if (selectedFielder == null) {
+                                        selectedFielder2 = null
+                                        showSecondFielder = false
+                                    }
                                 },
                                 label = { Text(player.name) }
                             )
+                        }
+                    }
+
+                    // Second fielder (Run Out only)
+                    if (selectedType == DismissalType.RUN_OUT) {
+                        if (!showSecondFielder) {
+                            TextButton(
+                                onClick = { showSecondFielder = true },
+                                enabled = selectedFielder != null
+                            ) {
+                                Text("+ Add second fielder (optional)")
+                            }
+                        } else {
+                            Text("Fielder 2 (optional)", style = MaterialTheme.typography.labelMedium)
+                            if (bowlingTeamPlayers.isEmpty()) {
+                                Text(
+                                    "No fielding team players registered.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                )
+                            } else {
+                                bowlingTeamPlayers
+                                    .filter { it.id != selectedFielder?.id }
+                                    .forEach { player ->
+                                        FilterChip(
+                                            selected = selectedFielder2?.id == player.id,
+                                            onClick = {
+                                                selectedFielder2 =
+                                                    if (selectedFielder2?.id == player.id) null else player
+                                            },
+                                            label = { Text(player.name) }
+                                        )
+                                    }
+                                if (selectedFielder2 != null) {
+                                    TextButton(onClick = {
+                                        selectedFielder2 = null
+                                        showSecondFielder = false
+                                    }) {
+                                        Text("Remove second fielder")
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -1403,11 +1456,17 @@ internal fun WicketDetailsDialog(
             Button(
                 onClick = {
                     val out = batterOut ?: return@Button
+                    val fieldersList = when {
+                        !requiresFielder -> emptyList()
+                        selectedType == DismissalType.RUN_OUT ->
+                            listOfNotNull(selectedFielder, selectedFielder2)
+                        else -> listOfNotNull(selectedFielder)
+                    }
                     onConfirm(
                         DismissalDetail(
                             batter = out,
                             dismissalType = selectedType,
-                            fielder = if (requiresFielder) selectedFielder else null,
+                            fielders = fieldersList,
                             bowler = currentBowler
                         )
                     )
@@ -1610,7 +1669,7 @@ private fun buildExtrasEvent(
         DismissalDetail(
             batter = batterOut,
             dismissalType = DismissalType.RUN_OUT,
-            fielder = fielder,
+            fielders = listOfNotNull(fielder),
             bowler = null
         )
     } else null

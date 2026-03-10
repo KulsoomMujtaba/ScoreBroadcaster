@@ -129,7 +129,7 @@ internal fun EditBallDialog(
     var hasWicket        by remember { mutableStateOf(event.wicket) }
     var batterOut        by remember { mutableStateOf(event.dismissalDetail?.batter ?: battingPlayers.firstOrNull()) }
     var dismissalType    by remember { mutableStateOf(event.dismissalDetail?.dismissalType ?: DismissalType.BOWLED) }
-    var selectedFielder  by remember { mutableStateOf(event.dismissalDetail?.fielder) }
+    var selectedFielder  by remember { mutableStateOf(event.dismissalDetail?.fielders?.getOrNull(0)) }
     var selectedBowler   by remember { mutableStateOf(event.dismissalDetail?.bowler ?: bowlingPlayers.firstOrNull()) }
 
     // Delete confirmation
@@ -148,7 +148,7 @@ internal fun EditBallDialog(
             DismissalDetail(
                 batter      = batterOut!!,
                 dismissalType = dismissalType,
-                fielder     = if (requiresFielder) selectedFielder else null,
+                fielders    = if (requiresFielder) listOfNotNull(selectedFielder) else emptyList(),
                 bowler      = effectiveBowler
             )
         } else null
@@ -534,7 +534,7 @@ private fun buildExtrasEventForEdit(
         DismissalDetail(
             batter        = batterOut,
             dismissalType = DismissalType.RUN_OUT,
-            fielder       = fielder,
+            fielders      = listOfNotNull(fielder),
             bowler        = null
         )
     } else null
