@@ -217,6 +217,21 @@ Scoring is modelled as an append-only event log:
 
 ## Development Log
 
+### 2026-03-10 – UI Improvement: Broadcast Overlay Styling Refinement (Text Hierarchy + Outlined Ball Indicators)
+
+**Files changed:**
+| File | Action |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/ui/ScoreboardOverlay.kt` | Updated – middle section text hierarchy improved; ball indicators changed to outlined circles |
+| `app/src/main/java/com/example/scorebroadcaster/streaming/ScoreboardOverlayRenderer.kt` | Updated – matching text hierarchy and outlined ball indicators in Canvas renderer |
+| `README.md` | Updated |
+
+**Explanation:**
+
+- **Middle section text hierarchy improved with multiple highlight colors.** The centre score section now uses separate `Text` composables for each element, each with its own colour and weight. Team names use light grey (`#D0D0D0`) with normal weight. The score (`177-2`) remains pure white and extra-bold so it visually stands out the most. Overs are now rendered in warm gold (`#F2C94C`) to draw attention. The run rate label is muted grey while the run rate value is rendered in gold, giving a two-tone "RR 6.21" display.
+- **Score and overs now visually emphasized.** The score uses `FontWeight.ExtraBold` and a slightly larger font size than the surrounding text. Overs use the accent gold colour to distinguish them from the team name text.
+- **Current-over balls changed from filled circles to outlined broadcast-style indicators.** Ball indicators no longer use a coloured fill background. Instead every ball is an outlined circle with a thin border and the label centred inside, matching professional cricket broadcast graphics. Border and text colours follow the same rules: light grey for dots and normal runs (white text), gold border and text for boundary 4, stronger gold border with white text for six, red border and text for wickets, and amber border and text for wides and no-balls.
+
 ### 2026-03-10 – UI Improvement: Broadcast Overlay Visual Refinement (Ball Centering + Blue/Gold Palette)
 
 **Files changed:**

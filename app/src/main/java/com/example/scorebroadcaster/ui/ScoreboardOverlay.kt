@@ -35,14 +35,14 @@ import com.example.scorebroadcaster.data.entity.Player
 private val OverlayBackground = Color(0xCC1F3A5F)   // deep blue, slight transparency
 private val PrimaryText = Color.White
 private val SecondaryText = Color(0xFFCCCCCC)
-private val AccentColor = Color(0xFFF2C94C)          // warm gold – accents
+private val TeamNameColor = Color(0xFFD0D0D0)        // light grey for team names in middle section
+private val AccentColor = Color(0xFFF2C94C)          // warm gold – accents + overs highlight
 private val WicketColor = Color(0xFFFF4444)
 private val BoundaryFourColor = Color(0xFFF2C94C)    // gold highlight for boundary 4
 private val BoundarySixColor = Color(0xFFFFAA00)     // stronger gold highlight for six
 private val DotBorderColor = Color(0xFF888888)
 private val StrikerDotColor = Color(0xFFF2C94C)      // gold accent indicator next to striker name
 private val WideBallColor = Color(0xFFF5A623)        // lighter gold/amber for wide and no-ball
-private val NormalBallColor = Color(0xFF2A3A4A)      // dark blue-neutral for regular runs
 
 // ─── Public composable ────────────────────────────────────────────────────────
 
@@ -182,9 +182,9 @@ private fun CenterScoreSection(
         ) {
             Text(
                 text = model.matchTitle,
-                color = SecondaryText,
+                color = TeamNameColor,
                 fontSize = 10.sp,
-                fontWeight = FontWeight.Medium,
+                fontWeight = FontWeight.Normal,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -196,19 +196,41 @@ private fun CenterScoreSection(
             )
             Text(
                 text = model.overs,
-                color = SecondaryText,
+                color = AccentColor,
                 fontSize = 10.sp
             )
         }
-        // Line 2: run rate / chase info (always rendered to hold height)
-        Text(
-            text = model.contextLine ?: "",
-            color = SecondaryText,
-            fontSize = 10.sp,
-            fontWeight = FontWeight.SemiBold,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
+        // Line 2: run rate / chase info – label in muted grey, value in gold/white
+        val contextLine = model.contextLine ?: ""
+        if (contextLine.startsWith("RUN RATE ")) {
+            val rrValue = contextLine.removePrefix("RUN RATE ")
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(3.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "RR",
+                    color = SecondaryText,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = rrValue,
+                    color = AccentColor,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        } else {
+            Text(
+                text = contextLine,
+                color = SecondaryText,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
     }
 }
 
@@ -272,31 +294,27 @@ private fun BallIndicator(label: String) {
     val isWicket = label == "W"
     val isBoundarySix = label == "6"
     val isBoundaryFour = label == "4"
-    val isDot = label == "0" || label == "."
     val isWide = label == "Wd"
     val isNoBall = label == "NB"
 
-    val bgColor = when {
+    val borderColor = when {
         isWicket -> WicketColor
-        isBoundarySix -> BoundarySixColor
         isBoundaryFour -> BoundaryFourColor
-        isDot -> Color.Transparent
+        isBoundarySix -> BoundarySixColor
         isWide || isNoBall -> WideBallColor
-        else -> NormalBallColor
+        else -> DotBorderColor  // light grey for dots and normal runs
     }
-    val textColor = if (isDot) DotBorderColor else Color.White
-    val borderModifier = if (isDot) {
-        Modifier.border(1.dp, DotBorderColor, CircleShape)
-    } else {
-        Modifier
+    val textColor = when {
+        isWicket -> WicketColor
+        isBoundaryFour -> BoundaryFourColor
+        isWide || isNoBall -> WideBallColor
+        else -> PrimaryText  // white for dot, normal runs, six
     }
 
     Box(
         modifier = Modifier
             .size(20.dp)
-            .clip(CircleShape)
-            .background(bgColor)
-            .then(borderModifier),
+            .border(1.5.dp, borderColor, CircleShape),
         contentAlignment = Alignment.Center
     ) {
         Text(
