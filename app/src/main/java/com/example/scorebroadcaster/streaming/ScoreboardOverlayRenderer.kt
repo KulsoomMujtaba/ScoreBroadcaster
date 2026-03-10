@@ -21,8 +21,9 @@ private const val STRIKER_DOT_OFFSET_X = 8f        // px from section left edge 
 private const val STRIKER_DOT_VERTICAL_CENTER = 0.5f  // fraction of row height
 private const val STRIKER_DOT_RADIUS = 4f           // px
 
-private const val BALL_INDICATOR_RADIUS = 7f        // px
-private const val BALL_INDICATOR_SPACING = 16f      // px between ball centre points
+// Landscape defaults (portrait values are scaled down in render)
+private const val BALL_INDICATOR_RADIUS = 5.5f      // px (reduced from 7f for slimmer over row)
+private const val BALL_INDICATOR_SPACING = 12f      // px between ball centre points (reduced from 16f)
 
 /** Two-space gap used to separate inline text segments within a single drawn line. */
 private const val INLINE_GAP = "  "
@@ -43,10 +44,13 @@ private const val INLINE_GAP = "  "
  *
  * @param streamWidth   Width of the video stream in pixels (default 1280).
  * @param overlayHeight Height of the overlay strip in pixels (default 90).
+ * @param streamHeight  Full height of the video stream in pixels (default 720); used to detect
+ *                      portrait vs landscape orientation for responsive layout adjustments.
  */
 class ScoreboardOverlayRenderer(
     private val streamWidth: Int = 1280,
-    private val overlayHeight: Int = 90
+    private val overlayHeight: Int = 90,
+    private val streamHeight: Int = 720
 ) {
 
     /** Single reused bitmap buffer; erased to transparent before each render. */
@@ -59,6 +63,12 @@ class ScoreboardOverlayRenderer(
 
     private val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.argb(0xCC, 0x1F, 0x3A, 0x5F)
+        style = Paint.Style.FILL
+    }
+
+    // Darker contrasting background for the centre score capsule
+    private val centerPanelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.argb(0xDD, 0x0D, 0x21, 0x37)
         style = Paint.Style.FILL
     }
 
@@ -178,6 +188,27 @@ class ScoreboardOverlayRenderer(
         val fw = streamWidth.toFloat()
         val fh = overlayHeight.toFloat()
 
+        // Detect orientation from stream dimensions
+        val isPortrait = streamWidth < streamHeight
+
+        // Apply orientation-responsive font sizes (portrait is 85% of landscape)
+        val fontScale = if (isPortrait) 0.85f else 1f
+        titlePaint.textSize = 13f * fontScale
+        inningsBadgePaint.textSize = 13f * fontScale
+        scorePaint.textSize = 18f * fontScale
+        oversPaint.textSize = 13f * fontScale
+        contextPaint.textSize = 13f * fontScale
+        contextValuePaint.textSize = 13f * fontScale
+        batterNameBoldPaint.textSize = 15f * fontScale
+        batterNamePaint.textSize = 15f * fontScale
+        batterStatsBoldPaint.textSize = 13f * fontScale
+        batterStatsPaint.textSize = 13f * fontScale
+        bowlerNamePaint.textSize = 15f * fontScale
+        bowlerFiguresPaint.textSize = 13f * fontScale
+
+        val ballRadius = if (isPortrait) BALL_INDICATOR_RADIUS * 0.85f else BALL_INDICATOR_RADIUS
+        val ballSpacing = if (isPortrait) BALL_INDICATOR_SPACING * 0.85f else BALL_INDICATOR_SPACING
+
         // Single background rect for the full strip
         canvas.drawRect(0f, 0f, fw, fh, bgPaint)
 
@@ -185,32 +216,34 @@ class ScoreboardOverlayRenderer(
         val showBatters = model.striker != null || model.nonStriker != null
         val showBowler = model.bowler != null
 
-        val pad = 10f
+        // Portrait uses narrower side sections so the center stays readable
+        val sideWidthFraction = if (isPortrait) 0.32f else 0.36f
+        val pad = if (isPortrait) 8f else 10f
 
         when {
             showBatters && showBowler -> {
-                val leftW = fw * 0.36f
-                val rightW = fw * 0.36f
+                val leftW = fw * sideWidthFraction
+                val rightW = fw * sideWidthFraction
                 val centreX = leftW
                 val centreW = fw - leftW - rightW
                 drawBattersSection(model, pad, fh, leftW - pad * 2)
-                drawCentreSection(model, centreX + pad, fh, centreW - pad * 2)
-                drawBowlerSection(model, centreX + centreW + pad, fh, rightW - pad * 2)
+                drawCentreSection(model, centreX, fh, centreW, pad)
+                drawBowlerSection(model, centreX + centreW + pad, fh, rightW - pad * 2, ballRadius, ballSpacing)
             }
             showBatters -> {
                 val leftW = fw * 0.50f
                 val centreW = fw - leftW
                 drawBattersSection(model, pad, fh, leftW - pad * 2)
-                drawCentreSection(model, leftW + pad, fh, centreW - pad * 2)
+                drawCentreSection(model, leftW, fh, centreW, pad)
             }
             showBowler -> {
                 val rightW = fw * 0.50f
                 val centreW = fw - rightW
-                drawCentreSection(model, pad, fh, centreW - pad * 2)
-                drawBowlerSection(model, centreW + pad, fh, rightW - pad * 2)
+                drawCentreSection(model, 0f, fh, centreW, pad)
+                drawBowlerSection(model, centreW + pad, fh, rightW - pad * 2, ballRadius, ballSpacing)
             }
             else -> {
-                drawCentreSection(model, pad, fh, fw - pad * 2)
+                drawCentreSection(model, 0f, fh, fw, pad)
             }
         }
 
@@ -258,10 +291,24 @@ class ScoreboardOverlayRenderer(
 
     private fun drawCentreSection(
         model: BroadcastOverlayModel,
-        left: Float,
+        sectionLeft: Float,
         totalH: Float,
-        width: Float
+        sectionWidth: Float,
+        pad: Float
     ) {
+        // Draw the distinct darker rounded capsule behind the center score area
+        val panelLeft = sectionLeft + pad / 2f
+        val panelRight = sectionLeft + sectionWidth - pad / 2f
+        val panelCorner = 6f
+        canvas.drawRoundRect(
+            panelLeft, 2f,
+            panelRight, totalH - 2f,
+            panelCorner, panelCorner,
+            centerPanelPaint
+        )
+
+        val left = sectionLeft + pad
+        val width = sectionWidth - pad * 2
         val cx = left + width / 2f
 
         // ── Line 1: matchTitle  score  overs – all on one baseline ────────────
@@ -311,7 +358,9 @@ class ScoreboardOverlayRenderer(
         model: BroadcastOverlayModel,
         left: Float,
         totalH: Float,
-        width: Float
+        width: Float,
+        ballRadius: Float = BALL_INDICATOR_RADIUS,
+        ballSpacing: Float = BALL_INDICATOR_SPACING
     ) {
         val bowler = model.bowler ?: return
 
@@ -337,10 +386,10 @@ class ScoreboardOverlayRenderer(
         if (model.currentOverBalls.isNotEmpty()) {
             val by = totalH * 0.80f
             val rightEdge = left + width - 6f
-            var bx = rightEdge - BALL_INDICATOR_RADIUS
+            var bx = rightEdge - ballRadius
             model.currentOverBalls.reversed().forEach { ball ->
-                drawBallIndicator(ball, bx, by, BALL_INDICATOR_RADIUS)
-                bx -= BALL_INDICATOR_SPACING
+                drawBallIndicator(ball, bx, by, ballRadius)
+                bx -= ballSpacing
             }
         }
     }

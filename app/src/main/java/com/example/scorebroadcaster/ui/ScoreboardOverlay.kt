@@ -1,5 +1,6 @@
 package com.example.scorebroadcaster.ui
 
+import android.content.res.Configuration
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -18,6 +19,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -33,6 +35,7 @@ import com.example.scorebroadcaster.data.entity.Player
 // ─── Overlay colour palette ───────────────────────────────────────────────────
 
 private val OverlayBackground = Color(0xCC1F3A5F)   // deep blue, slight transparency
+private val CenterPanelBackground = Color(0xDD0D2137) // darker contrasting tone for center panel
 private val PrimaryText = Color.White
 private val SecondaryText = Color(0xFFCCCCCC)
 private val TeamNameColor = Color(0xFFD0D0D0)        // light grey for team names in middle section
@@ -75,13 +78,25 @@ fun ScoreboardOverlay(
     val showBatters = model.striker != null || model.nonStriker != null
     val showBowler = model.bowler != null
 
+    // Detect orientation for responsive layout sizing
+    val configuration = LocalConfiguration.current
+    val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+
+    val hPad = if (isLandscape) 10.dp else 6.dp
+    val sideWeight = if (isLandscape) 1f else 0.8f
+    val centerWeight = if (showBatters || showBowler) {
+        if (isLandscape) 1.2f else 1.0f
+    } else {
+        1f
+    }
+
     // Single unified lower-third strip – left / center / right columns
     Row(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp))
             .background(OverlayBackground)
-            .padding(horizontal = 10.dp, vertical = 4.dp),
+            .padding(horizontal = hPad, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
@@ -90,14 +105,16 @@ fun ScoreboardOverlay(
             BattersSection(
                 striker = model.striker,
                 nonStriker = model.nonStriker,
-                modifier = Modifier.weight(1f)
+                isLandscape = isLandscape,
+                modifier = Modifier.weight(sideWeight)
             )
         }
 
         // ── Center: score capsule ──────────────────────────────────────────────
         CenterScoreSection(
             model = model,
-            modifier = Modifier.weight(if (showBatters || showBowler) 1.2f else 1f)
+            isLandscape = isLandscape,
+            modifier = Modifier.weight(centerWeight)
         )
 
         // ── Right: bowler + current-over balls ────────────────────────────────
@@ -105,7 +122,8 @@ fun ScoreboardOverlay(
             BowlerSection(
                 bowler = checkNotNull(model.bowler),
                 currentOverBalls = model.currentOverBalls,
-                modifier = Modifier.weight(1f)
+                isLandscape = isLandscape,
+                modifier = Modifier.weight(sideWeight)
             )
         }
     }
@@ -117,21 +135,24 @@ fun ScoreboardOverlay(
 private fun BattersSection(
     striker: BatterOverlayInfo?,
     nonStriker: BatterOverlayInfo?,
+    isLandscape: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     Column(
         modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(1.dp)
     ) {
-        striker?.let { BatterRow(batter = it) }
-        nonStriker?.let { BatterRow(batter = it) }
+        striker?.let { BatterRow(batter = it, isLandscape = isLandscape) }
+        nonStriker?.let { BatterRow(batter = it, isLandscape = isLandscape) }
     }
 }
 
 @Composable
-private fun BatterRow(batter: BatterOverlayInfo) {
+private fun BatterRow(batter: BatterOverlayInfo, isLandscape: Boolean = true) {
     val nameColor = if (batter.isStriker) PrimaryText else SecondaryText
     val weight = if (batter.isStriker) FontWeight.Bold else FontWeight.Normal
+    val nameFontSize = if (isLandscape) 11.sp else 10.sp
+    val statsFontSize = if (isLandscape) 10.sp else 9.sp
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(3.dp)
@@ -147,7 +168,7 @@ private fun BatterRow(batter: BatterOverlayInfo) {
         Text(
             text = batter.name,
             color = nameColor,
-            fontSize = 11.sp,
+            fontSize = nameFontSize,
             fontWeight = weight,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -157,7 +178,7 @@ private fun BatterRow(batter: BatterOverlayInfo) {
         Text(
             text = "${batter.runs}(${batter.balls})",
             color = nameColor,
-            fontSize = 10.sp,
+            fontSize = statsFontSize,
             fontWeight = weight
         )
     }
@@ -168,68 +189,80 @@ private fun BatterRow(batter: BatterOverlayInfo) {
 @Composable
 private fun CenterScoreSection(
     model: BroadcastOverlayModel,
+    isLandscape: Boolean = true,
     modifier: Modifier = Modifier
 ) {
-    Column(
-        modifier = modifier,
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(2.dp)
+    val scoreFontSize = if (isLandscape) 13.sp else 12.sp
+    val smallFontSize = if (isLandscape) 10.sp else 9.sp
+
+    // The center section gets its own darker rounded capsule to distinguish it from the outer strip
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(5.dp))
+            .background(CenterPanelBackground)
+            .padding(horizontal = 6.dp, vertical = 2.dp),
+        contentAlignment = Alignment.Center
     ) {
-        // Line 1: matchTitle  score  overs – all on one row
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalAlignment = Alignment.CenterVertically
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(1.dp)
         ) {
-            Text(
-                text = model.matchTitle,
-                color = TeamNameColor,
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Normal,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Text(
-                text = model.score,
-                color = PrimaryText,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.ExtraBold
-            )
-            Text(
-                text = model.overs,
-                color = AccentColor,
-                fontSize = 10.sp
-            )
-        }
-        // Line 2: run rate / chase info – label in muted grey, value in gold/white
-        val contextLine = model.contextLine ?: ""
-        if (contextLine.startsWith("RUN RATE ")) {
-            val rrValue = contextLine.removePrefix("RUN RATE ")
+            // Line 1: matchTitle  score  overs – all on one row
             Row(
-                horizontalArrangement = Arrangement.spacedBy(3.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "RR",
-                    color = SecondaryText,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.SemiBold
+                    text = model.matchTitle,
+                    color = TeamNameColor,
+                    fontSize = smallFontSize,
+                    fontWeight = FontWeight.Normal,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = rrValue,
+                    text = model.score,
+                    color = PrimaryText,
+                    fontSize = scoreFontSize,
+                    fontWeight = FontWeight.ExtraBold
+                )
+                Text(
+                    text = model.overs,
                     color = AccentColor,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.SemiBold
+                    fontSize = smallFontSize
                 )
             }
-        } else {
-            Text(
-                text = contextLine,
-                color = SecondaryText,
-                fontSize = 10.sp,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+            // Line 2: run rate / chase info – label in muted grey, value in gold/white
+            val contextLine = model.contextLine ?: ""
+            if (contextLine.startsWith("RUN RATE ")) {
+                val rrValue = contextLine.removePrefix("RUN RATE ")
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(3.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "RR",
+                        color = SecondaryText,
+                        fontSize = smallFontSize,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = rrValue,
+                        color = AccentColor,
+                        fontSize = smallFontSize,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            } else {
+                Text(
+                    text = contextLine,
+                    color = SecondaryText,
+                    fontSize = smallFontSize,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
         }
     }
 }
@@ -240,8 +273,11 @@ private fun CenterScoreSection(
 private fun BowlerSection(
     bowler: BowlerOverlayInfo,
     currentOverBalls: List<String>,
+    isLandscape: Boolean = true,
     modifier: Modifier = Modifier
 ) {
+    val nameFontSize = if (isLandscape) 11.sp else 10.sp
+    val statsFontSize = if (isLandscape) 10.sp else 9.sp
     Column(
         modifier = modifier,
         horizontalAlignment = Alignment.End,
@@ -255,7 +291,7 @@ private fun BowlerSection(
             Text(
                 text = bowler.name,
                 color = PrimaryText,
-                fontSize = 11.sp,
+                fontSize = nameFontSize,
                 fontWeight = FontWeight.Bold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -264,20 +300,20 @@ private fun BowlerSection(
             Text(
                 text = "${bowler.wickets}-${bowler.runs}",
                 color = SecondaryText,
-                fontSize = 10.sp
+                fontSize = statsFontSize
             )
             if (bowler.oversText.isNotEmpty()) {
                 Text(
                     text = "(${bowler.oversText})",
                     color = SecondaryText,
-                    fontSize = 10.sp
+                    fontSize = statsFontSize
                 )
             }
         }
-        // Current-over ball circles – compact row
+        // Current-over ball circles – compact row, reduced spacing
         if (currentOverBalls.isNotEmpty()) {
             Row(
-                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                horizontalArrangement = Arrangement.spacedBy(1.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 currentOverBalls.forEach { ballLabel -> BallIndicator(label = ballLabel) }
@@ -313,14 +349,14 @@ private fun BallIndicator(label: String) {
 
     Box(
         modifier = Modifier
-            .size(20.dp)
-            .border(1.5.dp, borderColor, CircleShape),
+            .size(14.dp)
+            .border(1.dp, borderColor, CircleShape),
         contentAlignment = Alignment.Center
     ) {
         Text(
             text = displayLabel,
             color = textColor,
-            fontSize = 8.sp,
+            fontSize = 7.sp,
             fontWeight = FontWeight.Bold,
             maxLines = 1
         )
