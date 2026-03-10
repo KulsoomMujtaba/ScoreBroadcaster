@@ -71,6 +71,10 @@ import com.example.scorebroadcaster.data.entity.toMatchPlayer
 import com.example.scorebroadcaster.domain.BallEvent
 import com.example.scorebroadcaster.viewmodel.MatchViewModel
 import com.example.scorebroadcaster.viewmodel.MatchSessionViewModel
+import com.example.scorebroadcaster.ui.theme.BoundaryFourContainer
+import com.example.scorebroadcaster.ui.theme.OnBoundaryFourContainer
+import com.example.scorebroadcaster.ui.theme.BoundarySixContainer
+import com.example.scorebroadcaster.ui.theme.OnBoundarySixContainer
 
 /** Tabs shown in the top navigation of [ScoringScreen]. */
 enum class ScoringScreenTab(val title: String) {
@@ -903,8 +907,8 @@ private fun RunButtonsGrid(
                 enabled = enabled,
                 modifier = Modifier.weight(1f),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                    containerColor = BoundaryFourContainer,
+                    contentColor = OnBoundaryFourContainer
                 )
             )
             ScoringActionButton(
@@ -913,8 +917,8 @@ private fun RunButtonsGrid(
                 enabled = enabled,
                 modifier = Modifier.weight(1f),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onTertiaryContainer
+                    containerColor = BoundarySixContainer,
+                    contentColor = OnBoundarySixContainer
                 )
             )
         }
