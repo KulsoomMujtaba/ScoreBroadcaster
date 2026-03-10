@@ -58,7 +58,7 @@ class ScoreboardOverlayRenderer(
     // ── Paint objects (allocated once) ────────────────────────────────────────
 
     private val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.argb(0xCC, 0, 0, 0)
+        color = Color.argb(0xCC, 0x1F, 0x3A, 0x5F)
         style = Paint.Style.FILL
     }
 
@@ -73,7 +73,7 @@ class ScoreboardOverlayRenderer(
         typeface = Typeface.DEFAULT_BOLD
     }
     private val scorePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.parseColor("#FFFFCC00")
+        color = Color.WHITE
         textSize = 18f
         typeface = Typeface.DEFAULT_BOLD
     }
@@ -82,7 +82,7 @@ class ScoreboardOverlayRenderer(
         textSize = 13f
     }
     private val contextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.parseColor("#FFFFCC00")
+        color = Color.parseColor("#FFCCCCCC")
         textSize = 13f
         typeface = Typeface.DEFAULT_BOLD
     }
@@ -105,7 +105,7 @@ class ScoreboardOverlayRenderer(
         textSize = 13f
     }
     private val strikerDotPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.parseColor("#FFFFCC00")
+        color = Color.parseColor("#FFF2C94C")   // warm gold accent
         style = Paint.Style.FILL
     }
     private val bowlerNamePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -123,12 +123,20 @@ class ScoreboardOverlayRenderer(
         color = Color.parseColor("#FFFF4444")
         style = Paint.Style.FILL
     }
-    private val ballBoundaryPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.parseColor("#FF44AAFF")
+    private val ballBoundaryFourPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.parseColor("#FFF2C94C")   // warm gold for boundary 4
+        style = Paint.Style.FILL
+    }
+    private val ballBoundarySixPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.parseColor("#FFFFAA00")   // stronger gold for six
+        style = Paint.Style.FILL
+    }
+    private val ballWidePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.parseColor("#FFF5A623")   // lighter gold/amber for wide and no-ball
         style = Paint.Style.FILL
     }
     private val ballRunsPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.parseColor("#FF444444")
+        color = Color.parseColor("#FF2A3A4A")   // dark blue-neutral for regular runs
         style = Paint.Style.FILL
     }
     private val ballDotBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -326,13 +334,18 @@ class ScoreboardOverlayRenderer(
 
     private fun drawBallIndicator(label: String, cx: Float, cy: Float, r: Float) {
         val isWicket = label == "W"
-        val isBoundary = label == "4" || label == "6"
+        val isBoundarySix = label == "6"
+        val isBoundaryFour = label == "4"
         val isDot = label == "0" || label == "."
+        val isWide = label == "Wd"
+        val isNoBall = label == "NB"
 
         when {
             isWicket -> canvas.drawCircle(cx, cy, r, ballWicketPaint)
-            isBoundary -> canvas.drawCircle(cx, cy, r, ballBoundaryPaint)
+            isBoundarySix -> canvas.drawCircle(cx, cy, r, ballBoundarySixPaint)
+            isBoundaryFour -> canvas.drawCircle(cx, cy, r, ballBoundaryFourPaint)
             isDot -> canvas.drawCircle(cx, cy, r, ballDotBorderPaint)
+            isWide || isNoBall -> canvas.drawCircle(cx, cy, r, ballWidePaint)
             else -> canvas.drawCircle(cx, cy, r, ballRunsPaint)
         }
         // Draw label text centred inside the circle
