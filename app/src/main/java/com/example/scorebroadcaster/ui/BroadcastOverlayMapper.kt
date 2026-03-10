@@ -16,7 +16,9 @@ data class BatterOverlayInfo(
 data class BowlerOverlayInfo(
     val name: String,
     val wickets: Int,
-    val runs: Int
+    val runs: Int,
+    /** Overs bowled as a string, e.g. "5.3". Empty if unavailable. */
+    val oversText: String = ""
 )
 
 /**
@@ -89,7 +91,7 @@ object BroadcastOverlayMapper {
             BatterOverlayInfo(it.player.name, it.runs, it.balls, isStriker = false)
         }
         val bowler = console.currentBowlerEntry?.let {
-            BowlerOverlayInfo(it.player.name, it.wickets, it.runs)
+            BowlerOverlayInfo(it.player.name, it.wickets, it.runs, "${it.overs}.${it.balls}")
         }
 
         return BroadcastOverlayModel(

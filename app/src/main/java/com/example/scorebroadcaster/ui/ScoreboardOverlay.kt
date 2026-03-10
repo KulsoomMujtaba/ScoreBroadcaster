@@ -87,14 +87,14 @@ fun ScoreboardOverlay(
             BattersSection(
                 striker = model.striker,
                 nonStriker = model.nonStriker,
-                modifier = Modifier.weight(1.2f)
+                modifier = Modifier.weight(1f)
             )
         }
 
         // ── Center: score capsule ──────────────────────────────────────────────
         CenterScoreSection(
             model = model,
-            modifier = Modifier.weight(if (showBatters || showBowler) 0.85f else 1f)
+            modifier = Modifier.weight(if (showBatters || showBowler) 1.2f else 1f)
         )
 
         // ── Right: bowler + current-over balls ────────────────────────────────
@@ -170,51 +170,42 @@ private fun CenterScoreSection(
     Column(
         modifier = modifier,
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(1.dp)
+        verticalArrangement = Arrangement.spacedBy(2.dp)
     ) {
-        // Title + innings badge on same line
+        // Line 1: matchTitle  score  overs – all on one row
         Row(
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
                 text = model.matchTitle,
                 color = SecondaryText,
-                fontSize = 9.sp,
+                fontSize = 10.sp,
                 fontWeight = FontWeight.Medium,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
             Text(
-                text = model.inningsBadge,
+                text = model.score,
                 color = AccentColor,
-                fontSize = 9.sp,
-                fontWeight = FontWeight.SemiBold
+                fontSize = 13.sp,
+                fontWeight = FontWeight.ExtraBold
             )
-        }
-        // Score – most prominent element
-        Text(
-            text = model.score,
-            color = AccentColor,
-            fontSize = 18.sp,
-            fontWeight = FontWeight.ExtraBold
-        )
-        Text(
-            text = model.overs,
-            color = SecondaryText,
-            fontSize = 9.sp
-        )
-        // Run rate / chase info directly below overs
-        model.contextLine?.let { line ->
             Text(
-                text = line,
-                color = AccentColor,
-                fontSize = 9.sp,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                text = model.overs,
+                color = SecondaryText,
+                fontSize = 10.sp
             )
         }
+        // Line 2: run rate / chase info (always rendered to hold height)
+        Text(
+            text = model.contextLine ?: "",
+            color = AccentColor,
+            fontSize = 10.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 
@@ -229,22 +220,36 @@ private fun BowlerSection(
     Column(
         modifier = modifier,
         horizontalAlignment = Alignment.End,
-        verticalArrangement = Arrangement.spacedBy(1.dp)
+        verticalArrangement = Arrangement.spacedBy(2.dp)
     ) {
-        Text(
-            text = bowler.name,
-            color = PrimaryText,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Bold,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-        Text(
-            text = "${bowler.wickets}-${bowler.runs}",
-            color = SecondaryText,
-            fontSize = 10.sp
-        )
-        // Current-over ball circles – compact row under bowler figures
+        // One line: name  W-R  (overs)
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = bowler.name,
+                color = PrimaryText,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false)
+            )
+            Text(
+                text = "${bowler.wickets}-${bowler.runs}",
+                color = SecondaryText,
+                fontSize = 10.sp
+            )
+            if (bowler.oversText.isNotEmpty()) {
+                Text(
+                    text = "(${bowler.oversText})",
+                    color = SecondaryText,
+                    fontSize = 10.sp
+                )
+            }
+        }
+        // Current-over ball circles – compact row
         if (currentOverBalls.isNotEmpty()) {
             Row(
                 horizontalArrangement = Arrangement.spacedBy(2.dp),
@@ -260,6 +265,7 @@ private fun BowlerSection(
 
 @Composable
 private fun BallIndicator(label: String) {
+    val displayLabel = ballDisplayLabel(label)
     val isWicket = label == "W"
     val isBoundary = label == "4" || label == "6"
     val isDot = label == "0" || label == "."
@@ -273,6 +279,7 @@ private fun BallIndicator(label: String) {
         isWide || isNoBall -> Color(0xFF886600)
         else -> Color(0xFF444444)
     }
+    val textColor = if (isDot) DotBorderColor else Color.White
     val borderModifier = if (isDot) {
         Modifier.border(1.dp, DotBorderColor, CircleShape)
     } else {
@@ -280,11 +287,20 @@ private fun BallIndicator(label: String) {
     }
 
     Box(
+        contentAlignment = Alignment.Center,
         modifier = Modifier
-            .size(9.dp)
+            .size(14.dp)
             .background(bgColor, CircleShape)
             .then(borderModifier)
-    )
+    ) {
+        Text(
+            text = displayLabel,
+            color = textColor,
+            fontSize = 6.sp,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1
+        )
+    }
 }
 
 // ─── Previews ─────────────────────────────────────────────────────────────────
