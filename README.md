@@ -217,6 +217,22 @@ Scoring is modelled as an append-only event log:
 
 ## Development Log
 
+### 2026-03-10 – Bug Fix: Striker / non-striker can now be swapped correctly in innings setup
+
+Previously, when only two batting players existed and both were already selected, the dropdown filtering logic prevented swapping them unless both fields were manually cleared. The innings setup UI now supports direct swapping in two ways:
+- selecting the opposite batter automatically swaps the two selections
+- a new "⇅ Swap batters" action allows one-tap reversal
+
+Duplicate batter selection is still prevented, but the scorer no longer needs to clear both fields to switch ends.
+
+**Files changed:**
+| File | Action |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/ui/ScoringScreen.kt` | Updated – striker/non-striker dropdowns now show the full batting roster; auto-swap logic added to selection handlers; "⇅ Swap batters" button added between the two selectors |
+| `README.md` | Updated |
+
+---
+
 ### 2026-03-10 – Bug Fix: Resume Match incorrectly reopening innings setup
 
 **Files changed:**

@@ -1903,16 +1903,44 @@ private fun SetupOpenersBottomSheet(
             }
             PlayerDropdown(
                 label = "Striker",
-                players = battingTeam.players.filter { it.id != nonStriker?.id },
+                players = battingTeam.players,
                 selected = striker,
-                onSelected = { striker = it }
+                onSelected = { newStriker ->
+                    if (newStriker?.id == nonStriker?.id) {
+                        // Auto-swap: move the previous striker into the non-striker slot
+                        nonStriker = striker
+                        striker = newStriker
+                    } else {
+                        striker = newStriker
+                    }
+                }
             )
+            Spacer(modifier = Modifier.height(8.dp))
+            TextButton(
+                onClick = {
+                    val temp = striker
+                    striker = nonStriker
+                    nonStriker = temp
+                },
+                enabled = striker != null && nonStriker != null,
+                modifier = Modifier.align(Alignment.CenterHorizontally)
+            ) {
+                Text("⇅ Swap batters")
+            }
             Spacer(modifier = Modifier.height(8.dp))
             PlayerDropdown(
                 label = "Non-striker",
-                players = battingTeam.players.filter { it.id != striker?.id },
+                players = battingTeam.players,
                 selected = nonStriker,
-                onSelected = { nonStriker = it }
+                onSelected = { newNonStriker ->
+                    if (newNonStriker?.id == striker?.id) {
+                        // Auto-swap: move the previous non-striker into the striker slot
+                        striker = nonStriker
+                        nonStriker = newNonStriker
+                    } else {
+                        nonStriker = newNonStriker
+                    }
+                }
             )
             Spacer(modifier = Modifier.height(8.dp))
             // Add Batter button
