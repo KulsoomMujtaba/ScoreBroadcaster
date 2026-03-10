@@ -25,6 +25,12 @@ import com.example.scorebroadcaster.data.entity.Player
  *                        bowler-stamping was introduced (backward-compatible default).
  *                        Used by [com.example.scorebroadcaster.domain.MaidenOverCalculator] to
  *                        derive maiden-over counts without storing mutable counters.
+ * @param striker         The batter on strike when this ball was bowled.  Null for events
+ *                        recorded before striker-stamping was introduced (backward-compatible).
+ *                        Persisted so the live batting state can be restored after an app
+ *                        restart without re-opening the innings-setup dialog.
+ * @param nonStriker      The batter at the non-striker's end.  Same persistence rationale as
+ *                        [striker].
  */
 data class BallEvent(
     val runsOffBat: Int = 0,
@@ -32,5 +38,7 @@ data class BallEvent(
     val wicket: Boolean = false,
     val dismissalDetail: DismissalDetail? = null,
     val countsAsBall: Boolean = true,
-    val bowler: Player? = null
+    val bowler: Player? = null,
+    val striker: Player? = null,
+    val nonStriker: Player? = null
 )

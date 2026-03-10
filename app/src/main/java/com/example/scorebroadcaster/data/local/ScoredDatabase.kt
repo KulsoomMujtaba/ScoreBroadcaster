@@ -21,7 +21,9 @@ import androidx.room.TypeConverters
  *       `inningsNumber`, `sequenceNumber`; added dismissal fields, bowler fields, `createdAt`;
  *       added `toDomain()` / `toEntity()` mapping helpers (Phase 9.4)
  * - v5: Finalised `matches` schema — renamed `overs` to `oversLimit`; added `tossWinner` and
- *       `tossDecision` columns so the full toss result survives app restarts
+ * - v6: Added `eventStrikerName`, `eventStrikerSourceProfileId`, `eventNonStrikerName`,
+ *       `eventNonStrikerSourceProfileId` columns to `ball_events` so batting state can be
+ *       restored after an app restart without re-opening the innings-setup dialog.
  *
  * Use [getInstance] to obtain the singleton database instance.
  */
@@ -33,7 +35,7 @@ import androidx.room.TypeConverters
         MatchEntity::class,
         BallEventEntity::class
     ],
-    version = 5,
+    version = 6,
     exportSchema = false
 )
 @TypeConverters(PlayerListTypeConverter::class)
