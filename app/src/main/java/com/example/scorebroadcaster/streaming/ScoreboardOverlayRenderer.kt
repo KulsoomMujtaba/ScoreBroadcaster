@@ -274,11 +274,11 @@ class ScoreboardOverlayRenderer(
         width: Float
     ) {
         val nameMaxWidth = width * 0.58f
-        val lineH = (totalH - 8f) / 2f
+        val lineH = (totalH - 4f) / 2f
         listOf(model.striker, model.nonStriker).forEachIndexed { i, batter ->
             batter ?: return@forEachIndexed
-            val rowTop = 4f + i * lineH
-            val baselineY = rowTop + lineH * 0.70f
+            val rowTop = 2f + i * lineH
+            val baselineY = rowTop + lineH * 0.72f
             val xText = left + 18f
 
             // Striker dot
@@ -349,7 +349,7 @@ class ScoreboardOverlayRenderer(
 
         // ── Line 2: context line (run rate / chase info) ───────────────────────
         if (model.contextLine != null) {
-            val line2Y = totalH * 0.82f
+            val line2Y = totalH * 0.78f
             if (model.contextLine.startsWith("RUN RATE ")) {
                 val rrValue = model.contextLine.removePrefix("RUN RATE ")
                 val labelText = "RR"
@@ -399,10 +399,10 @@ class ScoreboardOverlayRenderer(
             canvas.drawText(oversDisplayText, x, lineY, bowlerFiguresPaint)
         }
 
-        // ── Ball labels – compact left-to-right row at ~80 % height ──────────
+        // ── Ball labels – compact left-to-right row at ~75 % height ──────────
         // Labels start from the left of the right section (aligned with bowler name)
         if (model.currentOverBalls.isNotEmpty()) {
-            val by = totalH * 0.80f
+            val by = totalH * 0.76f
             var bx = left
             model.currentOverBalls.forEach { ball ->
                 val labelW = drawBallLabel(ball, bx, by)

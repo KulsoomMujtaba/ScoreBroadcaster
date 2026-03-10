@@ -217,6 +217,25 @@ Scoring is modelled as an append-only event log:
 
 ## Development Log
 
+### 2026-03-10 – UI Improvement: Broadcast Overlay Spacing Reduction and Portrait Orientation Fix
+
+**Files changed:**
+| File | Action |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/ui/ScoreboardOverlay.kt` | Updated – reduced vertical spacing between overlay rows; fixed orientation detection to use `Configuration.ORIENTATION_PORTRAIT` |
+| `app/src/main/java/com/example/scorebroadcaster/streaming/ScoreboardOverlayRenderer.kt` | Updated – reduced vertical offsets for second row in each section for tighter layout |
+| `app/src/main/java/com/example/scorebroadcaster/ui/CameraPreviewScreen.kt` | Updated – removed forced landscape orientation lock so the overlay can switch between portrait and landscape |
+| `app/src/main/java/com/example/scorebroadcaster/ui/StreamPreviewScreen.kt` | Updated – removed forced landscape orientation lock so the overlay can switch between portrait and landscape |
+| `README.md` | Updated – added this development log entry |
+
+**Explanation:**
+
+- **Reduced vertical spacing between overlay rows to further reduce overlay height.** In the Compose overlay (`ScoreboardOverlay.kt`), the outer Row's vertical padding was reduced from 4 dp to 2 dp, and the `BowlerSection` Column's `verticalArrangement` was tightened from `spacedBy(2.dp)` to `spacedBy(1.dp)`. In the Canvas renderer (`ScoreboardOverlayRenderer.kt`), the top padding in `drawBattersSection` was reduced from 4 px to 2 px and the row height formula updated accordingly; the centre section's run-rate line was moved from `totalH × 0.82` to `totalH × 0.78`; and the bowler ball-label row was moved from `totalH × 0.80` to `totalH × 0.76`. The overall overlay strip is now visibly slimmer while keeping all text readable and non-overlapping.
+- **Fixed bug where portrait mode incorrectly displayed the landscape overlay.** The root cause was that `CameraPreviewScreen` and `StreamPreviewScreen` both forced `ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE`, which prevented `configuration.orientation` from ever reporting portrait. Both screens now allow the device's natural orientation. In `ScoreboardOverlay.kt`, orientation detection was changed from the previous `configuration.screenWidthDp >= configuration.screenHeightDp` comparison to the standard `configuration.orientation == Configuration.ORIENTATION_PORTRAIT` API, which correctly triggers recomposition when the device rotates.
+- **Overlay now switches correctly between portrait and landscape layouts.** The Compose overlay recomposes automatically whenever `LocalConfiguration.current` reports an orientation change, applying narrower section weights (0.8 f vs 1 f), tighter horizontal padding (6 dp vs 10 dp), and smaller font sizes in portrait mode. The Canvas renderer continues to derive orientation from `streamWidth < streamHeight`, unchanged, since the stream dimensions are supplied as constructor parameters.
+
+---
+
 ### 2026-03-10 – UI Improvement: Broadcast Overlay Layout Refinement (Plain Ball Labels, Right-Side Alignment, Portrait Layout Fix)
 
 **Files changed:**
