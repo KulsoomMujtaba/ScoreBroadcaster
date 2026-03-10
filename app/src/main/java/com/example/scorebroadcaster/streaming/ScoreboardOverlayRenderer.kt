@@ -21,9 +21,31 @@ private const val STRIKER_DOT_OFFSET_X = 8f        // px from section left edge 
 private const val STRIKER_DOT_VERTICAL_CENTER = 0.5f  // fraction of row height
 private const val STRIKER_DOT_RADIUS = 4f           // px
 
-// Landscape defaults (portrait values are scaled down in render)
-private const val BALL_INDICATOR_RADIUS = 5.5f      // px (reduced from 7f for slimmer over row)
-private const val BALL_INDICATOR_SPACING = 12f      // px between ball centre points (reduced from 16f)
+// Landscape layout constants
+private const val LS_TITLE_TEXT_SIZE = 13f
+private const val LS_SCORE_TEXT_SIZE = 18f
+private const val LS_BATTER_NAME_TEXT_SIZE = 15f
+private const val LS_BATTER_STATS_TEXT_SIZE = 13f
+private const val LS_BOWLER_NAME_TEXT_SIZE = 15f
+private const val LS_BOWLER_FIGURES_TEXT_SIZE = 13f
+private const val LS_BALL_TEXT_SIZE = 9f
+private const val LS_SIDE_WIDTH_FRACTION = 0.36f
+private const val LS_PAD = 10f
+private const val LS_BALL_LABEL_GAP = 4f           // px gap between consecutive ball label tokens
+private const val LS_BOWLER_NAME_WIDTH_FRACTION = 0.45f  // fraction of section width for bowler name
+
+// Portrait layout constants – intentionally tuned for narrow width, not simply scaled down
+private const val PT_TITLE_TEXT_SIZE = 10f
+private const val PT_SCORE_TEXT_SIZE = 14f
+private const val PT_BATTER_NAME_TEXT_SIZE = 12f
+private const val PT_BATTER_STATS_TEXT_SIZE = 10f
+private const val PT_BOWLER_NAME_TEXT_SIZE = 12f
+private const val PT_BOWLER_FIGURES_TEXT_SIZE = 10f
+private const val PT_BALL_TEXT_SIZE = 8f
+private const val PT_SIDE_WIDTH_FRACTION = 0.30f
+private const val PT_PAD = 6f
+private const val PT_BALL_LABEL_GAP = 3f           // px gap between consecutive ball label tokens
+private const val PT_BOWLER_NAME_WIDTH_FRACTION = 0.45f  // fraction of section width for bowler name
 
 /** Two-space gap used to separate inline text segments within a single drawn line. */
 private const val INLINE_GAP = "  "
@@ -35,7 +57,7 @@ private const val INLINE_GAP = "  "
  * Layout (single slim strip):
  * - **Left** (~36 % width): striker/non-striker name + runs/balls (two lines)
  * - **Centre** (~28 % width): match title + innings badge, score (large), overs, run rate / chase
- * - **Right** (~36 % width): bowler name + figures, then a compact row of current-over ball circles
+ * - **Right** (~36 % width): bowler name + figures, then a compact row of current-over ball labels
  *
  * A single [Bitmap] buffer ([streamWidth] × [overlayHeight], ARGB_8888) is allocated once
  * and reused across renders to minimise GC pressure. The buffer is erased to transparent
@@ -72,52 +94,52 @@ class ScoreboardOverlayRenderer(
         style = Paint.Style.FILL
     }
 
-    // Text paints – sizes reduced to match compact 90 px strip
+    // Text paints – sizes are set per-render based on orientation
     private val titlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.parseColor("#FFD0D0D0")   // light grey – team names
-        textSize = 13f
+        textSize = LS_TITLE_TEXT_SIZE
     }
     private val inningsBadgePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.parseColor("#FFFFCC00")
-        textSize = 13f
+        textSize = LS_TITLE_TEXT_SIZE
         typeface = Typeface.DEFAULT_BOLD
     }
     private val scorePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.WHITE
-        textSize = 18f
+        textSize = LS_SCORE_TEXT_SIZE
         typeface = Typeface.DEFAULT_BOLD
     }
     private val oversPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.parseColor("#FFF2C94C")   // warm gold – overs highlight
-        textSize = 13f
+        textSize = LS_TITLE_TEXT_SIZE
     }
     private val contextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.parseColor("#FFCCCCCC")
-        textSize = 13f
+        textSize = LS_TITLE_TEXT_SIZE
         typeface = Typeface.DEFAULT_BOLD
     }
     private val contextValuePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.parseColor("#FFF2C94C")   // warm gold – run rate value
-        textSize = 13f
+        textSize = LS_TITLE_TEXT_SIZE
         typeface = Typeface.DEFAULT_BOLD
     }
     private val batterNameBoldPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.WHITE
-        textSize = 15f
+        textSize = LS_BATTER_NAME_TEXT_SIZE
         typeface = Typeface.DEFAULT_BOLD
     }
     private val batterNamePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.parseColor("#FFCCCCCC")
-        textSize = 15f
+        textSize = LS_BATTER_NAME_TEXT_SIZE
     }
     private val batterStatsBoldPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.WHITE
-        textSize = 13f
+        textSize = LS_BATTER_STATS_TEXT_SIZE
         typeface = Typeface.DEFAULT_BOLD
     }
     private val batterStatsPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.parseColor("#FFCCCCCC")
-        textSize = 13f
+        textSize = LS_BATTER_STATS_TEXT_SIZE
     }
     private val strikerDotPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.parseColor("#FFF2C94C")   // warm gold accent
@@ -125,46 +147,23 @@ class ScoreboardOverlayRenderer(
     }
     private val bowlerNamePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.WHITE
-        textSize = 15f
+        textSize = LS_BOWLER_NAME_TEXT_SIZE
         typeface = Typeface.DEFAULT_BOLD
     }
     private val bowlerFiguresPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.parseColor("#FFCCCCCC")
-        textSize = 13f
+        textSize = LS_BOWLER_FIGURES_TEXT_SIZE
     }
 
-    // Ball indicator paints – all outline/stroke style (broadcast-style)
-    private val ballWicketPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.parseColor("#FFFF4444")
-        style = Paint.Style.STROKE
-        strokeWidth = 2f
-    }
-    private val ballBoundaryFourPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.parseColor("#FFF2C94C")   // warm gold for boundary 4
-        style = Paint.Style.STROKE
-        strokeWidth = 2f
-    }
-    private val ballBoundarySixPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.parseColor("#FFFFAA00")   // stronger gold for six
-        style = Paint.Style.STROKE
-        strokeWidth = 2f
-    }
-    private val ballWidePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.parseColor("#FFF5A623")   // lighter gold/amber for wide and no-ball
-        style = Paint.Style.STROKE
-        strokeWidth = 2f
-    }
-    private val ballNormalPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.parseColor("#FF888888")   // light grey for dots and normal runs
-        style = Paint.Style.STROKE
-        strokeWidth = 1.5f
-    }
-    /** Text paint for ball labels – color set per-ball in drawBallIndicator. */
+    /**
+     * Text paint for ball labels – no circle drawn, color set per-ball in [drawBallLabel].
+     * Uses LEFT alignment so each token can be positioned by its left edge.
+     */
     private val ballTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.WHITE
-        textSize = 9f
+        textSize = LS_BALL_TEXT_SIZE
         typeface = Typeface.DEFAULT_BOLD
-        textAlign = Paint.Align.CENTER
+        textAlign = Paint.Align.LEFT
     }
 
     // ── Public API ────────────────────────────────────────────────────────────
@@ -188,26 +187,42 @@ class ScoreboardOverlayRenderer(
         val fw = streamWidth.toFloat()
         val fh = overlayHeight.toFloat()
 
-        // Detect orientation from stream dimensions
+        // Detect orientation from stream dimensions (portrait = taller than wide)
         val isPortrait = streamWidth < streamHeight
 
-        // Apply orientation-responsive font sizes (portrait is 85% of landscape)
-        val fontScale = if (isPortrait) 0.85f else 1f
-        titlePaint.textSize = 13f * fontScale
-        inningsBadgePaint.textSize = 13f * fontScale
-        scorePaint.textSize = 18f * fontScale
-        oversPaint.textSize = 13f * fontScale
-        contextPaint.textSize = 13f * fontScale
-        contextValuePaint.textSize = 13f * fontScale
-        batterNameBoldPaint.textSize = 15f * fontScale
-        batterNamePaint.textSize = 15f * fontScale
-        batterStatsBoldPaint.textSize = 13f * fontScale
-        batterStatsPaint.textSize = 13f * fontScale
-        bowlerNamePaint.textSize = 15f * fontScale
-        bowlerFiguresPaint.textSize = 13f * fontScale
+        // Apply orientation-specific font sizes using separate portrait/landscape constants
+        if (isPortrait) {
+            titlePaint.textSize = PT_TITLE_TEXT_SIZE
+            inningsBadgePaint.textSize = PT_TITLE_TEXT_SIZE
+            scorePaint.textSize = PT_SCORE_TEXT_SIZE
+            oversPaint.textSize = PT_TITLE_TEXT_SIZE
+            contextPaint.textSize = PT_TITLE_TEXT_SIZE
+            contextValuePaint.textSize = PT_TITLE_TEXT_SIZE
+            batterNameBoldPaint.textSize = PT_BATTER_NAME_TEXT_SIZE
+            batterNamePaint.textSize = PT_BATTER_NAME_TEXT_SIZE
+            batterStatsBoldPaint.textSize = PT_BATTER_STATS_TEXT_SIZE
+            batterStatsPaint.textSize = PT_BATTER_STATS_TEXT_SIZE
+            bowlerNamePaint.textSize = PT_BOWLER_NAME_TEXT_SIZE
+            bowlerFiguresPaint.textSize = PT_BOWLER_FIGURES_TEXT_SIZE
+            ballTextPaint.textSize = PT_BALL_TEXT_SIZE
+        } else {
+            titlePaint.textSize = LS_TITLE_TEXT_SIZE
+            inningsBadgePaint.textSize = LS_TITLE_TEXT_SIZE
+            scorePaint.textSize = LS_SCORE_TEXT_SIZE
+            oversPaint.textSize = LS_TITLE_TEXT_SIZE
+            contextPaint.textSize = LS_TITLE_TEXT_SIZE
+            contextValuePaint.textSize = LS_TITLE_TEXT_SIZE
+            batterNameBoldPaint.textSize = LS_BATTER_NAME_TEXT_SIZE
+            batterNamePaint.textSize = LS_BATTER_NAME_TEXT_SIZE
+            batterStatsBoldPaint.textSize = LS_BATTER_STATS_TEXT_SIZE
+            batterStatsPaint.textSize = LS_BATTER_STATS_TEXT_SIZE
+            bowlerNamePaint.textSize = LS_BOWLER_NAME_TEXT_SIZE
+            bowlerFiguresPaint.textSize = LS_BOWLER_FIGURES_TEXT_SIZE
+            ballTextPaint.textSize = LS_BALL_TEXT_SIZE
+        }
 
-        val ballRadius = if (isPortrait) BALL_INDICATOR_RADIUS * 0.85f else BALL_INDICATOR_RADIUS
-        val ballSpacing = if (isPortrait) BALL_INDICATOR_SPACING * 0.85f else BALL_INDICATOR_SPACING
+        val ballLabelGap = if (isPortrait) PT_BALL_LABEL_GAP else LS_BALL_LABEL_GAP
+        val bowlerNameWidthFraction = if (isPortrait) PT_BOWLER_NAME_WIDTH_FRACTION else LS_BOWLER_NAME_WIDTH_FRACTION
 
         // Single background rect for the full strip
         canvas.drawRect(0f, 0f, fw, fh, bgPaint)
@@ -217,8 +232,8 @@ class ScoreboardOverlayRenderer(
         val showBowler = model.bowler != null
 
         // Portrait uses narrower side sections so the center stays readable
-        val sideWidthFraction = if (isPortrait) 0.32f else 0.36f
-        val pad = if (isPortrait) 8f else 10f
+        val sideWidthFraction = if (isPortrait) PT_SIDE_WIDTH_FRACTION else LS_SIDE_WIDTH_FRACTION
+        val pad = if (isPortrait) PT_PAD else LS_PAD
 
         when {
             showBatters && showBowler -> {
@@ -228,7 +243,7 @@ class ScoreboardOverlayRenderer(
                 val centreW = fw - leftW - rightW
                 drawBattersSection(model, pad, fh, leftW - pad * 2)
                 drawCentreSection(model, centreX, fh, centreW, pad)
-                drawBowlerSection(model, centreX + centreW + pad, fh, rightW - pad * 2, ballRadius, ballSpacing)
+                drawBowlerSection(model, centreX + centreW, fh, rightW, pad, ballLabelGap, bowlerNameWidthFraction)
             }
             showBatters -> {
                 val leftW = fw * 0.50f
@@ -240,7 +255,7 @@ class ScoreboardOverlayRenderer(
                 val rightW = fw * 0.50f
                 val centreW = fw - rightW
                 drawCentreSection(model, 0f, fh, centreW, pad)
-                drawBowlerSection(model, centreW + pad, fh, rightW - pad * 2, ballRadius, ballSpacing)
+                drawBowlerSection(model, centreW, fh, rightW, pad, ballLabelGap, bowlerNameWidthFraction)
             }
             else -> {
                 drawCentreSection(model, 0f, fh, fw, pad)
@@ -356,22 +371,24 @@ class ScoreboardOverlayRenderer(
 
     private fun drawBowlerSection(
         model: BroadcastOverlayModel,
-        left: Float,
+        sectionLeft: Float,
         totalH: Float,
-        width: Float,
-        ballRadius: Float = BALL_INDICATOR_RADIUS,
-        ballSpacing: Float = BALL_INDICATOR_SPACING
+        sectionWidth: Float,
+        pad: Float,
+        ballLabelGap: Float = LS_BALL_LABEL_GAP,
+        bowlerNameWidthFraction: Float = LS_BOWLER_NAME_WIDTH_FRACTION
     ) {
         val bowler = model.bowler ?: return
+        val left = sectionLeft + pad
 
         // ── Line 1: name  W-R  (overs) on one baseline ────────────────────────
-        val nameMaxWidth = width * 0.48f
+        val nameMaxWidth = sectionWidth * bowlerNameWidthFraction
         val nameText = truncateText(bowler.name, bowlerNamePaint, nameMaxWidth)
         val figuresText = "$INLINE_GAP${bowler.wickets}-${bowler.runs}"
         val oversDisplayText = if (bowler.oversText.isNotEmpty()) "$INLINE_GAP(${bowler.oversText})" else ""
 
         val lineY = totalH * 0.42f
-        var x = left + 6f
+        var x = left
         bowlerNamePaint.textAlign = Paint.Align.LEFT
         canvas.drawText(nameText, x, lineY, bowlerNamePaint)
         x += bowlerNamePaint.measureText(nameText)
@@ -382,46 +399,41 @@ class ScoreboardOverlayRenderer(
             canvas.drawText(oversDisplayText, x, lineY, bowlerFiguresPaint)
         }
 
-        // ── Ball indicators – compact row at ~78 % height ─────────────────────
+        // ── Ball labels – compact left-to-right row at ~80 % height ──────────
+        // Labels start from the left of the right section (aligned with bowler name)
         if (model.currentOverBalls.isNotEmpty()) {
             val by = totalH * 0.80f
-            val rightEdge = left + width - 6f
-            var bx = rightEdge - ballRadius
-            model.currentOverBalls.reversed().forEach { ball ->
-                drawBallIndicator(ball, bx, by, ballRadius)
-                bx -= ballSpacing
+            var bx = left
+            model.currentOverBalls.forEach { ball ->
+                val labelW = drawBallLabel(ball, bx, by)
+                bx += labelW + ballLabelGap
             }
         }
     }
 
-    private fun drawBallIndicator(label: String, cx: Float, cy: Float, r: Float) {
+    /**
+     * Draws a single ball outcome as a plain text token at ([x], [y]) using left-alignment.
+     * No circle or border is drawn – just the colored label text.
+     * Returns the measured width of the drawn label so the caller can advance [x].
+     */
+    private fun drawBallLabel(label: String, x: Float, y: Float): Float {
         val isWicket = label == "W"
         val isBoundarySix = label == "6"
         val isBoundaryFour = label == "4"
         val isWide = label == "Wd"
         val isNoBall = label == "NB"
 
-        // Draw outlined circle (broadcast style – no fill)
-        val borderPaint = when {
-            isWicket -> ballWicketPaint
-            isBoundaryFour -> ballBoundaryFourPaint
-            isBoundarySix -> ballBoundarySixPaint
-            isWide || isNoBall -> ballWidePaint
-            else -> ballNormalPaint  // light grey for dots and normal runs
-        }
-        canvas.drawCircle(cx, cy, r, borderPaint)
-
-        // Draw label text centred inside the circle with matching text color
-        val textColor = when {
+        ballTextPaint.color = when {
             isWicket -> Color.parseColor("#FFFF4444")
             isBoundaryFour -> Color.parseColor("#FFF2C94C")
+            isBoundarySix -> Color.parseColor("#FFFFAA00")
             isWide || isNoBall -> Color.parseColor("#FFF5A623")
-            else -> Color.WHITE  // white for dot, normal runs, six
+            else -> Color.WHITE
         }
         val displayLabel = ballDisplayLabel(label)
-        ballTextPaint.color = textColor
-        val textY = cy - (ballTextPaint.ascent() + ballTextPaint.descent()) / 2f
-        canvas.drawText(displayLabel, cx, textY, ballTextPaint)
+        val textY = y - (ballTextPaint.ascent() + ballTextPaint.descent()) / 2f
+        canvas.drawText(displayLabel, x, textY, ballTextPaint)
+        return ballTextPaint.measureText(displayLabel)
     }
 
     // ── Utilities ──────────────────────────────────────────────────────────────
