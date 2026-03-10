@@ -1,8 +1,6 @@
 package com.example.scorebroadcaster.ui
 
-import android.content.res.Configuration
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -43,7 +41,6 @@ private val AccentColor = Color(0xFFF2C94C)          // warm gold – accents + 
 private val WicketColor = Color(0xFFFF4444)
 private val BoundaryFourColor = Color(0xFFF2C94C)    // gold highlight for boundary 4
 private val BoundarySixColor = Color(0xFFFFAA00)     // stronger gold highlight for six
-private val DotBorderColor = Color(0xFF888888)
 private val StrikerDotColor = Color(0xFFF2C94C)      // gold accent indicator next to striker name
 private val WideBallColor = Color(0xFFF5A623)        // lighter gold/amber for wide and no-ball
 
@@ -78,9 +75,10 @@ fun ScoreboardOverlay(
     val showBatters = model.striker != null || model.nonStriker != null
     val showBowler = model.bowler != null
 
-    // Detect orientation for responsive layout sizing
+    // Detect orientation from actual screen dimensions instead of Configuration.orientation,
+    // which may report incorrect values when the activity orientation is locked.
     val configuration = LocalConfiguration.current
-    val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+    val isLandscape = configuration.screenWidthDp >= configuration.screenHeightDp
 
     val hPad = if (isLandscape) 10.dp else 6.dp
     val sideWeight = if (isLandscape) 1f else 0.8f
@@ -280,7 +278,7 @@ private fun BowlerSection(
     val statsFontSize = if (isLandscape) 10.sp else 9.sp
     Column(
         modifier = modifier,
-        horizontalAlignment = Alignment.End,
+        horizontalAlignment = Alignment.Start,
         verticalArrangement = Arrangement.spacedBy(2.dp)
     ) {
         // One line: name  W-R  (overs)
@@ -295,7 +293,7 @@ private fun BowlerSection(
                 fontWeight = FontWeight.Bold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f, fill = false)
+                modifier = Modifier.weight(1f)
             )
             Text(
                 text = "${bowler.wickets}-${bowler.runs}",
@@ -310,10 +308,10 @@ private fun BowlerSection(
                 )
             }
         }
-        // Current-over ball circles – compact row, reduced spacing
+        // Current-over ball labels – compact plain text row, no circles
         if (currentOverBalls.isNotEmpty()) {
             Row(
-                horizontalArrangement = Arrangement.spacedBy(1.dp),
+                horizontalArrangement = Arrangement.spacedBy(3.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 currentOverBalls.forEach { ballLabel -> BallIndicator(label = ballLabel) }
@@ -324,43 +322,28 @@ private fun BowlerSection(
 
 // ─── Ball indicator ───────────────────────────────────────────────────────────
 
+/**
+ * Renders a single current-over run label as plain compact text (no circle or border).
+ * Color emphasis is preserved: 4 and 6 use accent gold, W uses wicket red,
+ * wides and no-balls use amber, all other balls use primary white.
+ */
 @Composable
 private fun BallIndicator(label: String) {
     val displayLabel = ballDisplayLabel(label)
-    val isWicket = label == "W"
-    val isBoundarySix = label == "6"
-    val isBoundaryFour = label == "4"
-    val isWide = label == "Wd"
-    val isNoBall = label == "NB"
-
-    val borderColor = when {
-        isWicket -> WicketColor
-        isBoundaryFour -> BoundaryFourColor
-        isBoundarySix -> BoundarySixColor
-        isWide || isNoBall -> WideBallColor
-        else -> DotBorderColor  // light grey for dots and normal runs
+    val textColor = when (label) {
+        "W" -> WicketColor
+        "4" -> BoundaryFourColor
+        "6" -> BoundarySixColor
+        "Wd", "NB" -> WideBallColor
+        else -> PrimaryText
     }
-    val textColor = when {
-        isWicket -> WicketColor
-        isBoundaryFour -> BoundaryFourColor
-        isWide || isNoBall -> WideBallColor
-        else -> PrimaryText  // white for dot, normal runs, six
-    }
-
-    Box(
-        modifier = Modifier
-            .size(14.dp)
-            .border(1.dp, borderColor, CircleShape),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = displayLabel,
-            color = textColor,
-            fontSize = 7.sp,
-            fontWeight = FontWeight.Bold,
-            maxLines = 1
-        )
-    }
+    Text(
+        text = displayLabel,
+        color = textColor,
+        fontSize = 9.sp,
+        fontWeight = FontWeight.Bold,
+        maxLines = 1
+    )
 }
 
 // ─── Previews ─────────────────────────────────────────────────────────────────

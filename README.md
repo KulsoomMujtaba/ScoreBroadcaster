@@ -217,6 +217,23 @@ Scoring is modelled as an append-only event log:
 
 ## Development Log
 
+### 2026-03-10 – UI Improvement: Broadcast Overlay Layout Refinement (Plain Ball Labels, Right-Side Alignment, Portrait Layout Fix)
+
+**Files changed:**
+| File | Action |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/ui/ScoreboardOverlay.kt` | Updated – removed circle borders from ball indicators, fixed bowler section left-alignment, improved portrait orientation detection |
+| `app/src/main/java/com/example/scorebroadcaster/streaming/ScoreboardOverlayRenderer.kt` | Updated – removed circle drawing, fixed ball row to start left-to-right from section left edge, added separate portrait/landscape constants |
+| `README.md` | Updated – added this development log entry |
+
+**Explanation:**
+
+- **Current-over run indicators simplified from circles to plain text labels.** The `BallIndicator` composable no longer renders a bordered circular `Box` around each ball outcome. It now renders a plain `Text` token with the same color rules: warm gold for 4 and 6, red for wickets, amber for wides and no-balls, white for dots and normal runs. In the Canvas renderer, `drawBallIndicator` was replaced with `drawBallLabel` which draws only text (no `canvas.drawCircle` call), and the unused STROKE-style ball border paints were removed entirely. The ball row becomes visibly slimmer as a result.
+- **Right-side bowler section is now left-aligned and anchored after the center score block.** The `BowlerSection` Compose column was changed from `horizontalAlignment = Alignment.End` to `Alignment.Start`, so the bowler name and current-over labels start from the left edge of the right section (immediately after the center panel). In the Canvas renderer, `drawBowlerSection` now draws the ball row left-to-right starting from the section's left edge with `sectionLeft + pad`, replacing the previous right-to-left drawing from the section's right edge. Both the bowler info line and the ball label row are aligned under the same left anchor.
+- **Portrait mode now correctly uses a portrait-specific overlay layout instead of reusing landscape values.** In the Compose overlay, orientation detection was changed from `configuration.orientation == ORIENTATION_LANDSCAPE` to `configuration.screenWidthDp >= configuration.screenHeightDp`, which compares actual screen dp dimensions directly and is resilient to locked-orientation edge cases. In the Canvas renderer, the previous `fontScale = 0.85f` multiplier approach was replaced with two explicit sets of named constants (`LS_*` for landscape, `PT_*` for portrait) covering font sizes, side-section width fraction, padding, and ball-label gap. Portrait-mode sizes are intentionally smaller and the side-section fraction is narrower (30 % vs 36 %) to give the center score block more room on a narrow screen.
+
+---
+
 ### 2026-03-10 – UI Improvement: Broadcast Overlay Compact Redesign (Orientation-Responsive, Center Panel, Slimmer Balls)
 
 **Files changed:**
