@@ -64,7 +64,7 @@ class ScoreboardOverlayRenderer(
 
     // Text paints – sizes reduced to match compact 90 px strip
     private val titlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.parseColor("#FFCCCCCC")
+        color = Color.parseColor("#FFD0D0D0")   // light grey – team names
         textSize = 13f
     }
     private val inningsBadgePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -78,11 +78,16 @@ class ScoreboardOverlayRenderer(
         typeface = Typeface.DEFAULT_BOLD
     }
     private val oversPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.parseColor("#FFCCCCCC")
+        color = Color.parseColor("#FFF2C94C")   // warm gold – overs highlight
         textSize = 13f
     }
     private val contextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.parseColor("#FFCCCCCC")
+        textSize = 13f
+        typeface = Typeface.DEFAULT_BOLD
+    }
+    private val contextValuePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.parseColor("#FFF2C94C")   // warm gold – run rate value
         textSize = 13f
         typeface = Typeface.DEFAULT_BOLD
     }
@@ -118,42 +123,35 @@ class ScoreboardOverlayRenderer(
         textSize = 13f
     }
 
-    // Ball indicator paints
+    // Ball indicator paints – all outline/stroke style (broadcast-style)
     private val ballWicketPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.parseColor("#FFFF4444")
-        style = Paint.Style.FILL
+        style = Paint.Style.STROKE
+        strokeWidth = 2f
     }
     private val ballBoundaryFourPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.parseColor("#FFF2C94C")   // warm gold for boundary 4
-        style = Paint.Style.FILL
+        style = Paint.Style.STROKE
+        strokeWidth = 2f
     }
     private val ballBoundarySixPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.parseColor("#FFFFAA00")   // stronger gold for six
-        style = Paint.Style.FILL
+        style = Paint.Style.STROKE
+        strokeWidth = 2f
     }
     private val ballWidePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.parseColor("#FFF5A623")   // lighter gold/amber for wide and no-ball
-        style = Paint.Style.FILL
+        style = Paint.Style.STROKE
+        strokeWidth = 2f
     }
-    private val ballRunsPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.parseColor("#FF2A3A4A")   // dark blue-neutral for regular runs
-        style = Paint.Style.FILL
-    }
-    private val ballDotBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.parseColor("#FF888888")
+    private val ballNormalPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.parseColor("#FF888888")   // light grey for dots and normal runs
         style = Paint.Style.STROKE
         strokeWidth = 1.5f
     }
-    /** Text paint for non-dot ball labels (white). */
+    /** Text paint for ball labels – color set per-ball in drawBallIndicator. */
     private val ballTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.WHITE
-        textSize = 9f
-        typeface = Typeface.DEFAULT_BOLD
-        textAlign = Paint.Align.CENTER
-    }
-    /** Text paint for dot-ball labels (grey, matching the border colour). */
-    private val ballDotTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.parseColor("#FF888888")
         textSize = 9f
         typeface = Typeface.DEFAULT_BOLD
         textAlign = Paint.Align.CENTER
@@ -289,8 +287,23 @@ class ScoreboardOverlayRenderer(
 
         // ── Line 2: context line (run rate / chase info) ───────────────────────
         if (model.contextLine != null) {
-            contextPaint.textAlign = Paint.Align.CENTER
-            canvas.drawText(model.contextLine, cx, totalH * 0.82f, contextPaint)
+            val line2Y = totalH * 0.82f
+            if (model.contextLine.startsWith("RUN RATE ")) {
+                val rrValue = model.contextLine.removePrefix("RUN RATE ")
+                val labelText = "RR"
+                val valueText = " $rrValue"
+                val labelW = contextPaint.measureText(labelText)
+                val valueW = contextValuePaint.measureText(valueText)
+                val totalW = labelW + valueW
+                contextPaint.textAlign = Paint.Align.LEFT
+                contextValuePaint.textAlign = Paint.Align.LEFT
+                val startX = cx - totalW / 2f
+                canvas.drawText(labelText, startX, line2Y, contextPaint)
+                canvas.drawText(valueText, startX + labelW, line2Y, contextValuePaint)
+            } else {
+                contextPaint.textAlign = Paint.Align.CENTER
+                canvas.drawText(model.contextLine, cx, line2Y, contextPaint)
+            }
         }
     }
 
@@ -336,23 +349,30 @@ class ScoreboardOverlayRenderer(
         val isWicket = label == "W"
         val isBoundarySix = label == "6"
         val isBoundaryFour = label == "4"
-        val isDot = label == "0" || label == "."
         val isWide = label == "Wd"
         val isNoBall = label == "NB"
 
-        when {
-            isWicket -> canvas.drawCircle(cx, cy, r, ballWicketPaint)
-            isBoundarySix -> canvas.drawCircle(cx, cy, r, ballBoundarySixPaint)
-            isBoundaryFour -> canvas.drawCircle(cx, cy, r, ballBoundaryFourPaint)
-            isDot -> canvas.drawCircle(cx, cy, r, ballDotBorderPaint)
-            isWide || isNoBall -> canvas.drawCircle(cx, cy, r, ballWidePaint)
-            else -> canvas.drawCircle(cx, cy, r, ballRunsPaint)
+        // Draw outlined circle (broadcast style – no fill)
+        val borderPaint = when {
+            isWicket -> ballWicketPaint
+            isBoundaryFour -> ballBoundaryFourPaint
+            isBoundarySix -> ballBoundarySixPaint
+            isWide || isNoBall -> ballWidePaint
+            else -> ballNormalPaint  // light grey for dots and normal runs
         }
-        // Draw label text centred inside the circle
+        canvas.drawCircle(cx, cy, r, borderPaint)
+
+        // Draw label text centred inside the circle with matching text color
+        val textColor = when {
+            isWicket -> Color.parseColor("#FFFF4444")
+            isBoundaryFour -> Color.parseColor("#FFF2C94C")
+            isWide || isNoBall -> Color.parseColor("#FFF5A623")
+            else -> Color.WHITE  // white for dot, normal runs, six
+        }
         val displayLabel = ballDisplayLabel(label)
-        val textPaint = if (isDot) ballDotTextPaint else ballTextPaint
-        val textY = cy - (textPaint.ascent() + textPaint.descent()) / 2f
-        canvas.drawText(displayLabel, cx, textY, textPaint)
+        ballTextPaint.color = textColor
+        val textY = cy - (ballTextPaint.ascent() + ballTextPaint.descent()) / 2f
+        canvas.drawText(displayLabel, cx, textY, ballTextPaint)
     }
 
     // ── Utilities ──────────────────────────────────────────────────────────────
