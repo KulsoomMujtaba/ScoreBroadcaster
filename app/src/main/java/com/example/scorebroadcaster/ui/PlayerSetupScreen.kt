@@ -26,6 +26,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -68,6 +69,68 @@ fun PlayerSetupScreen(
     // Negative indices represent team B: -(index+1)
     var pickerForIndex by remember { mutableStateOf<Int?>(null) }
 
+    // ---------------------------------------------------------------------------
+    // Cross-team exclusion sets (recomputed whenever either roster changes)
+    // ---------------------------------------------------------------------------
+
+    // Excluded profile IDs for Team A picker = profile IDs currently in Team B
+    val excludedForA_ProfileIds by remember {
+        derivedStateOf { teamBSourceIds.values.toSet() }
+    }
+    // Excluded normalised names for Team A picker = ad-hoc names in Team B
+    val excludedForA_Names by remember {
+        derivedStateOf {
+            teamBPlayers.indices
+                .filter { i -> teamBSourceIds[i] == null && teamBPlayers[i].isNotBlank() }
+                .map { i -> normalizePlayerName(teamBPlayers[i]) }
+                .toSet()
+        }
+    }
+
+    // Excluded profile IDs for Team B picker = profile IDs currently in Team A
+    val excludedForB_ProfileIds by remember {
+        derivedStateOf { teamASourceIds.values.toSet() }
+    }
+    // Excluded normalised names for Team B picker = ad-hoc names in Team A
+    val excludedForB_Names by remember {
+        derivedStateOf {
+            teamAPlayers.indices
+                .filter { i -> teamASourceIds[i] == null && teamAPlayers[i].isNotBlank() }
+                .map { i -> normalizePlayerName(teamAPlayers[i]) }
+                .toSet()
+        }
+    }
+
+    // Per-slot conflict flags for inline error display
+    // A slot conflicts if its name / sourceProfileId matches any entry on the other side.
+    val teamAConflicts by remember {
+        derivedStateOf {
+            teamAPlayers.indices.map { i ->
+                val name = teamAPlayers[i]
+                if (name.isBlank()) return@map false
+                val srcId = teamASourceIds[i]
+                if (srcId != null) srcId in excludedForA_ProfileIds
+                else normalizePlayerName(name) in excludedForA_Names
+            }
+        }
+    }
+    val teamBConflicts by remember {
+        derivedStateOf {
+            teamBPlayers.indices.map { i ->
+                val name = teamBPlayers[i]
+                if (name.isBlank()) return@map false
+                val srcId = teamBSourceIds[i]
+                if (srcId != null) srcId in excludedForB_ProfileIds
+                else normalizePlayerName(name) in excludedForB_Names
+            }
+        }
+    }
+
+    // Continue is disabled while any cross-team conflict exists.
+    val hasCrossTeamConflict by remember {
+        derivedStateOf { teamAConflicts.any { it } || teamBConflicts.any { it } }
+    }
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -89,6 +152,7 @@ fun PlayerSetupScreen(
         Text(match.teamA.name, style = MaterialTheme.typography.titleMedium)
         PlayerListEditor(
             players = teamAPlayers,
+            conflictSlots = teamAConflicts,
             onPlayerChange = { index, value ->
                 teamAPlayers[index] = value
                 // Clear the profile link when the user manually edits the name
@@ -110,6 +174,7 @@ fun PlayerSetupScreen(
         Text(match.teamB.name, style = MaterialTheme.typography.titleMedium)
         PlayerListEditor(
             players = teamBPlayers,
+            conflictSlots = teamBConflicts,
             onPlayerChange = { index, value ->
                 teamBPlayers[index] = value
                 teamBSourceIds.remove(index)
@@ -160,9 +225,18 @@ fun PlayerSetupScreen(
                 matchSessionViewModel.setPendingMatch(updatedMatch)
                 onNavigateToSummary()
             },
+            enabled = !hasCrossTeamConflict,
             modifier = Modifier.fillMaxWidth()
         ) {
             Text("Next: Match Summary →", style = MaterialTheme.typography.titleMedium)
+        }
+        if (hasCrossTeamConflict) {
+            Text(
+                text = "A player cannot be assigned to both teams in the same match.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.fillMaxWidth()
+            )
         }
     }
 
@@ -191,7 +265,9 @@ fun PlayerSetupScreen(
             onCreateAndSelect = { profile ->
                 matchSessionViewModel.addSavedPlayer(profile)
                 applyProfile(profile)
-            }
+            },
+            excludedProfileIds = if (isTeamB) excludedForB_ProfileIds else excludedForA_ProfileIds,
+            excludedNames = if (isTeamB) excludedForB_Names else excludedForA_Names
         )
     }
 }
@@ -203,6 +279,7 @@ fun PlayerSetupScreen(
 @Composable
 private fun PlayerListEditor(
     players: List<String>,
+    conflictSlots: List<Boolean> = emptyList(),
     onPlayerChange: (Int, String) -> Unit,
     onAddPlayer: () -> Unit,
     onRemovePlayer: (Int) -> Unit,
@@ -210,41 +287,53 @@ private fun PlayerListEditor(
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         players.forEachIndexed { index, name ->
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { onPlayerChange(index, it) },
-                    label = { Text("Player ${index + 1}") },
-                    modifier = Modifier.weight(1f),
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next)
-                )
-                // Always show the picker icon — tapping it opens PlayerPickerDialog which
-                // supports both selecting saved players and creating a new one inline.
-                IconButton(
-                    onClick = { onPickSaved(index) },
-                    modifier = Modifier.size(40.dp)
+            val hasConflict = conflictSlots.getOrElse(index) { false }
+            Column {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Icon(
-                        Icons.Default.Person,
-                        contentDescription = "Pick or create player",
-                        tint = MaterialTheme.colorScheme.primary
+                    OutlinedTextField(
+                        value = name,
+                        onValueChange = { onPlayerChange(index, it) },
+                        label = { Text("Player ${index + 1}") },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                        isError = hasConflict
                     )
-                }
-                if (players.size > 1) {
+                    // Always show the picker icon — tapping it opens PlayerPickerDialog which
+                    // supports both selecting saved players and creating a new one inline.
                     IconButton(
-                        onClick = { onRemovePlayer(index) },
+                        onClick = { onPickSaved(index) },
                         modifier = Modifier.size(40.dp)
                     ) {
                         Icon(
-                            Icons.Default.Close,
-                            contentDescription = "Remove player",
-                            tint = MaterialTheme.colorScheme.error
+                            Icons.Default.Person,
+                            contentDescription = "Pick or create player",
+                            tint = MaterialTheme.colorScheme.primary
                         )
                     }
+                    if (players.size > 1) {
+                        IconButton(
+                            onClick = { onRemovePlayer(index) },
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription = "Remove player",
+                                tint = MaterialTheme.colorScheme.error
+                            )
+                        }
+                    }
+                }
+                if (hasConflict) {
+                    Text(
+                        text = "This player is already assigned to the other team.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(start = 4.dp, top = 2.dp)
+                    )
                 }
             }
         }

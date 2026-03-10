@@ -45,29 +45,48 @@ import com.example.scorebroadcaster.data.entity.PlayerSourceType
  * 3. **Create new player** — an inline text field + button that lets the scorer create a
  *    brand-new private player on the fly without navigating away.
  *
- * @param savedPlayers      Existing private player profiles to display and search.
- * @param onDismiss         Called when the dialog is cancelled without a selection.
- * @param onSelect          Called with an *existing* [PlayerProfile] that was tapped.
- *                          The caller should **not** persist it again — it is already saved.
- * @param onCreateAndSelect Called with a *newly-built* [PlayerProfile] when the scorer
- *                          types a name and taps the add button.  The caller is responsible
- *                          for persisting the profile (e.g. via
- *                          `MatchSessionViewModel.addSavedPlayer`).
+ * @param savedPlayers        Existing private player profiles to display and search.
+ * @param onDismiss           Called when the dialog is cancelled without a selection.
+ * @param onSelect            Called with an *existing* [PlayerProfile] that was tapped.
+ *                            The caller should **not** persist it again — it is already saved.
+ * @param onCreateAndSelect   Called with a *newly-built* [PlayerProfile] when the scorer
+ *                            types a name and taps the add button.  The caller is responsible
+ *                            for persisting the profile (e.g. via
+ *                            `MatchSessionViewModel.addSavedPlayer`).
+ * @param excludedProfileIds  Profile IDs that must not be shown (already assigned to the
+ *                            other team via a saved profile).
+ * @param excludedNames       Normalised (trimmed + lowercased) ad-hoc player names that
+ *                            must not be shown (already assigned to the other team without
+ *                            a saved profile).
  */
 @Composable
 fun PlayerPickerDialog(
     savedPlayers: List<PlayerProfile>,
     onDismiss: () -> Unit,
     onSelect: (PlayerProfile) -> Unit,
-    onCreateAndSelect: (PlayerProfile) -> Unit
+    onCreateAndSelect: (PlayerProfile) -> Unit,
+    excludedProfileIds: Set<String> = emptySet(),
+    excludedNames: Set<String> = emptySet()
 ) {
     var searchQuery by remember { mutableStateOf("") }
     var newPlayerName by remember { mutableStateOf("") }
 
-    val filtered = remember(savedPlayers, searchQuery) {
-        if (searchQuery.isBlank()) savedPlayers
-        else savedPlayers.filter {
+    val filtered = remember(savedPlayers, searchQuery, excludedProfileIds, excludedNames) {
+        val eligible = savedPlayers.filter { profile ->
+            profile.id !in excludedProfileIds &&
+                normalizePlayerName(profile.displayName) !in excludedNames
+        }
+        if (searchQuery.isBlank()) eligible
+        else eligible.filter {
             it.displayName.contains(searchQuery.trim(), ignoreCase = true)
+        }
+    }
+
+    // True when every saved player has been excluded by the opposite team's roster.
+    val allExcluded = remember(savedPlayers, excludedProfileIds, excludedNames) {
+        savedPlayers.isNotEmpty() && savedPlayers.all { profile ->
+            profile.id in excludedProfileIds ||
+                normalizePlayerName(profile.displayName) in excludedNames
         }
     }
 
@@ -98,7 +117,13 @@ fun PlayerPickerDialog(
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                 )
-                if (filtered.isEmpty()) {
+                if (allExcluded) {
+                    Text(
+                        text = "No eligible players available — already assigned to the other team.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                    )
+                } else if (filtered.isEmpty()) {
                     Text(
                         text = if (searchQuery.isBlank()) "No saved players yet."
                                else "No match for \"${searchQuery.trim()}\".",
@@ -141,6 +166,10 @@ fun PlayerPickerDialog(
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                 )
+                val newNameConflicts = remember(newPlayerName, excludedNames) {
+                    newPlayerName.isNotBlank() &&
+                        normalizePlayerName(newPlayerName) in excludedNames
+                }
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically
@@ -151,7 +180,8 @@ fun PlayerPickerDialog(
                         label = { Text("Player name") },
                         singleLine = true,
                         modifier = Modifier.weight(1f),
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done)
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                        isError = newNameConflicts
                     )
                     Button(
                         onClick = {
@@ -166,7 +196,7 @@ fun PlayerPickerDialog(
                                 newPlayerName = ""
                             }
                         },
-                        enabled = newPlayerName.isNotBlank()
+                        enabled = newPlayerName.isNotBlank() && !newNameConflicts
                     ) {
                         Icon(
                             Icons.Default.Add,
@@ -174,6 +204,14 @@ fun PlayerPickerDialog(
                             modifier = Modifier.size(18.dp)
                         )
                     }
+                }
+                if (newNameConflicts) {
+                    Text(
+                        text = "This player is already assigned to the other team.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 }
             }
         },

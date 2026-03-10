@@ -217,6 +217,32 @@ Scoring is modelled as an append-only event log:
 
 ## Development Log
 
+### 2026-03-10 – Cross-team player exclusivity in match setup
+
+Player cannot belong to both teams in the same match.
+
+During team setup, a player already assigned to one side is now excluded from the other side's picker and cannot be added manually to both teams. Identity is resolved using `sourceProfileId` when available, with normalized-name fallback for ad-hoc players. Inline validation is shown and Continue remains disabled until cross-team conflicts are resolved.
+
+**Files created/modified:**
+| File | Action |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/ui/PlayerIdentityHelper.kt` | Created – `normalizePlayerName`, `Player.sameIdentityAs`, `hasCrossTeamDuplicate`, `crossTeamConflicts` helpers |
+| `app/src/main/java/com/example/scorebroadcaster/ui/PlayerSetupScreen.kt` | Updated – derived cross-team exclusion sets, per-slot conflict flags, inline error text, `enabled = !hasCrossTeamConflict` on Continue |
+| `app/src/main/java/com/example/scorebroadcaster/ui/PlayerPickerDialog.kt` | Updated – `excludedProfileIds` / `excludedNames` params; filters saved-player list; blocks "create new" for conflicting names |
+| `README.md` | Updated |
+
+**Architecture:**
+
+*`PlayerIdentityHelper.kt`* — thin helper file next to the UI layer. Contains:
+- `normalizePlayerName(name)` — trims and lowercases for ad-hoc name comparison.
+- `Player.sameIdentityAs(other)` — prefers `sourceProfileId` equality; falls back to normalized name.
+- `hasCrossTeamDuplicate(teamA, teamB)` — returns `true` if any overlap exists.
+- `crossTeamConflicts(teamA, teamB)` — returns the set of conflicting `Player` entries from Team A's perspective.
+
+*`PlayerSetupScreen`* — maintains `derivedStateOf` blocks that compute `excludedForA_ProfileIds`, `excludedForA_Names`, `excludedForB_ProfileIds`, `excludedForB_Names`, `teamAConflicts`, `teamBConflicts`, and `hasCrossTeamConflict` from the live local roster state. The Continue button has `enabled = !hasCrossTeamConflict`. A section-level error is shown below the button while the conflict persists. Per-slot `isError` styling and inline error text appear on each conflicting field.
+
+*`PlayerPickerDialog`* — two new optional parameters (`excludedProfileIds: Set<String>`, `excludedNames: Set<String>`) filter the visible saved-player list. If all saved players are excluded, a muted info row ("No eligible players available — already assigned to the other team.") is shown. The "Create new player" inline field has its button disabled and shows an inline error when the typed name matches an excluded ad-hoc name.
+
 ### 2026-03-10 – Bug Fix: Striker / non-striker can now be swapped correctly in innings setup
 
 Previously, when only two batting players existed and both were already selected, the dropdown filtering logic prevented swapping them unless both fields were manually cleared. The innings setup UI now supports direct swapping in two ways:
