@@ -318,6 +318,15 @@ class MatchViewModel : ViewModel() {
         } else {
             _currentPartnership.value = updatedPartnership
         }
+
+        // --- Win condition: chasing team reaches or exceeds the target ---
+        // Check after all state updates so the result banner reflects the final delivery.
+        if (console.phase == InningsPhase.SECOND_INNINGS &&
+            console.target > 0 &&
+            newState.runs >= console.target
+        ) {
+            endMatch()
+        }
     }
 
     fun undo() {
@@ -687,7 +696,10 @@ class MatchViewModel : ViewModel() {
      * correctly reflects the outcome after an app restart.
      */
     fun endMatch() {
-        _consoleState.value = _consoleState.value.copy(phase = InningsPhase.MATCH_COMPLETE)
+        _consoleState.value = _consoleState.value.copy(
+            phase = InningsPhase.MATCH_COMPLETE,
+            pendingAction = null
+        )
         _activeMatch.value?.let { match ->
             val updated = match.copy(status = MatchStatus.COMPLETED)
             _activeMatch.value = updated

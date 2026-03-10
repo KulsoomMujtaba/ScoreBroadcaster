@@ -217,6 +217,19 @@ Scoring is modelled as an append-only event log:
 
 ## Development Log
 
+### 2026-03-10 – Bug Fix: Target Reached Condition
+
+**Files changed:**
+| File | Action |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/viewmodel/MatchViewModel.kt` | Updated – win-condition check added at end of `updateConsoleAfterEvent`; `endMatch()` now also clears `pendingAction` |
+| `README.md` | Updated |
+
+**Explanation:**
+When the chasing team reaches or exceeds the target in the second innings, the match now automatically ends and the chasing team is declared the winner. A win-condition check was added at the end of `updateConsoleAfterEvent` in `MatchViewModel`: if the current phase is `SECOND_INNINGS` and `newState.runs >= console.target`, `endMatch()` is called immediately. `endMatch()` was also updated to clear `pendingAction` so that any pending wicket/bowler dialogs are dismissed at the moment the match ends. Scoring buttons are disabled automatically because `scoringEnabled` requires `phase == SECOND_INNINGS`, which is no longer true once `MATCH_COMPLETE` is set.
+
+---
+
 ### 2026-03-10 – UI Improvement: Broadcast Overlay Spacing Reduction and Portrait Orientation Fix
 
 **Files changed:**
