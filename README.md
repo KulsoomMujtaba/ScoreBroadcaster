@@ -217,6 +217,24 @@ Scoring is modelled as an append-only event log:
 
 ## Development Log
 
+### 2026-03-10 – UI Improvement: Broadcast Overlay Compact Redesign (Orientation-Responsive, Center Panel, Slimmer Balls)
+
+**Files changed:**
+| File | Action |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/ui/ScoreboardOverlay.kt` | Updated – reduced ball circle sizes, added center section background panel, added orientation-responsive layout |
+| `app/src/main/java/com/example/scorebroadcaster/streaming/ScoreboardOverlayRenderer.kt` | Updated – reduced ball radius/spacing, added center section rounded-rect panel, added portrait/landscape orientation detection |
+| `README.md` | Updated – added this development log entry |
+
+**Explanation:**
+
+- **Current-over ball circles reduced in size for a slimmer overlay.** Ball indicators in the Compose overlay have been reduced from 20 dp to 14 dp, border stroke from 1.5 dp to 1 dp, text size from 8 sp to 7 sp, and horizontal spacing between balls from 2 dp to 1 dp. In the Canvas renderer, ball radius has been reduced from 7 px to 5.5 px and center-to-center spacing from 16 px to 12 px. The result is a noticeably slimmer over row while labels remain centered and readable.
+- **Center score section now uses its own highlighted background panel.** The center column (Team A vs Team B, score, overs, run rate / chase context) is now wrapped in a distinct darker rounded capsule (`#0D2137` at 87 % opacity) set against the outer deep-blue strip. In Compose this is a `RoundedCornerShape(5.dp)` Box; in the Canvas renderer a `drawRoundRect` is drawn behind the center section text. The left and right side sections remain outside this panel.
+- **Overlay now adapts its sizing and layout for landscape vs portrait.** In Compose, `LocalConfiguration.current.orientation` is checked each recomposition; portrait mode uses tighter horizontal padding (6 dp vs 10 dp), narrower side-section weights (0.8 f vs 1 f), and slightly smaller text sizes (name 10 sp, stats 9 sp, score 12 sp). In the Canvas renderer, `streamWidth < streamHeight` detects portrait; portrait applies an 85 % font-scale factor, a narrower side-section fraction (32 % vs 36 %), and proportionally smaller ball dimensions.
+- **Overlay is flush to the bottom edge in immersive preview and stream output.** No external bottom margin or safe-area inset is applied to the scoreboard overlay in `CameraPreviewScreen`; the `Alignment.BottomCenter` anchor keeps it pinned to the screen edge. The Canvas renderer draws the full overlay height bitmap with no bottom gap.
+
+---
+
 ### 2026-03-10 – UI Improvement: Broadcast Overlay Styling Refinement (Text Hierarchy + Outlined Ball Indicators)
 
 **Files changed:**
