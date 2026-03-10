@@ -1,5 +1,6 @@
 package com.example.scorebroadcaster.ui
 
+import android.content.res.Configuration
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -75,15 +76,15 @@ fun ScoreboardOverlay(
     val showBatters = model.striker != null || model.nonStriker != null
     val showBowler = model.bowler != null
 
-    // Detect orientation from actual screen dimensions instead of Configuration.orientation,
-    // which may report incorrect values when the activity orientation is locked.
+    // Detect orientation using Configuration.orientation so the overlay layout responds
+    // correctly when the device is rotated (recomposition is triggered by LocalConfiguration).
     val configuration = LocalConfiguration.current
-    val isLandscape = configuration.screenWidthDp >= configuration.screenHeightDp
+    val isPortrait = configuration.orientation == Configuration.ORIENTATION_PORTRAIT
 
-    val hPad = if (isLandscape) 10.dp else 6.dp
-    val sideWeight = if (isLandscape) 1f else 0.8f
+    val hPad = if (isPortrait) 6.dp else 10.dp
+    val sideWeight = if (isPortrait) 0.8f else 1f
     val centerWeight = if (showBatters || showBowler) {
-        if (isLandscape) 1.2f else 1.0f
+        if (isPortrait) 1.0f else 1.2f
     } else {
         1f
     }
@@ -94,7 +95,7 @@ fun ScoreboardOverlay(
             .fillMaxWidth()
             .clip(RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp))
             .background(OverlayBackground)
-            .padding(horizontal = hPad, vertical = 4.dp),
+            .padding(horizontal = hPad, vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
@@ -103,7 +104,7 @@ fun ScoreboardOverlay(
             BattersSection(
                 striker = model.striker,
                 nonStriker = model.nonStriker,
-                isLandscape = isLandscape,
+                isLandscape = !isPortrait,
                 modifier = Modifier.weight(sideWeight)
             )
         }
@@ -111,7 +112,7 @@ fun ScoreboardOverlay(
         // ── Center: score capsule ──────────────────────────────────────────────
         CenterScoreSection(
             model = model,
-            isLandscape = isLandscape,
+            isLandscape = !isPortrait,
             modifier = Modifier.weight(centerWeight)
         )
 
@@ -120,7 +121,7 @@ fun ScoreboardOverlay(
             BowlerSection(
                 bowler = checkNotNull(model.bowler),
                 currentOverBalls = model.currentOverBalls,
-                isLandscape = isLandscape,
+                isLandscape = !isPortrait,
                 modifier = Modifier.weight(sideWeight)
             )
         }
@@ -279,7 +280,7 @@ private fun BowlerSection(
     Column(
         modifier = modifier,
         horizontalAlignment = Alignment.Start,
-        verticalArrangement = Arrangement.spacedBy(2.dp)
+        verticalArrangement = Arrangement.spacedBy(1.dp)
     ) {
         // One line: name  W-R  (overs)
         Row(

@@ -1,8 +1,6 @@
 package com.example.scorebroadcaster.ui
 
 import android.Manifest
-import android.app.Activity
-import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.view.ViewGroup
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -62,7 +60,7 @@ private val STREAMING_PERMISSIONS = arrayOf(
  * - Requests CAMERA and RECORD_AUDIO permissions at runtime if not yet granted.
  * - Shows a red "● LIVE" badge while the stream is active.
  * - Streaming stops automatically when this screen is disposed (back-press / navigation pop).
- * - Locks the screen to landscape for a professional broadcast monitor feel.
+ * - The overlay adapts automatically between portrait and landscape layouts as the device rotates.
  *
  * @param onBack called when the user taps the close button to return to the previous screen.
  */
@@ -76,16 +74,6 @@ fun StreamPreviewScreen(
     val streamingStatus by liveStreamViewModel.streamingStatus.collectAsStateWithLifecycle()
     val activeMatch by matchViewModel.activeMatch.collectAsStateWithLifecycle()
     val context = LocalContext.current
-
-    // Lock to landscape while this screen is visible; restore on exit.
-    val activity = context as? Activity
-    DisposableEffect(Unit) {
-        val original = activity?.requestedOrientation ?: ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-        activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
-        onDispose {
-            activity?.requestedOrientation = original
-        }
-    }
 
     var permissionsGranted by remember {
         mutableStateOf(

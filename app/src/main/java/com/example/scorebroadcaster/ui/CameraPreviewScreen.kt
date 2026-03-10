@@ -1,8 +1,6 @@
 package com.example.scorebroadcaster.ui
 
 import android.Manifest
-import android.app.Activity
-import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.util.Log
 import android.view.ViewGroup
@@ -54,7 +52,7 @@ import com.example.scorebroadcaster.viewmodel.MatchViewModel
  *   from [MatchViewModel.state] via [collectAsStateWithLifecycle], recomposing whenever
  *   the match state changes.
  * - No scoring controls are available here; scoring must be done from [ScoringScreen].
- * - Locks the screen to landscape for a professional broadcast monitor feel.
+ * - The overlay adapts automatically between portrait and landscape layouts as the device rotates.
  * - Requests the CAMERA permission at runtime if it has not already been granted.
  *
  * @param onBack called when the user taps the close button to return to the previous screen.
@@ -70,16 +68,6 @@ fun CameraPreviewScreen(
     val activeMatch by matchViewModel.activeMatch.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
-
-    // Lock to landscape while this screen is visible; restore on exit.
-    val activity = context as? Activity
-    DisposableEffect(Unit) {
-        val original = activity?.requestedOrientation ?: ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-        activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
-        onDispose {
-            activity?.requestedOrientation = original
-        }
-    }
 
     var cameraPermissionGranted by remember {
         mutableStateOf(
