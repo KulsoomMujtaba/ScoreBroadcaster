@@ -109,13 +109,16 @@ class MatchViewModel : ViewModel() {
         if (ballEvent.wicket) {
             Log.d("WicketFlow", "Wicket recorded: ${ballEvent.dismissalDetail?.dismissalType} — ${ballEvent.dismissalDetail?.batter?.name}")
         }
+        val console = _consoleState.value
         // Stamp the current bowler onto the event so MaidenOverCalculator can derive maiden
         // counts from the event log without needing any external player-tracking state.
-        val stamped = if (ballEvent.bowler == null) {
-            ballEvent.copy(bowler = _consoleState.value.currentBowler)
-        } else {
-            ballEvent
-        }
+        // Also stamp the current striker and non-striker so the live batting state can be
+        // restored after an app restart without re-opening the innings-setup dialog.
+        val stamped = ballEvent.copy(
+            bowler = ballEvent.bowler ?: console.currentBowler,
+            striker = ballEvent.striker ?: console.striker,
+            nonStriker = ballEvent.nonStriker ?: console.nonStriker
+        )
         val prevState = _state.value
         _events.value = _events.value + stamped
         val newState = reduce(_events.value)
@@ -789,9 +792,10 @@ class MatchViewModel : ViewModel() {
      * selection every time.
      *
      * The current bowler is reconstructed from the last event that carries a bowler reference.
-     * Striker and non-striker cannot be reliably derived from [BallEvent]s alone; when they
-     * are absent [ScoringScreen] will detect the missing players via [needsInningsSetup] and
-     * show the setup dialog so the scorer can identify who is currently at the crease.
+     * Striker and non-striker are reconstructed from the last stamped event by applying the same
+     * rotation and wicket-replacement logic used during live scoring.  Events recorded before
+     * batter-stamping was introduced (null striker) fall back gracefully: [ScoringScreen] detects
+     * the missing players via [needsInningsSetup] and shows the setup dialog.
      *
      * Four resume scenarios are handled:
      * 1. **Match completed** — match.status is [MatchStatus.COMPLETED]; phase restored to
@@ -865,11 +869,14 @@ class MatchViewModel : ViewModel() {
                 _fallOfWickets.value = computeFallOfWickets(secondEvents)
                 // Reconstruct the current bowler from the last stamped ball event.
                 val currentBowler = secondEvents.lastOrNull { it.bowler != null }?.bowler
+                // Reconstruct striker and non-striker by replaying the last delivery's
+                // rotation/wicket logic on the most recent stamped batter positions.
+                val (striker, nonStriker) = deriveCurrentBatters(secondEvents)
+                val strikerEntry = striker?.let { BattingEntry(player = it) }
+                val nonStrikerEntry = nonStriker?.let { BattingEntry(player = it) }
+                val bowlerEntry = currentBowler?.let { BowlingEntry(player = it) }
                 _consoleState.value = ScoringConsoleState(
                     inningsNumber = 2,
-                    // Use SECOND_INNINGS so the UI does not force a fresh openers setup.
-                    // needsInningsSetup in ScoringScreen will detect missing striker/bowler
-                    // and show the restore-players dialog if required.
                     phase = InningsPhase.SECOND_INNINGS,
                     battingTeamName = match.bowlingFirst.name,
                     bowlingTeamName = match.battingFirst.name,
@@ -883,10 +890,18 @@ class MatchViewModel : ViewModel() {
                     firstInningsOvers = firstState.overs,
                     firstInningsBalls = firstState.balls,
                     target = firstState.runs + 1,
-                    currentBowler = currentBowler
+                    striker = striker,
+                    nonStriker = nonStriker,
+                    currentBowler = currentBowler,
+                    strikerEntry = strikerEntry,
+                    nonStrikerEntry = nonStrikerEntry,
+                    currentBowlerEntry = bowlerEntry,
+                    allBattingEntries = listOfNotNull(strikerEntry, nonStrikerEntry),
+                    allBowlingEntries = listOfNotNull(bowlerEntry)
                 )
                 Log.d("ResumeFlow", "Restored: 2nd innings in progress " +
-                        "(${secondEvents.size} balls), bowler=${currentBowler?.name}")
+                        "(${secondEvents.size} balls), bowler=${currentBowler?.name}, " +
+                        "striker=${striker?.name}, nonStriker=${nonStriker?.name}")
             }
 
             // ── 3. Innings break ──────────────────────────────────────────────────────
@@ -921,18 +936,29 @@ class MatchViewModel : ViewModel() {
                 _fallOfWickets.value = computeFallOfWickets(firstEvents)
                 // Reconstruct the current bowler from the last stamped ball event.
                 val currentBowler = firstEvents.lastOrNull { it.bowler != null }?.bowler
+                // Reconstruct striker and non-striker by replaying the last delivery's
+                // rotation/wicket logic on the most recent stamped batter positions.
+                val (striker, nonStriker) = deriveCurrentBatters(firstEvents)
+                val strikerEntry = striker?.let { BattingEntry(player = it) }
+                val nonStrikerEntry = nonStriker?.let { BattingEntry(player = it) }
+                val bowlerEntry = currentBowler?.let { BowlingEntry(player = it) }
                 _consoleState.value = ScoringConsoleState(
                     inningsNumber = 1,
-                    // Use FIRST_INNINGS so the UI does not force a fresh openers setup.
-                    // needsInningsSetup in ScoringScreen will detect missing striker/bowler
-                    // and show the restore-players dialog if required.
                     phase = InningsPhase.FIRST_INNINGS,
                     battingTeamName = match.battingFirst.name,
                     bowlingTeamName = match.bowlingFirst.name,
-                    currentBowler = currentBowler
+                    striker = striker,
+                    nonStriker = nonStriker,
+                    currentBowler = currentBowler,
+                    strikerEntry = strikerEntry,
+                    nonStrikerEntry = nonStrikerEntry,
+                    currentBowlerEntry = bowlerEntry,
+                    allBattingEntries = listOfNotNull(strikerEntry, nonStrikerEntry),
+                    allBowlingEntries = listOfNotNull(bowlerEntry)
                 )
                 Log.d("ResumeFlow", "Restored: 1st innings in progress " +
-                        "(${firstEvents.size} balls), bowler=${currentBowler?.name}")
+                        "(${firstEvents.size} balls), bowler=${currentBowler?.name}, " +
+                        "striker=${striker?.name}, nonStriker=${nonStriker?.name}")
             }
         }
     }
@@ -940,6 +966,55 @@ class MatchViewModel : ViewModel() {
     // ---------------------------------------------------------------------------
     // Private helpers
     // ---------------------------------------------------------------------------
+
+    /**
+     * Derives the current striker and non-striker from a sequence of persisted [BallEvent]s
+     * after an app restart.
+     *
+     * Each event carries the pre-delivery batter positions in its [BallEvent.striker] and
+     * [BallEvent.nonStriker] fields (stamped by [addBallEvent]).  This function locates the
+     * last event that has a non-null striker stamp, then applies the same rotation and
+     * wicket-replacement logic used by [updateConsoleAfterEvent] to compute the post-delivery
+     * batting positions.
+     *
+     * Returns `Pair(null, null)` for events recorded before batter-stamping was introduced,
+     * allowing [ScoringScreen] to fall back to the innings-setup dialog for those matches.
+     */
+    private fun deriveCurrentBatters(events: List<BallEvent>): Pair<Player?, Player?> {
+        val lastIdx = events.indexOfLast { it.striker != null }
+        if (lastIdx < 0) return Pair(null, null)
+
+        val event = events[lastIdx]
+        val preStriker = event.striker
+        val preNonStriker = event.nonStriker
+
+        val wicketFell = event.wicket
+        val strikerIsOut = wicketFell &&
+                event.dismissalDetail?.batter?.name == preStriker?.name
+
+        // Determine whether this delivery ended the current over.  Compare MatchState ball
+        // counts before and after this specific delivery to detect the over boundary.
+        val stateAfter = reduce(events.take(lastIdx + 1))
+        val stateBefore = if (lastIdx > 0) reduce(events.take(lastIdx)) else MatchState()
+        val overEnded = event.countsAsBall &&
+                stateAfter.balls == 0 &&
+                stateAfter.overs > stateBefore.overs
+
+        // Odd-runs rotation: wides and no-balls do not rotate strike.
+        val isWide = event.extras.wides > 0
+        val isNoBall = event.extras.noBalls > 0
+        val oddRuns = !isWide && !isNoBall &&
+                (event.runsOffBat + event.extras.byes + event.extras.legByes) % 2 == 1
+
+        // Mirror the rotation rules from updateConsoleAfterEvent.
+        return when {
+            wicketFell && strikerIsOut  -> Pair(null, preNonStriker)
+            wicketFell && !strikerIsOut -> Pair(preStriker, null)
+            overEnded && oddRuns        -> Pair(preStriker, preNonStriker)
+            overEnded || oddRuns        -> Pair(preNonStriker, preStriker)
+            else                        -> Pair(preStriker, preNonStriker)
+        }
+    }
 
     /**
      * Returns batting-team players that are eligible to be the next incoming batter.

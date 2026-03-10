@@ -217,6 +217,34 @@ Scoring is modelled as an append-only event log:
 
 ## Development Log
 
+### 2026-03-10 – Bug Fix: Resume Match incorrectly reopening innings setup
+
+**Files changed:**
+| File | Action |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/domain/BallEvent.kt` | Updated – added `striker` and `nonStriker` fields so the live batting state is persisted with every delivery |
+| `app/src/main/java/com/example/scorebroadcaster/data/local/BallEventEntity.kt` | Updated – added `eventStrikerName`, `eventStrikerSourceProfileId`, `eventNonStrikerName`, `eventNonStrikerSourceProfileId` columns; updated `toDomain()` and `toEntity()` mappers |
+| `app/src/main/java/com/example/scorebroadcaster/data/local/ScoredDatabase.kt` | Updated – bumped schema version to 6 |
+| `app/src/main/java/com/example/scorebroadcaster/viewmodel/MatchViewModel.kt` | Updated – `addBallEvent()` stamps striker/nonStriker onto each event; added `deriveCurrentBatters()` helper; `resumePersistedState()` now restores striker, nonStriker, batting entries, and bowling entries from stamped events |
+| `app/src/main/java/com/example/scorebroadcaster/ui/ScoringScreen.kt` | Updated – `LaunchedEffect` now also dismisses the setup dialog when `needsInningsSetup` transitions to false (secondary guard for async restore) |
+| `README.md` | Updated |
+
+**Explanation:**
+
+Resuming an already-started match after app restart now restores the live innings state correctly. The innings setup popup is only shown when setup is genuinely required, not for matches already in progress.
+
+**Root cause:** `resumePersistedState()` could reconstruct the current bowler from stored events (via `BallEvent.bowler`) but had no way to reconstruct the striker and non-striker, because `BallEvent` did not carry batter information. As a result, both positions were always null after an app restart, which caused `needsInningsSetup` in `ScoringScreen` to evaluate to `true` and re-open the innings-setup bottom sheet even when the innings was already underway.
+
+**Fix — primary (ViewModel):**
+- Added `striker: Player?` and `nonStriker: Player?` fields to `BallEvent`. `addBallEvent()` stamps the current console state's striker and non-striker onto every delivery before persisting it, exactly as the bowler field is already stamped.
+- Added `deriveCurrentBatters(events)` — a pure helper that locates the last stamped event, then applies the same over-end rotation and wicket-replacement logic used by `updateConsoleAfterEvent` to compute the post-delivery batting positions.
+- `resumePersistedState()` calls `deriveCurrentBatters()` for both the first-innings and second-innings in-progress paths and populates `striker`, `nonStriker`, `strikerEntry`, `nonStrikerEntry`, `allBattingEntries`, `currentBowlerEntry`, and `allBowlingEntries` in the restored `ScoringConsoleState`. Events recorded before this change (null striker fields) fall back gracefully: the derived positions are null, `needsInningsSetup` remains true, and the setup dialog is shown as before.
+
+**Fix — secondary (UI guard):**
+- The `LaunchedEffect(needsInningsSetup)` in `ScoringScreen` now resets `setupDialogVisible` to `false` when `needsInningsSetup` transitions to false. This ensures that even if the dialog was transiently opened during the brief async window between `initFromMatch()` and `resumePersistedState()` completing, it is automatically dismissed once the ViewModel finishes restoring the full live state.
+
+---
+
 ### 2026-03-10 – Bug Fix: Target Reached Condition
 
 **Files changed:**

@@ -140,6 +140,10 @@ fun ScoringScreen(
                     "striker=${console.striker?.name}, " +
                     "nonStriker=${console.nonStriker?.name}, " +
                     "bowler=${console.currentBowler?.name}")
+        } else if (!needsInningsSetup) {
+            // State was restored (e.g. after async resume from DB) — dismiss any
+            // setup dialog that may have opened during the transient null phase.
+            setupDialogVisible = false
         }
     }
 

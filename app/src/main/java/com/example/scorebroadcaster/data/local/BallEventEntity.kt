@@ -53,6 +53,12 @@ data class BallEventEntity(
     val eventBowlerName: String?,
     val eventBowlerSourceProfileId: String?,
 
+    // The striker and non-striker at the time of this delivery (for app-restart restore)
+    val eventStrikerName: String?,
+    val eventStrikerSourceProfileId: String?,
+    val eventNonStrikerName: String?,
+    val eventNonStrikerSourceProfileId: String?,
+
     val createdAt: Long
 )
 
@@ -91,13 +97,23 @@ fun BallEventEntity.toDomain(): BallEvent {
         Player(name = it, sourceProfileId = eventBowlerSourceProfileId)
     }
 
+    val striker: Player? = eventStrikerName?.let {
+        Player(name = it, sourceProfileId = eventStrikerSourceProfileId)
+    }
+
+    val nonStriker: Player? = eventNonStrikerName?.let {
+        Player(name = it, sourceProfileId = eventNonStrikerSourceProfileId)
+    }
+
     return BallEvent(
         runsOffBat = runsOffBat,
         extras = extras,
         wicket = wicket,
         dismissalDetail = dismissal,
         countsAsBall = countsAsBall,
-        bowler = bowler
+        bowler = bowler,
+        striker = striker,
+        nonStriker = nonStriker
     )
 }
 
@@ -131,5 +147,9 @@ fun BallEvent.toEntity(
     dismissalReplacingStriker = null,
     eventBowlerName = bowler?.name,
     eventBowlerSourceProfileId = bowler?.sourceProfileId,
+    eventStrikerName = striker?.name,
+    eventStrikerSourceProfileId = striker?.sourceProfileId,
+    eventNonStrikerName = nonStriker?.name,
+    eventNonStrikerSourceProfileId = nonStriker?.sourceProfileId,
     createdAt = System.currentTimeMillis()
 )
