@@ -45,6 +45,7 @@ data class BallEventEntity(
     val dismissedBatterName: String?,
     val dismissalType: String?,
     val fielderName: String?,
+    val fielder2Name: String?,
     val bowlerName: String?,
     /** True when the dismissal caused the striker to be replaced; null when not a wicket. */
     val dismissalReplacingStriker: Boolean?,
@@ -84,10 +85,14 @@ fun BallEventEntity.toDomain(): BallEvent {
     val dismissal: DismissalDetail? = if (wicket && dismissalType != null) {
         val type = runCatching { DismissalType.valueOf(dismissalType ?: "") }.getOrNull()
         if (type != null && dismissedBatterName != null) {
+            val fieldersList = listOfNotNull(
+                fielderName?.let { Player(name = it) },
+                fielder2Name?.let { Player(name = it) }
+            )
             DismissalDetail(
                 batter = Player(name = dismissedBatterName),
                 dismissalType = type,
-                fielder = fielderName?.let { Player(name = it) },
+                fielders = fieldersList,
                 bowler = bowlerName?.let { Player(name = it) }
             )
         } else null
@@ -142,7 +147,8 @@ fun BallEvent.toEntity(
     countsAsBall = countsAsBall,
     dismissedBatterName = dismissalDetail?.batter?.name,
     dismissalType = dismissalDetail?.dismissalType?.name,
-    fielderName = dismissalDetail?.fielder?.name,
+    fielderName = dismissalDetail?.fielders?.getOrNull(0)?.name,
+    fielder2Name = dismissalDetail?.fielders?.getOrNull(1)?.name,
     bowlerName = dismissalDetail?.bowler?.name,
     dismissalReplacingStriker = null,
     eventBowlerName = bowler?.name,

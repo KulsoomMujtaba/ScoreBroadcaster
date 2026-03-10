@@ -3,15 +3,17 @@ package com.example.scorebroadcaster.data.entity
 /**
  * Full details about a wicket dismissal.
  *
- * @param batter     The player who was dismissed.
- * @param dismissalType  How the batter was dismissed.
- * @param fielder    Optional fielder involved (catcher, wicketkeeper, or run-out fielder).
- * @param bowler     The bowler at the time of dismissal (may be null for run outs from earlier).
+ * @param batter        The player who was dismissed.
+ * @param dismissalType How the batter was dismissed.
+ * @param fielders      Fielders involved in the dismissal.
+ *                      Empty for Bowled/LBW; one player for Caught/Stumped;
+ *                      one or two players for Run Out.
+ * @param bowler        The bowler at the time of dismissal (may be null for run outs from earlier).
  */
 data class DismissalDetail(
     val batter: Player,
     val dismissalType: DismissalType,
-    val fielder: Player? = null,
+    val fielders: List<Player> = emptyList(),
     val bowler: Player? = null
 ) {
     /**
@@ -27,22 +29,29 @@ data class DismissalDetail(
      * - "lbw b Smith"
      * - "st Brown b Smith"
      * - "run out (Jones)"
+     * - "run out (Jones / Khan)"
      */
     fun toScorecardString(): String = when (dismissalType) {
         DismissalType.BOWLED ->
             "b ${bowler?.name ?: "?"}"
-        DismissalType.CAUGHT -> when {
-            fielder != null && bowler != null -> "c ${fielder.name} b ${bowler.name}"
-            fielder != null -> "c ${fielder.name}"
-            bowler != null -> "c & b ${bowler.name}"
-            else -> "caught"
+        DismissalType.CAUGHT -> {
+            val fielder = fielders.firstOrNull()
+            when {
+                fielder != null && bowler != null -> "c ${fielder.name} b ${bowler.name}"
+                fielder != null -> "c ${fielder.name}"
+                bowler != null -> "c & b ${bowler.name}"
+                else -> "caught"
+            }
         }
         DismissalType.LBW ->
             "lbw b ${bowler?.name ?: "?"}"
         DismissalType.STUMPED ->
-            "st ${fielder?.name ?: "?"} b ${bowler?.name ?: "?"}"
+            "st ${fielders.firstOrNull()?.name ?: "?"} b ${bowler?.name ?: "?"}"
         DismissalType.RUN_OUT ->
-            if (fielder != null) "run out (${fielder.name})" else "run out"
+            if (fielders.isNotEmpty()) {
+                val fielderText = fielders.joinToString(" / ") { it.name }
+                "run out ($fielderText)"
+            } else "run out"
         DismissalType.OTHER ->
             "out"
     }
