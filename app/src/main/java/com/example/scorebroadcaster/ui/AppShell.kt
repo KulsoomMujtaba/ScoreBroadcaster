@@ -266,19 +266,6 @@ fun AppDrawer(
             selected = currentRoute == "saved_players",
             onClick = { onNavigate("saved_players") }
         )
-        DrawerNavItem(
-            icon = Icons.Default.List,
-            label = "Scorecard",
-            selected = currentRoute == "scorecard",
-            onClick = { onNavigate("scorecard") }
-        )
-        DrawerNavItem(
-            icon = Icons.Default.Info,
-            label = "Ball Timeline",
-            selected = currentRoute == "ball_timeline",
-            onClick = { onNavigate("ball_timeline") }
-        )
-
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
         // Broadcast destinations

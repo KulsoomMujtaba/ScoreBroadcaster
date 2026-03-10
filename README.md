@@ -557,6 +557,30 @@ The scoring screen header has been redesigned into a compact, single-block `Comp
 
 ---
 
+### 2026-03-10 – UI Update: Navigation and Boundary Button Styling
+
+**Removed Scorecard and Ball Timeline from side navigation** to simplify the navigation drawer. Both screens remain fully accessible via the internal tab navigation within the Scoring screen (Score / Timeline / Scorecard tabs).
+
+**Run buttons now visually distinguish boundaries** (4 and 6) from normal runs, improving scoring feedback during live matches.
+
+| Button | Background | Text | Rationale |
+|--------|-----------|------|-----------|
+| 0, 1, 2, 3 | Default (primary container) | Default | Neutral — normal delivery |
+| **4** | Amber gold (`#FFB300`) | Dark (`#1A1100`) | Boundary highlight — gold |
+| **6** | Deep orange (`#E65100`) | White | Six highlight — strongest emphasis |
+| Wicket | Error container | On-error | Destructive / significant event |
+
+**Files changed:**
+
+| File | Change |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/ui/AppShell.kt` | Removed Scorecard and Ball Timeline drawer items |
+| `app/src/main/java/com/example/scorebroadcaster/ui/theme/Color.kt` | Added `BoundaryFourContainer`, `OnBoundaryFourContainer`, `BoundarySixContainer`, `OnBoundarySixContainer` |
+| `app/src/main/java/com/example/scorebroadcaster/ui/ScoringScreen.kt` | Applied boundary colours to 4 and 6 run buttons |
+| `README.md` | Added this Development Log entry |
+
+---
+
 ### 2026-03-09 – UI Improvement: Scoring Buttons Layout
 
 The scoring control area in `ScoringScreen` has been reorganised into a structured scorer pad with three clearly separated sections, making live scoring faster and more comfortable during a real match.
