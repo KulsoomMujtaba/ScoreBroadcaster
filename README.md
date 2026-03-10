@@ -1032,6 +1032,44 @@ Added a full ball-by-ball timeline and over history screen (`BallTimelineScreen`
 
 ---
 
+### 2026-03-10 – UI Improvement: Separate Wide / No Ball Extras Dialog
+
+**What changed:**
+Wide and No Ball now use a dedicated `WideNoBallEntryDialog` instead of the generic `ExtrasEntryDialog`.
+The new dialog makes the automatic +1 extra run explicit and separates it from any additional runs taken by running.
+
+**Key changes:**
+
+- **Wide and No Ball** taps open `WideNoBallEntryDialog`:
+  - Title shows "Wide" or "No Ball".
+  - Supporting text: "Includes 1 automatic extra run" and "Add any additional runs taken by running".
+  - Extra type selector limited to Wide / No Ball.
+  - Additional runs selector (0 / 1 / 2 / 3 / 4 / 5+) — represents runs taken **after** the automatic +1, not the total.
+  - 5+ reveals a free-text numeric input for additional runs.
+  - Summary text near the Confirm button shows the total breakdown, e.g. "Total extras on this ball: 3 (1 wide + 2 runs)".
+  - Wicket toggle and run-out detail section behave identically to the existing dialog.
+
+- **Bye and Leg Bye** taps continue to open the existing `ExtrasEntryDialog` — behaviour unchanged.
+
+**Event construction:**
+- Wide: `extras.wides = 1 + additionalRuns`, `runsOffBat = 0`, `countsAsBall = false`.
+- No Ball: `extras.noBalls = 1`, `runsOffBat = additionalRuns`, `countsAsBall = false` (same as before, but the UI now separates the automatic +1 visually).
+
+**Files changed:**
+
+| File | Action |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/ui/ScoringScreen.kt` | Added `WideNoBallEntryDialog` composable and `buildWideNoBallEvent` helper; updated call site to route Wide/NoBall taps to the new dialog |
+| `README.md` | Updated |
+
+**What did NOT change:**
+- Bye / Leg Bye behaviour — untouched.
+- `ExtrasEntryDialog` and `buildExtrasEvent` — untouched.
+- Wicket details logic — reused as-is.
+- Reducer, scorecard, timeline, innings flow, camera / streaming — untouched.
+
+---
+
 ### 2026-03-07 – Phase 6: Extras Entry Dialog
 
 **What changed:**
