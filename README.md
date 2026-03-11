@@ -217,6 +217,26 @@ Scoring is modelled as an append-only event log:
 
 ## Development Log
 
+### 2026-03-11 – Feature: Over Summary
+
+- BallTimeline now shows compact over summaries for each completed and in-progress over.
+- Each over card displays: over number, bowler name, ball-by-ball label sequence, and total runs or "Maiden".
+- Maiden overs are automatically detected (zero runs conceded by the bowler, excluding byes and leg-byes).
+- Data is derived from the BallEvent history, ensuring correctness after undo, ball edits, and ball deletions.
+- Works for both innings.
+
+**Files created/modified:**
+| File | Action |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/domain/BallTimelineFormatter.kt` | Updated – `OverSummary` extended with `bowlerName`, `runsInOver`, and `isMaiden` fields; `groupByOver` computes these fields |
+| `app/src/main/java/com/example/scorebroadcaster/domain/OverSummaryCalculator.kt` | Created – `deriveOverSummaries(events)` wraps `BallTimelineFormatter.groupByOver`; `ballLabel(event)` formats compact delivery labels ("0", "W", "Wd", "Nb", "B1", "Lb1") |
+| `app/src/main/java/com/example/scorebroadcaster/data/ScoringConsoleState.kt` | Updated – added `firstInningsOverSummaries` and `secondInningsOverSummaries` fields |
+| `app/src/main/java/com/example/scorebroadcaster/viewmodel/MatchViewModel.kt` | Updated – `refreshCurrentInningsOverSummaries()` helper keeps summaries in sync after every ball event mutation; over summaries populated in all `resumePersistedState` branches |
+| `app/src/main/java/com/example/scorebroadcaster/ui/BallTimelineScreen.kt` | Updated – `OverCard` now shows bowler name in header, compact ball-label sequence, interactive ball chips, and runs/maiden footer |
+| `README.md` | Updated |
+
+---
+
 ### 2026-03-11 – Feature: Fall of Wickets Tracking
 
 - Each wicket is now recorded as a Fall of Wicket entry.

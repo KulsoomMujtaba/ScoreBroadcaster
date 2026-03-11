@@ -37,6 +37,7 @@ import com.example.scorebroadcaster.data.InningsPhase
 import com.example.scorebroadcaster.domain.BallTimelineFormatter
 import com.example.scorebroadcaster.domain.IndexedBall
 import com.example.scorebroadcaster.domain.OverSummary
+import com.example.scorebroadcaster.domain.OverSummaryCalculator
 import com.example.scorebroadcaster.viewmodel.MatchViewModel
 
 /**
@@ -209,18 +210,56 @@ private fun OverCard(over: OverSummary, onBallTap: (IndexedBall) -> Unit) {
     ) {
         Column(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            // Over label
-            Text(
-                text       = "Over ${over.overNumber}",
-                style      = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold,
-                color      = MaterialTheme.colorScheme.primary
-            )
+            // Over header: number and optional bowler name
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text       = "Over ${over.overNumber}",
+                    style      = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color      = MaterialTheme.colorScheme.primary
+                )
+                if (over.bowlerName.isNotBlank()) {
+                    Text(
+                        text  = over.bowlerName,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
 
-            // Ball chips in a wrapping row
+            // Compact ball-label sequence (e.g. "1 0 4 0 W 2")
+            val ballSequence = over.balls.joinToString(" ") { OverSummaryCalculator.ballLabel(it.event) }
+            if (ballSequence.isNotBlank()) {
+                Text(
+                    text  = ballSequence,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+
+            // Ball chips in a wrapping row (interactive, for editing)
             BallChipsRow(balls = over.balls, onBallTap = onBallTap)
+
+            // Runs / maiden footer
+            val footerText = when {
+                over.isMaiden -> "Maiden"
+                else          -> "${over.runsInOver} run${if (over.runsInOver == 1) "" else "s"}"
+            }
+            Text(
+                text  = footerText,
+                style = MaterialTheme.typography.labelSmall,
+                color = if (over.isMaiden)
+                    MaterialTheme.colorScheme.primary
+                else
+                    MaterialTheme.colorScheme.onSurfaceVariant,
+                fontWeight = if (over.isMaiden) FontWeight.SemiBold else FontWeight.Normal
+            )
         }
     }
 }

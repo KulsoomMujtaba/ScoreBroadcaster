@@ -4,6 +4,7 @@ import com.example.scorebroadcaster.data.entity.BattingEntry
 import com.example.scorebroadcaster.data.entity.BowlingEntry
 import com.example.scorebroadcaster.data.entity.FallOfWicket
 import com.example.scorebroadcaster.data.entity.Player
+import com.example.scorebroadcaster.domain.OverSummary
 
 /** Phase of the match scoring session. */
 enum class InningsPhase {
@@ -84,6 +85,10 @@ data class ScoringConsoleState(
     val firstInningsLegByes: Int = 0,
     val firstInningsOvers: Int = 0,
     val firstInningsBalls: Int = 0,
+
+    // Over summaries derived from the event log (updated whenever events change)
+    val firstInningsOverSummaries: List<OverSummary> = emptyList(),
+    val secondInningsOverSummaries: List<OverSummary> = emptyList(),
 
     // First-innings totals (populated at end of 1st innings; used for target in 2nd)
     val firstInningsRuns: Int = 0,
