@@ -1,23 +1,25 @@
 package com.example.scorebroadcaster.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -34,23 +36,20 @@ import com.example.scorebroadcaster.data.entity.PlayerProfile
 import com.example.scorebroadcaster.data.entity.PlayerSourceType
 
 /**
- * Reusable player picker dialog used throughout the app wherever a player must be chosen.
+ * Reusable "Add Player" dialog used throughout the app wherever a player must be chosen.
  *
- * Displays three sections:
- * 1. **Saved Players** — a searchable list of existing private [PlayerProfile] entries.
- *    One tap selects a player and closes the dialog.
- * 2. **Scored Users (coming soon)** — a clearly-labelled placeholder for future app-user
- *    search.  No backend is implemented yet; this section keeps the architecture
- *    future-friendly so the section can be activated without UI restructuring.
- * 3. **Create new player** — an inline text field + button that lets the scorer create a
- *    brand-new private player on the fly without navigating away.
+ * Layout hierarchy:
+ * 1. **Search** — top search field that instantly filters the saved-player list.
+ * 2. **Saved Players** — scrollable list; one tap selects a player and closes the dialog.
+ *    Hidden entirely when there are no eligible saved players.
+ * 3. **Quick Create** — inline text field + button to create a brand-new private player.
  *
  * @param savedPlayers        Existing private player profiles to display and search.
  * @param onDismiss           Called when the dialog is cancelled without a selection.
  * @param onSelect            Called with an *existing* [PlayerProfile] that was tapped.
  *                            The caller should **not** persist it again — it is already saved.
  * @param onCreateAndSelect   Called with a *newly-built* [PlayerProfile] when the scorer
- *                            types a name and taps the add button.  The caller is responsible
+ *                            types a name and taps "Add Player".  The caller is responsible
  *                            for persisting the profile (e.g. via
  *                            `MatchSessionViewModel.addSavedPlayer`).
  * @param excludedProfileIds  Profile IDs that must not be shown (already assigned to the
@@ -71,140 +70,123 @@ fun PlayerPickerDialog(
     var searchQuery by remember { mutableStateOf("") }
     var newPlayerName by remember { mutableStateOf("") }
 
-    val filtered = remember(savedPlayers, searchQuery, excludedProfileIds, excludedNames) {
-        val eligible = savedPlayers.filter { profile ->
+    val eligible = remember(savedPlayers, excludedProfileIds, excludedNames) {
+        savedPlayers.filter { profile ->
             profile.id !in excludedProfileIds &&
                 normalizePlayerName(profile.displayName) !in excludedNames
         }
+    }
+
+    val filtered = remember(eligible, searchQuery) {
         if (searchQuery.isBlank()) eligible
         else eligible.filter {
             it.displayName.contains(searchQuery.trim(), ignoreCase = true)
         }
     }
 
-    // True when every saved player has been excluded by the opposite team's roster.
-    val allExcluded = remember(savedPlayers, excludedProfileIds, excludedNames) {
-        savedPlayers.isNotEmpty() && savedPlayers.all { profile ->
-            profile.id in excludedProfileIds ||
-                normalizePlayerName(profile.displayName) in excludedNames
+    val hasSavedPlayers = eligible.isNotEmpty()
+
+    val newNameConflicts = remember(newPlayerName, excludedNames) {
+        newPlayerName.isNotBlank() &&
+            normalizePlayerName(newPlayerName) in excludedNames
+    }
+
+    fun submitCreate() {
+        val name = newPlayerName.trim()
+        if (name.isNotEmpty() && !newNameConflicts) {
+            onCreateAndSelect(
+                PlayerProfile(
+                    displayName = name,
+                    playerSourceType = PlayerSourceType.PRIVATE
+                )
+            )
+            newPlayerName = ""
         }
     }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Pick Player") },
+        title = { Text("Add Player") },
         text = {
             Column(
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
                 modifier = Modifier.verticalScroll(rememberScrollState())
             ) {
-                // --- Search field ---
-                OutlinedTextField(
-                    value = searchQuery,
-                    onValueChange = { searchQuery = it },
-                    label = { Text("Search players") },
-                    leadingIcon = {
-                        Icon(Icons.Default.Search, contentDescription = null)
-                    },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search)
-                )
+                // --- Section 1: Search (only when saved players exist) ---
+                if (hasSavedPlayers) {
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        placeholder = { Text("Search players...") },
+                        leadingIcon = {
+                            Icon(Icons.Default.Search, contentDescription = null)
+                        },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search)
+                    )
+                }
 
-                // --- Saved Players section ---
-                Text(
-                    text = "Saved Players",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                )
-                if (allExcluded) {
-                    Text(
-                        text = "No eligible players available — already assigned to the other team.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                    )
-                } else if (filtered.isEmpty()) {
-                    Text(
-                        text = if (searchQuery.isBlank()) "No saved players yet."
-                               else "No match for \"${searchQuery.trim()}\".",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                    )
-                } else {
-                    filtered.forEach { profile ->
-                        OutlinedButton(
-                            onClick = { onSelect(profile) },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(
-                                text = profile.displayName,
-                                modifier = Modifier.fillMaxWidth()
-                            )
+                // --- Section 2: Saved Players (only when saved players exist) ---
+                if (hasSavedPlayers) {
+                    if (filtered.isEmpty()) {
+                        Text(
+                            text = "No saved players found",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                        )
+                    } else {
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            filtered.forEach { profile ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .heightIn(min = 48.dp)
+                                        .clickable { onSelect(profile) }
+                                        .padding(horizontal = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.Person,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(20.dp),
+                                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                    )
+                                    Column {
+                                        Text(
+                                            text = profile.displayName,
+                                            style = MaterialTheme.typography.bodyMedium
+                                        )
+                                        Text(
+                                            text = "Saved player",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 }
 
-                HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp))
-
-                // --- Scored Users placeholder (future) ---
-                Text(
-                    text = "Scored Users  ·  coming soon",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
-                )
-                Text(
-                    text = "Search registered Scored accounts – not available yet.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f)
-                )
-
-                HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp))
-
-                // --- Create new player section ---
+                // --- Section 3: Quick Create ---
+                HorizontalDivider()
                 Text(
                     text = "Create new player",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                 )
-                val newNameConflicts = remember(newPlayerName, excludedNames) {
-                    newPlayerName.isNotBlank() &&
-                        normalizePlayerName(newPlayerName) in excludedNames
-                }
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    OutlinedTextField(
-                        value = newPlayerName,
-                        onValueChange = { newPlayerName = it },
-                        label = { Text("Player name") },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f),
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                        isError = newNameConflicts
-                    )
-                    Button(
-                        onClick = {
-                            val name = newPlayerName.trim()
-                            if (name.isNotEmpty()) {
-                                onCreateAndSelect(
-                                    PlayerProfile(
-                                        displayName = name,
-                                        playerSourceType = PlayerSourceType.PRIVATE
-                                    )
-                                )
-                                newPlayerName = ""
-                            }
-                        },
-                        enabled = newPlayerName.isNotBlank() && !newNameConflicts
-                    ) {
-                        Icon(
-                            Icons.Default.Add,
-                            contentDescription = "Create player",
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                }
+                OutlinedTextField(
+                    value = newPlayerName,
+                    onValueChange = { newPlayerName = it },
+                    placeholder = { Text("Player name") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { submitCreate() }),
+                    isError = newNameConflicts
+                )
                 if (newNameConflicts) {
                     Text(
                         text = "This player is already assigned to the other team.",
@@ -212,6 +194,13 @@ fun PlayerPickerDialog(
                         color = MaterialTheme.colorScheme.error,
                         modifier = Modifier.fillMaxWidth()
                     )
+                }
+                Button(
+                    onClick = { submitCreate() },
+                    enabled = newPlayerName.isNotBlank() && !newNameConflicts,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Add Player")
                 }
             }
         },

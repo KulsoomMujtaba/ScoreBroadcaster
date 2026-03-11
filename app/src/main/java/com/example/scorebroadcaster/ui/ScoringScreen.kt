@@ -350,12 +350,6 @@ fun ScoringScreen(
                         bowlingTeamName = console.bowlingTeamName,
                         savedPlayers = savedPlayers,
                         onDismiss = { showAddPlayerDialog = false },
-                        onConfirm = { name, toBatting ->
-                            val profile = PlayerProfile(displayName = name)
-                            onSavePrivatePlayer(profile)
-                            matchViewModel.addPlayerToTeam(profile.toMatchPlayer(), toBatting)
-                            showAddPlayerDialog = false
-                        },
                         onPickFromSaved = { profile, isNew, toBatting ->
                             if (isNew) onSavePrivatePlayer(profile)
                             matchViewModel.addPlayerToTeam(profile.toMatchPlayer(), toBatting)
@@ -417,13 +411,6 @@ fun ScoringScreen(
                         matchViewModel.selectNextBatter(player)
                     },
                     onPlayerSelected = { matchViewModel.selectNextBatter(it) },
-                    onAddNewPlayer = { name ->
-                        val profile = PlayerProfile(displayName = name)
-                        onSavePrivatePlayer(profile)
-                        val player = profile.toMatchPlayer()
-                        matchViewModel.addPlayerToTeam(player, addToBattingTeam = true)
-                        matchViewModel.selectNextBatter(player)
-                    },
                     onAllOut = { matchViewModel.endInningsAsAllOut() }
                 )
             }
@@ -437,14 +424,7 @@ fun ScoringScreen(
                     matchViewModel.addPlayerToTeam(player, addToBattingTeam = false)
                     matchViewModel.changeBowler(player)
                 },
-                onPlayerSelected = { matchViewModel.changeBowler(it) },
-                onAddNewPlayer = { name ->
-                    val profile = PlayerProfile(displayName = name)
-                    onSavePrivatePlayer(profile)
-                    val player = profile.toMatchPlayer()
-                    matchViewModel.addPlayerToTeam(player, addToBattingTeam = false)
-                    matchViewModel.changeBowler(player)
-                }
+                onPlayerSelected = { matchViewModel.changeBowler(it) }
             )
             null -> Unit
         }
@@ -1157,14 +1137,11 @@ private fun MatchCompleteSection(
  *   team-player path visually primary.
  * @param emptyTeamMessage When non-null and [players] is empty, this message is shown instead
  *   of the player list, explaining why there are no team players to choose from.
- * @param savedPlayers When non-empty and [onPickFromSaved] is non-null, a "Pick from saved
- *   players" button is shown so the scorer can select or create a player from the saved list.
+ * @param savedPlayers When non-empty and [onPickFromSaved] is non-null, an "Add Player"
+ *   button is shown so the scorer can search, pick, or create a player via [PlayerPickerDialog].
  * @param onPickFromSaved Optional callback triggered when a player is chosen (or created) via
  *   [PlayerPickerDialog]. Receives the [PlayerProfile] and an [isNew] flag so the caller can
  *   persist the profile if it was freshly created.
- * @param onAddNewPlayer Optional callback: when non-null, an "Add new player" inline field
- *   is shown so the scorer can create a player on the fly without closing this dialog.
- *   The callback receives the trimmed player name.
  * @param onAllOut Optional callback: when non-null, a "No more players / All out" button is
  *   shown so the scorer can end the innings immediately without selecting a batter.
  */
@@ -1177,10 +1154,8 @@ private fun SelectPlayerDialog(
     emptyTeamMessage: String? = null,
     savedPlayers: List<PlayerProfile> = emptyList(),
     onPickFromSaved: ((profile: PlayerProfile, isNew: Boolean) -> Unit)? = null,
-    onAddNewPlayer: ((String) -> Unit)? = null,
     onAllOut: (() -> Unit)? = null
 ) {
-    var newPlayerName by remember { mutableStateOf("") }
     var showSavedPicker by remember { mutableStateOf(false) }
 
     AlertDialog(
@@ -1203,7 +1178,7 @@ private fun SelectPlayerDialog(
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                         )
-                    } else if (onAddNewPlayer == null) {
+                    } else {
                         Text("No players available.")
                     }
                 }
@@ -1218,14 +1193,9 @@ private fun SelectPlayerDialog(
                         )
                     }
                 }
-                // --- Pick from saved players (secondary path) ---
+                // --- Add Player (opens unified PlayerPickerDialog) ---
                 if (onPickFromSaved != null) {
                     HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-                    Text(
-                        text = "Saved players",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                    )
                     OutlinedButton(
                         onClick = { showSavedPicker = true },
                         modifier = Modifier.fillMaxWidth()
@@ -1235,38 +1205,7 @@ private fun SelectPlayerDialog(
                             contentDescription = null,
                             modifier = Modifier.size(16.dp)
                         )
-                        Text("Pick from saved players")
-                    }
-                }
-                // --- Add new player (tertiary path) ---
-                if (onAddNewPlayer != null) {
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-                    Text(
-                        text = "Add new player",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                    )
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        OutlinedTextField(
-                            value = newPlayerName,
-                            onValueChange = { newPlayerName = it },
-                            label = { Text("Player name") },
-                            singleLine = true,
-                            modifier = Modifier.weight(1f)
-                        )
-                        Button(
-                            onClick = {
-                                val name = newPlayerName.trim()
-                                if (name.isNotEmpty()) {
-                                    onAddNewPlayer(name)
-                                    newPlayerName = ""
-                                }
-                            },
-                            enabled = newPlayerName.isNotBlank()
-                        ) { Text("Add") }
+                        Text("Add Player")
                     }
                 }
                 if (onAllOut != null) {
@@ -1287,7 +1226,7 @@ private fun SelectPlayerDialog(
         confirmButton = {}
     )
 
-    // PlayerPickerDialog shown when "Pick from saved players" is tapped
+    // PlayerPickerDialog handles both picking saved players and creating new ones
     if (showSavedPicker && onPickFromSaved != null) {
         PlayerPickerDialog(
             savedPlayers = savedPlayers,
@@ -1982,36 +1921,29 @@ private fun buildWideNoBallEvent(
 // Add player during an active match
 // =============================================================================
 
+/**
+ * Dialog shown when the scorer taps "+ Add player to team" during an active match.
+ *
+ * Lets the scorer choose which team to add to, then opens [PlayerPickerDialog] to
+ * search / pick an existing saved player or create a new one on the fly.
+ */
 @Composable
 private fun AddPlayerToMatchDialog(
     battingTeamName: String,
     bowlingTeamName: String,
     savedPlayers: List<PlayerProfile> = emptyList(),
     onDismiss: () -> Unit,
-    onConfirm: (name: String, addToBattingTeam: Boolean) -> Unit,
-    /**
-     * Called when a player is chosen or created via [PlayerPickerDialog].
-     * [isNew] is true when the player was created inline (caller should persist the profile).
-     */
-    onPickFromSaved: ((profile: PlayerProfile, isNew: Boolean, addToBattingTeam: Boolean) -> Unit)? = null
+    onPickFromSaved: (profile: PlayerProfile, isNew: Boolean, addToBattingTeam: Boolean) -> Unit
 ) {
-    var playerName by remember { mutableStateOf("") }
     var addToBatting by remember { mutableStateOf(true) }
-    var showSavedPicker by remember { mutableStateOf(false) }
+    var showPicker by remember { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Add Player") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedTextField(
-                    value = playerName,
-                    onValueChange = { playerName = it },
-                    label = { Text("Player name *") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Text("Add to", style = MaterialTheme.typography.labelMedium)
+                Text("Add to team", style = MaterialTheme.typography.labelMedium)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilterChip(
                         selected = addToBatting,
@@ -2024,42 +1956,24 @@ private fun AddPlayerToMatchDialog(
                         label = { Text(bowlingTeamName) }
                     )
                 }
-                if (onPickFromSaved != null) {
-                    OutlinedButton(
-                        onClick = { showSavedPicker = true },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Icon(
-                            Icons.Default.Person,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Text("Pick from saved players")
-                    }
-                }
             }
         },
         confirmButton = {
-            Button(
-                onClick = { onConfirm(playerName.trim(), addToBatting) },
-                enabled = playerName.isNotBlank()
-            ) { Text("Add") }
+            Button(onClick = { showPicker = true }) { Text("Pick / Add Player") }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("Cancel") }
         }
     )
 
-    if (showSavedPicker && onPickFromSaved != null) {
+    if (showPicker) {
         PlayerPickerDialog(
             savedPlayers = savedPlayers,
-            onDismiss = { showSavedPicker = false },
+            onDismiss = { showPicker = false },
             onSelect = { profile ->
-                showSavedPicker = false
                 onPickFromSaved(profile, false, addToBatting)
             },
             onCreateAndSelect = { profile ->
-                showSavedPicker = false
                 onPickFromSaved(profile, true, addToBatting)
             }
         )
@@ -2109,12 +2023,7 @@ private fun SetupOpenersBottomSheet(
             bowler = bowlingTeam.players.firstOrNull()
         }
     }
-    // Dialog-chain state:
-    // addPlayerChoiceFor: true = show choice dialog for batting team, false = bowling team
-    // addPlayerNewFor:    true = show "add new player" dialog for batting, false = bowling
-    // pickerForBatting:   true = show saved-player picker for batting, false = bowling
-    var addPlayerChoiceFor by remember { mutableStateOf<Boolean?>(null) }
-    var addPlayerNewFor by remember { mutableStateOf<Boolean?>(null) }
+    // pickerForBatting: true = show player picker for batting team, false = bowling team
     var pickerForBatting by remember { mutableStateOf<Boolean?>(null) }
 
     val inningsLabel = when (inningsNumber) {
@@ -2220,7 +2129,7 @@ private fun SetupOpenersBottomSheet(
             Spacer(modifier = Modifier.height(8.dp))
             // Add Batter button
             OutlinedButton(
-                onClick = { addPlayerChoiceFor = true },
+                onClick = { pickerForBatting = true },
                 modifier = Modifier.fillMaxWidth()
             ) { Text("+ Add Batter") }
 
@@ -2265,7 +2174,7 @@ private fun SetupOpenersBottomSheet(
             Spacer(modifier = Modifier.height(8.dp))
             // Add Bowler button
             OutlinedButton(
-                onClick = { addPlayerChoiceFor = false },
+                onClick = { pickerForBatting = false },
                 modifier = Modifier.fillMaxWidth()
             ) { Text("+ Add Bowler") }
 
@@ -2291,52 +2200,29 @@ private fun SetupOpenersBottomSheet(
         }
     }
 
-    // ── Add-player dialog chain ───────────────────────────────────────────────
-    val choiceTarget = addPlayerChoiceFor
-    if (choiceTarget != null) {
-        val teamName = if (choiceTarget) battingTeam.name else bowlingTeam.name
-        AddPlayerChoiceDialog(
-            teamName = teamName,
-            showSavedOption = onPickFromSaved != null,
-            onPickFromSaved = {
-                addPlayerChoiceFor = null
-                pickerForBatting = choiceTarget
-            },
-            onAddNew = {
-                addPlayerChoiceFor = null
-                addPlayerNewFor = choiceTarget
-            },
-            onDismiss = { addPlayerChoiceFor = null }
-        )
-    }
-
-    val newTarget = addPlayerNewFor
-    if (newTarget != null) {
-        val teamName = if (newTarget) battingTeam.name else bowlingTeam.name
-        AddNewPlayerDialog(
-            teamName = teamName,
-            onAdd = { name ->
-                if (newTarget) onAddPlayerToBattingTeam(name)
-                else onAddPlayerToBowlingTeam(name)
-                addPlayerNewFor = null
-            },
-            onDismiss = { addPlayerNewFor = null }
-        )
-    }
-
-    // Saved-player picker for batting or bowling team
+    // ── Add-player dialog (opened when + Add Batter / + Add Bowler is tapped) ──
     val pickerTarget = pickerForBatting
-    if (pickerTarget != null && onPickFromSaved != null) {
+    if (pickerTarget != null) {
         PlayerPickerDialog(
             savedPlayers = savedPlayers,
             onDismiss = { pickerForBatting = null },
             onSelect = { profile ->
                 pickerForBatting = null
-                onPickFromSaved(profile, false, pickerTarget)
+                if (onPickFromSaved != null) {
+                    onPickFromSaved(profile, false, pickerTarget)
+                } else {
+                    if (pickerTarget) onAddPlayerToBattingTeam(profile.displayName)
+                    else onAddPlayerToBowlingTeam(profile.displayName)
+                }
             },
             onCreateAndSelect = { profile ->
                 pickerForBatting = null
-                onPickFromSaved(profile, true, pickerTarget)
+                if (onPickFromSaved != null) {
+                    onPickFromSaved(profile, true, pickerTarget)
+                } else {
+                    if (pickerTarget) onAddPlayerToBattingTeam(profile.displayName)
+                    else onAddPlayerToBowlingTeam(profile.displayName)
+                }
             }
         )
     }
@@ -2372,81 +2258,6 @@ private fun PlayerDropdown(
             }
         }
     }
-}
-
-// =============================================================================
-// Add-player dialogs (used in SetupOpenersBottomSheet)
-// =============================================================================
-
-/**
- * Choice dialog shown when the scorer taps "+ Add Batter" or "+ Add Bowler".
- * Offers two paths: pick from saved players or create a new one inline.
- */
-@Composable
-private fun AddPlayerChoiceDialog(
-    teamName: String,
-    showSavedOption: Boolean,
-    onPickFromSaved: () -> Unit,
-    onAddNew: () -> Unit,
-    onDismiss: () -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Add Player to $teamName") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                if (showSavedOption) {
-                    TextButton(
-                        onClick = onPickFromSaved,
-                        modifier = Modifier.fillMaxWidth()
-                    ) { Text("Pick from saved players") }
-                }
-                TextButton(
-                    onClick = onAddNew,
-                    modifier = Modifier.fillMaxWidth()
-                ) { Text("Add new player") }
-            }
-        },
-        confirmButton = {},
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
-        }
-    )
-}
-
-/**
- * Small dialog that lets the scorer type a name and add a brand-new player
- * to a specific team during innings setup.
- */
-@Composable
-private fun AddNewPlayerDialog(
-    teamName: String,
-    onAdd: (String) -> Unit,
-    onDismiss: () -> Unit
-) {
-    var name by remember { mutableStateOf("") }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("New Player – $teamName") },
-        text = {
-            OutlinedTextField(
-                value = name,
-                onValueChange = { name = it },
-                label = { Text("Player name") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
-            )
-        },
-        confirmButton = {
-            Button(
-                onClick = { onAdd(name.trim()) },
-                enabled = name.trim().isNotBlank()
-            ) { Text("Add") }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
-        }
-    )
 }
 
 // =============================================================================
