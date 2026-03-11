@@ -23,11 +23,19 @@ data class IndexedBall(
  * A completed (or in-progress) over with its constituent deliveries.
  *
  * @param overNumber   1-based over number.
+ * @param bowlerName   Name of the bowler who bowled this over (empty string if unknown).
  * @param balls        All deliveries in this over, in order (including wides and no-balls).
+ * @param runsInOver   Total runs scored in this over (runs off bat + wides + no-balls;
+ *                     byes and leg-byes excluded from bowler's figures).
+ * @param isMaiden     True when the bowler conceded zero runs in this over (a maiden over).
+ *                     Only meaningful for completed overs (6 legal deliveries).
  */
 data class OverSummary(
     val overNumber: Int,
-    val balls: List<IndexedBall>
+    val bowlerName: String = "",
+    val balls: List<IndexedBall>,
+    val runsInOver: Int = 0,
+    val isMaiden: Boolean = false
 )
 
 /**
@@ -131,7 +139,7 @@ object BallTimelineFormatter {
             if (event.countsAsBall) {
                 legalBallsInOver++
                 if (legalBallsInOver >= 6) {
-                    overs.add(OverSummary(currentOverNumber, currentBalls.toList()))
+                    overs.add(buildOverSummary(currentOverNumber, currentBalls.toList()))
                     currentOverNumber++
                     legalBallsInOver = 0
                     currentBalls.clear()
@@ -141,9 +149,26 @@ object BallTimelineFormatter {
 
         // Add the in-progress (incomplete) over, if any deliveries remain
         if (currentBalls.isNotEmpty()) {
-            overs.add(OverSummary(currentOverNumber, currentBalls.toList()))
+            overs.add(buildOverSummary(currentOverNumber, currentBalls.toList()))
         }
 
         return overs
+    }
+
+    /** Constructs an [OverSummary] from a list of [IndexedBall]s, computing derived fields. */
+    private fun buildOverSummary(overNumber: Int, balls: List<IndexedBall>): OverSummary {
+        val bowlerName = balls.firstNotNullOfOrNull { it.event.bowler?.name } ?: ""
+        val runsInOver = balls.sumOf { b ->
+            b.event.runsOffBat + b.event.extras.wides + b.event.extras.noBalls
+        }
+        val isComplete = balls.count { it.event.countsAsBall } >= 6
+        val isMaiden = isComplete && runsInOver == 0
+        return OverSummary(
+            overNumber = overNumber,
+            bowlerName = bowlerName,
+            balls      = balls,
+            runsInOver = runsInOver,
+            isMaiden   = isMaiden
+        )
     }
 }

@@ -19,6 +19,7 @@ import com.example.scorebroadcaster.data.entity.Team
 import com.example.scorebroadcaster.data.toBallEvent
 import com.example.scorebroadcaster.domain.BallEvent
 import com.example.scorebroadcaster.domain.MaidenOverCalculator
+import com.example.scorebroadcaster.domain.OverSummaryCalculator
 import com.example.scorebroadcaster.domain.reduce
 import com.example.scorebroadcaster.repository.MatchRepository
 import kotlinx.coroutines.Job
@@ -133,6 +134,7 @@ class MatchViewModel : ViewModel() {
                 currentInningsFallOfWickets = _fallOfWickets.value
             )
         }
+        refreshCurrentInningsOverSummaries()
         persistCurrentInningsEvents()
     }
 
@@ -355,6 +357,7 @@ class MatchViewModel : ViewModel() {
             _consoleState.value = _consoleState.value.copy(
                 currentInningsFallOfWickets = _fallOfWickets.value
             )
+            refreshCurrentInningsOverSummaries()
             persistCurrentInningsEvents()
         }
     }
@@ -390,6 +393,7 @@ class MatchViewModel : ViewModel() {
             _consoleState.value = _consoleState.value.copy(
                 currentInningsFallOfWickets = _fallOfWickets.value
             )
+            refreshCurrentInningsOverSummaries()
             persistCurrentInningsEvents()
         }
     }
@@ -421,6 +425,7 @@ class MatchViewModel : ViewModel() {
             _consoleState.value = _consoleState.value.copy(
                 currentInningsFallOfWickets = _fallOfWickets.value
             )
+            refreshCurrentInningsOverSummaries()
             persistCurrentInningsEvents()
         }
     }
@@ -448,8 +453,9 @@ class MatchViewModel : ViewModel() {
             firstInningsOvers    = firstState.overs,
             firstInningsBalls    = firstState.balls,
             target               = firstState.runs + 1,
-            firstInningsBowlingEntries = updatedFirstBowling,
-            firstInningsFallOfWickets  = computeFallOfWickets(firstEvents)
+            firstInningsBowlingEntries    = updatedFirstBowling,
+            firstInningsFallOfWickets     = computeFallOfWickets(firstEvents),
+            firstInningsOverSummaries     = OverSummaryCalculator.deriveOverSummaries(firstEvents)
         )
     }
 
@@ -474,6 +480,23 @@ class MatchViewModel : ViewModel() {
             allBowlingEntries = updatedBowling,
             currentBowlerEntry = updatedCurrentBowlerEntry
         )
+    }
+
+    /**
+     * Recompute over summaries for the current innings from the event log and update
+     * [ScoringConsoleState.firstInningsOverSummaries] or
+     * [ScoringConsoleState.secondInningsOverSummaries] depending on the active innings.
+     *
+     * Because over summaries are derived entirely from the event log they are always
+     * correct after undo, replace, or delete without a full console-state replay.
+     */
+    private fun refreshCurrentInningsOverSummaries() {
+        val summaries = OverSummaryCalculator.deriveOverSummaries(_events.value)
+        _consoleState.value = if (_consoleState.value.inningsNumber == 1) {
+            _consoleState.value.copy(firstInningsOverSummaries = summaries)
+        } else {
+            _consoleState.value.copy(secondInningsOverSummaries = summaries)
+        }
     }
 
     fun resetMatch() {
@@ -652,6 +675,7 @@ class MatchViewModel : ViewModel() {
             firstInningsBattingEntries = console.allBattingEntries,
             firstInningsBowlingEntries = console.allBowlingEntries,
             firstInningsFallOfWickets = console.currentInningsFallOfWickets,
+            firstInningsOverSummaries = OverSummaryCalculator.deriveOverSummaries(_events.value),
             currentInningsFallOfWickets = emptyList(),
             target = state.runs + 1
         )
@@ -706,6 +730,7 @@ class MatchViewModel : ViewModel() {
             firstInningsBattingEntries = console.firstInningsBattingEntries,
             firstInningsBowlingEntries = console.firstInningsBowlingEntries,
             firstInningsFallOfWickets = console.firstInningsFallOfWickets,
+            firstInningsOverSummaries = console.firstInningsOverSummaries,
             currentInningsFallOfWickets = emptyList(),
             target = console.target
         )
@@ -864,6 +889,8 @@ class MatchViewModel : ViewModel() {
                         firstInningsBalls = firstState.balls,
                         target = firstState.runs + 1,
                         firstInningsFallOfWickets = computeFallOfWickets(firstEvents),
+                        firstInningsOverSummaries = OverSummaryCalculator.deriveOverSummaries(firstEvents),
+                        secondInningsOverSummaries = OverSummaryCalculator.deriveOverSummaries(secondEvents),
                         currentInningsFallOfWickets = _fallOfWickets.value
                     )
                 } else if (firstEvents.isNotEmpty()) {
@@ -876,6 +903,7 @@ class MatchViewModel : ViewModel() {
                         phase = InningsPhase.MATCH_COMPLETE,
                         battingTeamName = match.battingFirst.name,
                         bowlingTeamName = match.bowlingFirst.name,
+                        firstInningsOverSummaries = OverSummaryCalculator.deriveOverSummaries(firstEvents),
                         currentInningsFallOfWickets = _fallOfWickets.value
                     )
                 }
@@ -925,6 +953,8 @@ class MatchViewModel : ViewModel() {
                     allBattingEntries = listOfNotNull(strikerEntry, nonStrikerEntry),
                     allBowlingEntries = listOfNotNull(bowlerEntry),
                     firstInningsFallOfWickets = computeFallOfWickets(firstEvents),
+                    firstInningsOverSummaries = OverSummaryCalculator.deriveOverSummaries(firstEvents),
+                    secondInningsOverSummaries = OverSummaryCalculator.deriveOverSummaries(secondEvents),
                     currentInningsFallOfWickets = _fallOfWickets.value
                 )
                 Log.d("ResumeFlow", "Restored: 2nd innings in progress " +
@@ -951,7 +981,8 @@ class MatchViewModel : ViewModel() {
                     firstInningsOvers = firstState.overs,
                     firstInningsBalls = firstState.balls,
                     target = firstState.runs + 1,
-                    firstInningsFallOfWickets = computeFallOfWickets(firstEvents)
+                    firstInningsFallOfWickets = computeFallOfWickets(firstEvents),
+                    firstInningsOverSummaries = OverSummaryCalculator.deriveOverSummaries(firstEvents)
                 )
                 Log.d("ResumeFlow", "Restored: innings break, " +
                         "1st inn total=${firstState.runs}/${firstState.wickets}")
@@ -984,6 +1015,7 @@ class MatchViewModel : ViewModel() {
                     currentBowlerEntry = bowlerEntry,
                     allBattingEntries = listOfNotNull(strikerEntry, nonStrikerEntry),
                     allBowlingEntries = listOfNotNull(bowlerEntry),
+                    firstInningsOverSummaries = OverSummaryCalculator.deriveOverSummaries(firstEvents),
                     currentInningsFallOfWickets = _fallOfWickets.value
                 )
                 Log.d("ResumeFlow", "Restored: 1st innings in progress " +
