@@ -290,6 +290,12 @@ class MatchViewModel : ViewModel() {
             maidens = maidensMap[console.currentBowler?.id] ?: 0
         )
 
+        // --- Partnership tracking ---
+        val partnershipRuns = event.runsOffBat + event.extras.total
+        val partnershipBalls = if (event.countsAsBall) 1 else 0
+        val newPartnershipRuns = if (wicketFell) 0 else console.currentPartnershipRuns + partnershipRuns
+        val newPartnershipBalls = if (wicketFell) 0 else console.currentPartnershipBalls + partnershipBalls
+
         _consoleState.value = console.copy(
             striker = rotatedStriker,
             nonStriker = rotatedNonStriker,
@@ -299,12 +305,12 @@ class MatchViewModel : ViewModel() {
             allBattingEntries = updatedAllBatting,
             allBowlingEntries = bowlingWithMaidens,
             pendingAction = pendingAction,
-            bowlerChangePending = bowlerChangePending
+            bowlerChangePending = bowlerChangePending,
+            currentPartnershipRuns = newPartnershipRuns,
+            currentPartnershipBalls = newPartnershipBalls
         )
 
         // --- Update current partnership ---
-        val partnershipRuns = event.runsOffBat + event.extras.total
-        val partnershipBalls = if (event.countsAsBall) 1 else 0
         val updatedPartnership = _currentPartnership.value?.let { p ->
             p.copy(
                 runs = p.runs + partnershipRuns,
@@ -507,7 +513,9 @@ class MatchViewModel : ViewModel() {
             allBattingEntries = listOf(strikerEntry, nonStrikerEntry),
             allBowlingEntries = listOf(bowlerEntry),
             pendingAction = null,
-            bowlerChangePending = false
+            bowlerChangePending = false,
+            currentPartnershipRuns = 0,
+            currentPartnershipBalls = 0
         )
         _currentPartnership.value = Partnership(
             strikerName = striker.name,
@@ -540,7 +548,9 @@ class MatchViewModel : ViewModel() {
             nonStrikerEntry = if (replacingStriker) console.nonStrikerEntry else newEntry,
             allBattingEntries = updatedAll,
             pendingAction = nextPending,
-            bowlerChangePending = false
+            bowlerChangePending = false,
+            currentPartnershipRuns = 0,
+            currentPartnershipBalls = 0
         )
         Log.d("WicketFlow", "pendingAction cleared after next batter selection (nextPending=${nextPending?.javaClass?.simpleName})")
         // Start a new partnership with the incoming batter and the remaining batter.
