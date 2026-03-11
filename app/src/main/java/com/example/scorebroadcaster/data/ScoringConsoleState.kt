@@ -2,6 +2,7 @@ package com.example.scorebroadcaster.data
 
 import com.example.scorebroadcaster.data.entity.BattingEntry
 import com.example.scorebroadcaster.data.entity.BowlingEntry
+import com.example.scorebroadcaster.data.entity.FallOfWicket
 import com.example.scorebroadcaster.data.entity.Player
 
 /** Phase of the match scoring session. */
@@ -69,9 +70,13 @@ data class ScoringConsoleState(
     val allBattingEntries: List<BattingEntry> = emptyList(),
     val allBowlingEntries: List<BowlingEntry> = emptyList(),
 
+    // Fall-of-wickets for the current innings (rebuilt from events; reset at innings change)
+    val currentInningsFallOfWickets: List<FallOfWicket> = emptyList(),
+
     // First-innings scorecard snapshot (saved when first innings ends)
     val firstInningsBattingEntries: List<BattingEntry> = emptyList(),
     val firstInningsBowlingEntries: List<BowlingEntry> = emptyList(),
+    val firstInningsFallOfWickets: List<FallOfWicket> = emptyList(),
     val firstInningsExtras: Int = 0,
     val firstInningsWides: Int = 0,
     val firstInningsNoBalls: Int = 0,
