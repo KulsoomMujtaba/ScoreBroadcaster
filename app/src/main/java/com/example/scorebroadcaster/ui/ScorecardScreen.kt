@@ -25,6 +25,7 @@ import com.example.scorebroadcaster.data.InningsPhase
 import com.example.scorebroadcaster.data.ScoringConsoleState
 import com.example.scorebroadcaster.data.entity.BattingEntry
 import com.example.scorebroadcaster.data.entity.BowlingEntry
+import com.example.scorebroadcaster.data.entity.FallOfWicket
 import com.example.scorebroadcaster.data.entity.Match
 import com.example.scorebroadcaster.viewmodel.MatchSessionViewModel
 import com.example.scorebroadcaster.viewmodel.MatchViewModel
@@ -63,6 +64,7 @@ fun ScorecardScreen(
     // Resolve 1st innings data
     val firstBatting: List<BattingEntry>
     val firstBowling: List<BowlingEntry>
+    val firstFallOfWickets: List<FallOfWicket>
     val firstExtras: Int
     val firstWides: Int
     val firstNoBalls: Int
@@ -77,6 +79,7 @@ fun ScorecardScreen(
         // Still in first innings — show live data
         firstBatting = console.allBattingEntries
         firstBowling = console.allBowlingEntries
+        firstFallOfWickets = console.currentInningsFallOfWickets
         firstExtras = state.extras
         firstWides = state.wides
         firstNoBalls = state.noBalls
@@ -90,6 +93,7 @@ fun ScorecardScreen(
         // After first innings — use saved snapshot
         firstBatting = console.firstInningsBattingEntries
         firstBowling = console.firstInningsBowlingEntries
+        firstFallOfWickets = console.firstInningsFallOfWickets
         firstExtras = console.firstInningsExtras
         firstWides = console.firstInningsWides
         firstNoBalls = console.firstInningsNoBalls
@@ -120,6 +124,7 @@ fun ScorecardScreen(
                 title = "1st Innings — ${match.battingFirst.name}",
                 battingEntries = firstBatting,
                 bowlingEntries = firstBowling,
+                fallOfWickets = firstFallOfWickets,
                 extras = firstExtras,
                 wides = firstWides,
                 noBalls = firstNoBalls,
@@ -167,6 +172,7 @@ fun ScorecardScreen(
                     title = "2nd Innings — ${match.bowlingFirst.name}",
                     battingEntries = console.allBattingEntries,
                     bowlingEntries = console.allBowlingEntries,
+                    fallOfWickets = console.currentInningsFallOfWickets,
                     extras = state.extras,
                     wides = state.wides,
                     noBalls = state.noBalls,
@@ -227,6 +233,7 @@ private fun InningsScorecardSection(
     title: String,
     battingEntries: List<BattingEntry>,
     bowlingEntries: List<BowlingEntry>,
+    fallOfWickets: List<FallOfWicket>,
     extras: Int,
     wides: Int,
     noBalls: Int,
@@ -298,6 +305,18 @@ private fun InningsScorecardSection(
                 color = MaterialTheme.colorScheme.primary
             )
             BowlingTable(entries = bowlingEntries)
+        }
+
+        // --- FALL OF WICKETS ---
+        if (fallOfWickets.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                "FALL OF WICKETS",
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
+            FallOfWicketsSection(entries = fallOfWickets)
         }
     }
 }
@@ -497,3 +516,19 @@ private fun BowlingTableRow(entry: BowlingEntry) {
     }
 }
 
+
+// =============================================================================
+// Fall of wickets section
+// =============================================================================
+
+@Composable
+private fun FallOfWicketsSection(entries: List<FallOfWicket>) {
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        entries.forEach { entry ->
+            Text(
+                text = "${entry.wicketNumber}-${entry.teamScore} (${entry.batterName}, ${entry.overs})",
+                style = MaterialTheme.typography.bodySmall
+            )
+        }
+    }
+}

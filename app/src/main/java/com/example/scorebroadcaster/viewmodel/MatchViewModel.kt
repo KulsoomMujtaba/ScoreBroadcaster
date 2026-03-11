@@ -128,6 +128,11 @@ class MatchViewModel : ViewModel() {
             _fallOfWickets.value = computeFallOfWickets(_events.value)
         }
         updateConsoleAfterEvent(stamped, prevState, newState)
+        if (stamped.wicket) {
+            _consoleState.value = _consoleState.value.copy(
+                currentInningsFallOfWickets = _fallOfWickets.value
+            )
+        }
         persistCurrentInningsEvents()
     }
 
@@ -347,6 +352,9 @@ class MatchViewModel : ViewModel() {
             // Console state is not fully rolled back (other stats require a full replay),
             // but maiden counts are derived from the event log and can always be kept correct.
             refreshMaidensFromEvents(_events.value)
+            _consoleState.value = _consoleState.value.copy(
+                currentInningsFallOfWickets = _fallOfWickets.value
+            )
             persistCurrentInningsEvents()
         }
     }
@@ -379,12 +387,12 @@ class MatchViewModel : ViewModel() {
                 .copy(teamAName = currentTeamAName, teamBName = currentTeamBName)
             _fallOfWickets.value = computeFallOfWickets(_events.value)
             refreshMaidensFromEvents(_events.value)
+            _consoleState.value = _consoleState.value.copy(
+                currentInningsFallOfWickets = _fallOfWickets.value
+            )
             persistCurrentInningsEvents()
         }
     }
-
-    /**
-     * Delete the [BallEvent] at [globalIndex] from the active-innings event log
      * (or the first-innings log when [inFirstInnings] is true).
      *
      * The innings aggregate [MatchState] is rebuilt by replaying the remaining events.
@@ -410,12 +418,12 @@ class MatchViewModel : ViewModel() {
                 .copy(teamAName = currentTeamAName, teamBName = currentTeamBName)
             _fallOfWickets.value = computeFallOfWickets(_events.value)
             refreshMaidensFromEvents(_events.value)
+            _consoleState.value = _consoleState.value.copy(
+                currentInningsFallOfWickets = _fallOfWickets.value
+            )
             persistCurrentInningsEvents()
         }
     }
-
-    /**
-     * Recompute the first-innings aggregate snapshot stored in [ScoringConsoleState] by
      * replaying [firstEvents] through the reducer.
      *
      * Called after [replaceBallEvent] or [deleteBallEvent] modifies the first-innings log.
@@ -440,7 +448,8 @@ class MatchViewModel : ViewModel() {
             firstInningsOvers    = firstState.overs,
             firstInningsBalls    = firstState.balls,
             target               = firstState.runs + 1,
-            firstInningsBowlingEntries = updatedFirstBowling
+            firstInningsBowlingEntries = updatedFirstBowling,
+            firstInningsFallOfWickets  = computeFallOfWickets(firstEvents)
         )
     }
 
@@ -642,6 +651,8 @@ class MatchViewModel : ViewModel() {
             firstInningsBalls = state.balls,
             firstInningsBattingEntries = console.allBattingEntries,
             firstInningsBowlingEntries = console.allBowlingEntries,
+            firstInningsFallOfWickets = console.currentInningsFallOfWickets,
+            currentInningsFallOfWickets = emptyList(),
             target = state.runs + 1
         )
         // Snapshot completed partnerships; also finalize any ongoing partnership.
@@ -694,6 +705,8 @@ class MatchViewModel : ViewModel() {
             firstInningsBalls = console.firstInningsBalls,
             firstInningsBattingEntries = console.firstInningsBattingEntries,
             firstInningsBowlingEntries = console.firstInningsBowlingEntries,
+            firstInningsFallOfWickets = console.firstInningsFallOfWickets,
+            currentInningsFallOfWickets = emptyList(),
             target = console.target
         )
         // Restore match status to IN_PROGRESS for the second innings.
@@ -849,7 +862,9 @@ class MatchViewModel : ViewModel() {
                         firstInningsLegByes = firstState.legByes,
                         firstInningsOvers = firstState.overs,
                         firstInningsBalls = firstState.balls,
-                        target = firstState.runs + 1
+                        target = firstState.runs + 1,
+                        firstInningsFallOfWickets = computeFallOfWickets(firstEvents),
+                        currentInningsFallOfWickets = _fallOfWickets.value
                     )
                 } else if (firstEvents.isNotEmpty()) {
                     _events.value = firstEvents
@@ -860,7 +875,8 @@ class MatchViewModel : ViewModel() {
                         inningsNumber = 1,
                         phase = InningsPhase.MATCH_COMPLETE,
                         battingTeamName = match.battingFirst.name,
-                        bowlingTeamName = match.bowlingFirst.name
+                        bowlingTeamName = match.bowlingFirst.name,
+                        currentInningsFallOfWickets = _fallOfWickets.value
                     )
                 }
                 Log.d("ResumeFlow", "Restored: match complete")
@@ -907,7 +923,9 @@ class MatchViewModel : ViewModel() {
                     nonStrikerEntry = nonStrikerEntry,
                     currentBowlerEntry = bowlerEntry,
                     allBattingEntries = listOfNotNull(strikerEntry, nonStrikerEntry),
-                    allBowlingEntries = listOfNotNull(bowlerEntry)
+                    allBowlingEntries = listOfNotNull(bowlerEntry),
+                    firstInningsFallOfWickets = computeFallOfWickets(firstEvents),
+                    currentInningsFallOfWickets = _fallOfWickets.value
                 )
                 Log.d("ResumeFlow", "Restored: 2nd innings in progress " +
                         "(${secondEvents.size} balls), bowler=${currentBowler?.name}, " +
@@ -932,7 +950,8 @@ class MatchViewModel : ViewModel() {
                     firstInningsLegByes = firstState.legByes,
                     firstInningsOvers = firstState.overs,
                     firstInningsBalls = firstState.balls,
-                    target = firstState.runs + 1
+                    target = firstState.runs + 1,
+                    firstInningsFallOfWickets = computeFallOfWickets(firstEvents)
                 )
                 Log.d("ResumeFlow", "Restored: innings break, " +
                         "1st inn total=${firstState.runs}/${firstState.wickets}")
@@ -964,7 +983,8 @@ class MatchViewModel : ViewModel() {
                     nonStrikerEntry = nonStrikerEntry,
                     currentBowlerEntry = bowlerEntry,
                     allBattingEntries = listOfNotNull(strikerEntry, nonStrikerEntry),
-                    allBowlingEntries = listOfNotNull(bowlerEntry)
+                    allBowlingEntries = listOfNotNull(bowlerEntry),
+                    currentInningsFallOfWickets = _fallOfWickets.value
                 )
                 Log.d("ResumeFlow", "Restored: 1st innings in progress " +
                         "(${firstEvents.size} balls), bowler=${currentBowler?.name}, " +

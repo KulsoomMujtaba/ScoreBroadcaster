@@ -217,6 +217,23 @@ Scoring is modelled as an append-only event log:
 
 ## Development Log
 
+### 2026-03-11 – Feature: Fall of Wickets Tracking
+
+- Each wicket is now recorded as a Fall of Wicket entry.
+- FoW entries store wicket number, team score at fall, dismissed batter, and over.
+- FoW is shown in the scorecard for both innings beneath the bowling summary.
+- FoW stays correct after undo, ball edits, and ball deletes because it is rebuilt from replayable innings state.
+
+**Files created/modified:**
+| File | Action |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/data/ScoringConsoleState.kt` | Updated – added `currentInningsFallOfWickets` and `firstInningsFallOfWickets` fields |
+| `app/src/main/java/com/example/scorebroadcaster/viewmodel/MatchViewModel.kt` | Updated – FoW lists kept in sync with `_consoleState` after every ball event mutation; snapshotted to `firstInningsFallOfWickets` at innings end; restored correctly on resume |
+| `app/src/main/java/com/example/scorebroadcaster/ui/ScorecardScreen.kt` | Updated – `InningsScorecardSection` now accepts and renders a `fallOfWickets` list; `FallOfWicketsSection` composable added |
+| `README.md` | Updated |
+
+---
+
 ### 2026-03-11 – Feature: Live Partnership Tracking
 
 - The scoring engine now tracks the current batting partnership.
