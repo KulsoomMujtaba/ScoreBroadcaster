@@ -1149,12 +1149,24 @@ Replaced the four fixed extra buttons (`Wd+1`, `NB+1`, `Bye`, `LB`) with a prope
 
 ---
 
+### 2026-03-11 – Feature: Maiden Overs (corrected rule)
+
+- Bowling stats now track maiden overs correctly.
+- **Maiden defined as:** over with zero runs conceded by the bowler.
+- Byes and leg-byes are **ignored** for bowler runs — they do not break a maiden.
+- Wides and no-balls **do** count against the bowler.
+- Maiden counts are derived from event history, so undo/edit/delete remain correct.
+- `MaidenOverCalculator.kt` updated: uses `extras.wides + extras.noBalls` (not `extras.total`) for runs conceded, and exposes a `calculateBowlerMaidens(events, bowlerId)` convenience function.
+
+---
+
 ### 2026-03-07 – Maiden Overs Tracking
 
 **Maiden-over rule used:**
-An over is a maiden when the batting team scores **zero runs in total** during that over.
-Every run source is counted: runs off the bat, wides, no-balls, byes, and leg-byes.
-A wicket with no runs scored does **not** break a maiden.
+An over is a maiden when the bowler concedes **zero runs** during that over.
+Runs conceded by the bowler: runs off the bat, wides, no-balls.
+Runs **not** counted against the bowler: byes, leg-byes.
+A wicket with no other runs does **not** break a maiden.
 This rule is documented in `MaidenOverCalculator.kt`.
 
 **Model updates:**
