@@ -51,7 +51,7 @@ The core promise is simple: open the app, start a match, score every ball, and s
 | Add player after match start | ✅ Done | `ScoringScreen`, `MatchDetailsScreen` |
 | Saved teams (create, view, reuse) | ✅ Done | `SavedTeamsScreen`, `CreateMatchScreen` |
 | Reusable player profiles (private) | ✅ Done | `SavedPlayersScreen`, `PlayerProfile`, `SavedPlayerRepository` |
-| Player picker (search, saved players, inline create, future section) | ✅ Done | `PlayerPickerDialog` |
+| Player picker (search-first, saved players, quick create, one-tap selection) | ✅ Done | `PlayerPickerDialog` |
 | Player picker integrated into team setup | ✅ Done | `PlayerSetupScreen`, `SavedTeamsScreen` |
 | Player picker integrated into match-time flows | ✅ Done | `ScoringScreen` |
 | New player auto-saved as private profile in match flows | ✅ Done | `ScoringScreen`, `MatchSessionViewModel` |
@@ -217,7 +217,19 @@ Scoring is modelled as an append-only event log:
 
 ## Development Log
 
-### 2026-03-11 – Feature: Over Summary
+### 2026-03-11 – UX Improvement: Add Player Dialog
+
+- **Search-first player picker**: `PlayerPickerDialog` redesigned with a clean three-section layout — search field at the top, scrollable saved-player list in the middle, quick-create form at the bottom.
+- **One-tap player selection**: saved-player rows are now full-width clickable surfaces (minimum 48 dp) with a person icon and an optional "Saved player" label — tapping instantly selects and closes the dialog.
+- **Cleaner quick-create flow**: the create-new section uses a full-width `OutlinedTextField` and a full-width "Add Player" button; pressing Enter also submits.
+- **Smart empty state**: when there are no eligible saved players the search field and list are hidden; only the "Create new player" section is shown.
+- **Removed clutter**: the "Scored Users · coming soon" placeholder section has been removed; title updated from "Pick Player" to "Add Player".
+- **Reused across all entry points**: `PlayerPickerDialog` is now the single Add Player surface used in `PlayerSetupScreen`, `SavedTeamsScreen`, `AddPlayerToMatchDialog`, next-batter / next-bowler (`SelectPlayerDialog`), and the openers setup bottom sheet (`SetupOpenersBottomSheet`).
+- **Fewer taps in innings setup**: tapping "+ Add Batter" or "+ Add Bowler" now opens `PlayerPickerDialog` directly — the intermediate `AddPlayerChoiceDialog` step has been removed.
+- **Simplified `SelectPlayerDialog`**: the inline "Add new player" text-field form has been removed; the consolidated "Add Player" button opens `PlayerPickerDialog` which covers both pick and create.
+- **Simplified `AddPlayerToMatchDialog`**: the inline create form and separate "Pick from saved players" button have been replaced with a team-selector and a single "Pick / Add Player" button that opens `PlayerPickerDialog`.
+
+
 
 - BallTimeline now shows compact over summaries for each completed and in-progress over.
 - Each over card displays: over number, bowler name, ball-by-ball label sequence, and total runs or "Maiden".
