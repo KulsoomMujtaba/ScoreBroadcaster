@@ -94,5 +94,18 @@ data class ScoringConsoleState(
      * True when the most recent wicket also ended an over, so a bowler-change
      * dialog must follow immediately after the next-batter dialog is resolved.
      */
-    val bowlerChangePending: Boolean = false
-)
+    val bowlerChangePending: Boolean = false,
+
+    /** Runs scored by the current batting pair since their partnership began. */
+    val currentPartnershipRuns: Int = 0,
+
+    /** Legal deliveries faced by the current batting pair since their partnership began. */
+    val currentPartnershipBalls: Int = 0
+) {
+    /**
+     * Partnership duration expressed as overs, e.g. 33 balls → "5.3 overs".
+     * Useful for display when an over-based representation is preferred.
+     */
+    val partnershipOversText: String
+        get() = "${currentPartnershipBalls / 6}.${currentPartnershipBalls % 6} overs"
+}

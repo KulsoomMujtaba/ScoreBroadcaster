@@ -765,6 +765,14 @@ private fun PlayersSection(console: ScoringConsoleState) {
                     Text(it.name, style = MaterialTheme.typography.bodySmall)
                 }
 
+            // Partnership
+            if (console.striker != null && console.nonStriker != null) {
+                Text(
+                    text = "Partnership: ${console.currentPartnershipRuns} (${console.currentPartnershipBalls})",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+
             HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp))
 
             // Bowler

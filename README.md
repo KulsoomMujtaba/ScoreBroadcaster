@@ -217,6 +217,24 @@ Scoring is modelled as an append-only event log:
 
 ## Development Log
 
+### 2026-03-11 – Feature: Live Partnership Tracking
+
+- The scoring engine now tracks the current batting partnership.
+- Partnership runs include all runs scored while the pair is batting (bat + extras).
+- Partnership balls count only legal deliveries (`countsAsBall == true`).
+- The partnership resets when a wicket falls or a new innings begins.
+- The current partnership is displayed on the Scoring screen under the batter stats.
+
+**Files created/modified:**
+| File | Action |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/data/ScoringConsoleState.kt` | Updated – added `currentPartnershipRuns`, `currentPartnershipBalls`, and `partnershipOversText` |
+| `app/src/main/java/com/example/scorebroadcaster/viewmodel/MatchViewModel.kt` | Updated – `updateConsoleAfterEvent` now updates partnership fields; reset in `setOpeners` and `selectNextBatter` |
+| `app/src/main/java/com/example/scorebroadcaster/ui/ScoringScreen.kt` | Updated – `PlayersSection` shows "Partnership: runs (balls)" below the batter rows |
+| `README.md` | Updated |
+
+---
+
 ### 2026-03-10 – Cross-team player exclusivity in match setup
 
 Player cannot belong to both teams in the same match.
