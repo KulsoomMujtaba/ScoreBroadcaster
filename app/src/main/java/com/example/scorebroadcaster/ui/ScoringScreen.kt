@@ -2208,7 +2208,12 @@ private fun SetupOpenersBottomSheet(
             onDismiss = { pickerForBatting = null },
             onSelect = { profile ->
                 pickerForBatting = null
-                onPickFromSaved?.invoke(profile, false, pickerTarget)
+                if (onPickFromSaved != null) {
+                    onPickFromSaved(profile, false, pickerTarget)
+                } else {
+                    if (pickerTarget) onAddPlayerToBattingTeam(profile.displayName)
+                    else onAddPlayerToBowlingTeam(profile.displayName)
+                }
             },
             onCreateAndSelect = { profile ->
                 pickerForBatting = null
