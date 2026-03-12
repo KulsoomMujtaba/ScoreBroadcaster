@@ -66,6 +66,26 @@ The core promise is simple: open the app, start a match, score every ball, and s
 
 ---
 
+## UX Improvement: Add Players Dialog
+
+### What changed
+
+- **MultiPlayerPickerSheet** redesigned as a full-screen player selection tool:
+  - **Search bar** at the top (`OutlinedTextField` with "Search players" placeholder) filters the list instantly as the user types.
+  - **Selected players summary** shows a count label ("Selected: N players") and a horizontally scrollable row of removable `InputChip` components — tapping a chip deselects that player.
+  - **Players list** uses `LazyColumn` with 8 dp row spacing; each row is touch-friendly (min 48 dp height), full-width, checkbox on the left, and player name rendered in `FontWeight.Medium`.
+  - **Add New Player section** (renamed from "Create new player") placed at the bottom behind a divider; the action button is labelled "Add Player". New players appear immediately in the list and are auto-selected.
+  - **Sticky confirm button** shows dynamic text: "Add N Player(s)"; always visible at the bottom of the dialog.
+  - **Empty state** message updated to: "No saved players yet. Create a player below to start building your team."
+  - **Team size limit** helper text updated to: "Maximum N players per team."
+
+### What did NOT change
+
+- `MatchViewModel`, `ScoreReducer`, `BallEvent`, or any Room entities — untouched.
+- All other screens — untouched.
+
+---
+
 ## UI Improvement: Run Rate Display + Recent Ball Chip Colours
 
 ### What changed

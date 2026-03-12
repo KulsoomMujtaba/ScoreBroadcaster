@@ -1,8 +1,8 @@
 package com.example.scorebroadcaster.ui
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -26,6 +27,7 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.InputChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -42,6 +44,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -144,7 +147,7 @@ fun MultiPlayerPickerSheet(
                             }
                         },
                         actions = {
-                            val label = if (selected.isEmpty()) "Add Selected"
+                            val label = if (selected.isEmpty()) "Select Players"
                             else "Add ${selected.size} Player${if (selected.size == 1) "" else "s"}"
                             Button(
                                 onClick = { onConfirm(selected.toList()) },
@@ -168,7 +171,7 @@ fun MultiPlayerPickerSheet(
                         ) {
                             HorizontalDivider()
                             Text(
-                                text = "Create new player",
+                                text = "Add New Player",
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                             )
@@ -195,7 +198,7 @@ fun MultiPlayerPickerSheet(
                                         contentDescription = null,
                                         modifier = Modifier.size(18.dp)
                                     )
-                                    Text("  Create")
+                                    Text("  Add Player")
                                 }
                             }
                             Button(
@@ -203,7 +206,7 @@ fun MultiPlayerPickerSheet(
                                 enabled = selected.isNotEmpty(),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                val label = if (selected.isEmpty()) "Add Selected"
+                                val label = if (selected.isEmpty()) "Select Players"
                                 else "Add ${selected.size} Player${if (selected.size == 1) "" else "s"}"
                                 Text(label)
                             }
@@ -234,23 +237,46 @@ fun MultiPlayerPickerSheet(
 
                     Spacer(Modifier.height(8.dp))
 
-                    // Selected count + team limit info
+                    // Selected players summary: count label + horizontally scrollable chips
+                    if (selected.isNotEmpty()) {
+                        Text(
+                            text = "Selected: ${selected.size} player${if (selected.size == 1) "" else "s"}",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            selected.toList().forEach { profile ->
+                                InputChip(
+                                    selected = true,
+                                    onClick = { togglePlayer(profile) },
+                                    label = { Text(profile.displayName) },
+                                    trailingIcon = {
+                                        Icon(
+                                            Icons.Default.Close,
+                                            contentDescription = "Remove ${profile.displayName}",
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                )
+                            }
+                        }
+                        Spacer(Modifier.height(4.dp))
+                    }
+
+                    // Team limit info row
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
+                        horizontalArrangement = Arrangement.End,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        if (selected.isNotEmpty()) {
-                            Text(
-                                text = "Selected: ${selected.size}",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        } else {
-                            Box(Modifier)
-                        }
                         Text(
-                            text = "Team limit: $maxSelectionCount players",
+                            text = "Maximum: $maxSelectionCount players",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                         )
@@ -260,7 +286,7 @@ fun MultiPlayerPickerSheet(
 
                     if (atLimit) {
                         Text(
-                            text = "Maximum $maxSelectionCount players reached.",
+                            text = "Maximum $maxSelectionCount players per team.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.error
                         )
@@ -271,7 +297,7 @@ fun MultiPlayerPickerSheet(
                     if (eligible.isEmpty()) {
                         Spacer(Modifier.height(32.dp))
                         Text(
-                            text = "No saved players yet.\nCreate players below to start building your team.",
+                            text = "No saved players yet.\nCreate a player below to start building your team.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                         )
@@ -285,7 +311,7 @@ fun MultiPlayerPickerSheet(
                     } else {
                         LazyColumn(
                             modifier = Modifier.fillMaxWidth(),
-                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             items(filtered, key = { it.id }) { profile ->
                                 val isSelected = selected.any { it.id == profile.id }
@@ -304,21 +330,17 @@ fun MultiPlayerPickerSheet(
                                         onCheckedChange = { if (!isDisabled) togglePlayer(profile) },
                                         enabled = !isDisabled
                                     )
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = profile.displayName,
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = if (isDisabled)
-                                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-                                            else
-                                                MaterialTheme.colorScheme.onSurface
-                                        )
-                                        Text(
-                                            text = "Saved player",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                                        )
-                                    }
+                                    Text(
+                                        text = profile.displayName,
+                                        style = MaterialTheme.typography.bodyMedium.copy(
+                                            fontWeight = FontWeight.Medium
+                                        ),
+                                        modifier = Modifier.weight(1f),
+                                        color = if (isDisabled)
+                                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                                        else
+                                            MaterialTheme.colorScheme.onSurface
+                                    )
                                 }
                             }
                         }
