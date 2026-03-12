@@ -41,6 +41,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.example.scorebroadcaster.data.entity.Player
 import com.example.scorebroadcaster.data.entity.PlayerProfile
+import com.example.scorebroadcaster.data.entity.PlayerSourceType
 import com.example.scorebroadcaster.data.entity.SavedTeam
 import com.example.scorebroadcaster.viewmodel.MatchSessionViewModel
 
@@ -166,6 +167,8 @@ fun CreateSavedTeamDialog(
     val slotProfileIds = remember { hashMapOf<Int, String>() }
     // Index of the slot waiting for a picked player; null = no picker open
     var pickerForSlot by remember { mutableStateOf<Int?>(null) }
+    // true when the multi-select picker is open
+    var showMultiPicker by remember { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -244,6 +247,13 @@ fun CreateSavedTeamDialog(
                         Text("  Add player")
                     }
                 }
+                TextButton(
+                    onClick = { showMultiPicker = true },
+                    modifier = Modifier.align(Alignment.Start)
+                ) {
+                    Icon(Icons.Default.Person, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Text("  Pick from saved players")
+                }
             }
         },
         confirmButton = {
@@ -284,6 +294,34 @@ fun CreateSavedTeamDialog(
                 slotProfileIds[slotIdx] = profile.id
                 pickerForSlot = null
             }
+        )
+    }
+
+    // Show MultiPlayerPickerSheet when "Pick from saved players" is tapped
+    if (showMultiPicker) {
+        val alreadyInTeam = slotProfileIds.values.toSet()
+        val filledSlots = playerNames.count { it.isNotBlank() }
+        val remainingSlots = (11 - filledSlots).coerceAtLeast(0)
+        MultiPlayerPickerSheet(
+            savedPlayers = savedPlayers,
+            maxSelectionCount = remainingSlots,
+            excludedPlayerIds = alreadyInTeam,
+            onCreatePlayer = { name ->
+                val profile = PlayerProfile(
+                    displayName = name,
+                    playerSourceType = PlayerSourceType.PRIVATE
+                )
+                onCreatePlayer(profile)
+                profile
+            },
+            onConfirm = { profiles ->
+                profiles.forEach { profile ->
+                    playerNames.add(profile.displayName)
+                    slotProfileIds[playerNames.size - 1] = profile.id
+                }
+                showMultiPicker = false
+            },
+            onDismiss = { showMultiPicker = false }
         )
     }
 }

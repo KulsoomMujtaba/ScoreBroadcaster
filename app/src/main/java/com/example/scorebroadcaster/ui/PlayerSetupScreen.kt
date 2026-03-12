@@ -38,6 +38,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.example.scorebroadcaster.data.entity.Player
 import com.example.scorebroadcaster.data.entity.PlayerProfile
+import com.example.scorebroadcaster.data.entity.PlayerSourceType
 import com.example.scorebroadcaster.viewmodel.MatchSessionViewModel
 
 @Composable
@@ -68,6 +69,9 @@ fun PlayerSetupScreen(
     // Index of the slot that has the picker dialog open; null = closed
     // Negative indices represent team B: -(index+1)
     var pickerForIndex by remember { mutableStateOf<Int?>(null) }
+
+    // null = closed; true = multi-picker for Team A; false = multi-picker for Team B
+    var multiPickerForTeamA by remember { mutableStateOf<Boolean?>(null) }
 
     // ---------------------------------------------------------------------------
     // Cross-team exclusion sets (recomputed whenever either roster changes)
@@ -165,7 +169,8 @@ fun PlayerSetupScreen(
                     teamASourceIds.remove(index)
                 }
             },
-            onPickSaved = { index -> pickerForIndex = index }
+            onPickSaved = { index -> pickerForIndex = index },
+            onPickMultiple = { multiPickerForTeamA = true }
         )
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
@@ -186,7 +191,8 @@ fun PlayerSetupScreen(
                     teamBSourceIds.remove(index)
                 }
             },
-            onPickSaved = { index -> pickerForIndex = -(index + 1) }
+            onPickSaved = { index -> pickerForIndex = -(index + 1) },
+            onPickMultiple = { multiPickerForTeamA = false }
         )
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -270,6 +276,47 @@ fun PlayerSetupScreen(
             excludedNames = if (isTeamB) excludedForB_Names else excludedForA_Names
         )
     }
+
+    // Multi-select player picker — opens when "Pick from saved players" is tapped.
+    val isPickingForTeamA = multiPickerForTeamA
+    if (isPickingForTeamA != null) {
+        val currentSourceIds = if (isPickingForTeamA) teamASourceIds else teamBSourceIds
+        val currentPlayers = if (isPickingForTeamA) teamAPlayers else teamBPlayers
+        // Exclude: already in this team (via profile) + in the other team (cross-team conflict)
+        val alreadyInTeam = currentSourceIds.values.toSet()
+        val otherTeamExcluded = if (isPickingForTeamA) excludedForA_ProfileIds else excludedForB_ProfileIds
+        val allExcluded = alreadyInTeam + otherTeamExcluded
+        // Remaining slots available in this team
+        val filledSlots = currentPlayers.count { it.isNotBlank() }
+        val remainingSlots = 11 - filledSlots
+
+        MultiPlayerPickerSheet(
+            savedPlayers = savedPlayers,
+            maxSelectionCount = remainingSlots.coerceAtLeast(0),
+            excludedPlayerIds = allExcluded,
+            onCreatePlayer = { name ->
+                val profile = PlayerProfile(
+                    displayName = name,
+                    playerSourceType = PlayerSourceType.PRIVATE
+                )
+                matchSessionViewModel.addSavedPlayer(profile)
+                profile
+            },
+            onConfirm = { profiles ->
+                profiles.forEach { profile ->
+                    if (isPickingForTeamA) {
+                        teamAPlayers.add(profile.displayName)
+                        teamASourceIds[teamAPlayers.size - 1] = profile.id
+                    } else {
+                        teamBPlayers.add(profile.displayName)
+                        teamBSourceIds[teamBPlayers.size - 1] = profile.id
+                    }
+                }
+                multiPickerForTeamA = null
+            },
+            onDismiss = { multiPickerForTeamA = null }
+        )
+    }
 }
 
 // =============================================================================
@@ -283,7 +330,8 @@ private fun PlayerListEditor(
     onPlayerChange: (Int, String) -> Unit,
     onAddPlayer: () -> Unit,
     onRemovePlayer: (Int) -> Unit,
-    onPickSaved: (Int) -> Unit
+    onPickSaved: (Int) -> Unit,
+    onPickMultiple: (() -> Unit)? = null
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         players.forEachIndexed { index, name ->
@@ -348,6 +396,19 @@ private fun PlayerListEditor(
                     modifier = Modifier.size(18.dp)
                 )
                 Text("  Add player")
+            }
+        }
+        if (onPickMultiple != null) {
+            TextButton(
+                onClick = onPickMultiple,
+                modifier = Modifier.align(Alignment.Start)
+            ) {
+                Icon(
+                    Icons.Default.Person,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+                Text("  Pick from saved players")
             }
         }
     }
