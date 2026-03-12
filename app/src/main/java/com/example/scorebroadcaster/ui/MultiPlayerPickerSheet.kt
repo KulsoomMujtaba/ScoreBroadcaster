@@ -55,20 +55,21 @@ import com.example.scorebroadcaster.data.entity.PlayerSourceType
 /**
  * Full-screen multi-select player picker for bulk team-building flows.
  *
- * Shows a searchable list of [savedPlayers] with checkboxes. The user can select
- * multiple players at once, create a new player inline, and confirm once.
+ * Shows a searchable list of [savedPlayers] ("My Players") with checkboxes. The user can select
+ * multiple players at once, create a new player inline (with an optional "Save to My Players"
+ * checkbox), and confirm once.
  *
  * Use this for:
- * - [PlayerSetupScreen] "Pick from saved players" action
- * - [CreateSavedTeamDialog] "Add players" action
+ * - [PlayerSetupScreen] "Add Players" action
+ * - [CreateSavedTeamDialog] "Add Players" action
  *
  * Do NOT use for single-player selection during an active match (next batter, bowler change, etc.).
  *
- * @param savedPlayers          List of existing saved player profiles to display.
+ * @param savedPlayers          List of existing My Players profiles to display.
  * @param initiallySelectedIds  Profile IDs to pre-select when the picker opens.
  * @param maxSelectionCount     Maximum number of players that can be selected (default 11).
  * @param excludedPlayerIds     Profile IDs to hide from the list (already assigned elsewhere).
- * @param onCreatePlayer        Called with a player name; must return a persisted [PlayerProfile].
+ * @param onCreatePlayer        Called with a player name and a saveToMyPlayers flag; must return a [PlayerProfile].
  * @param onConfirm             Called with the ordered list of selected profiles when confirmed.
  * @param onDismiss             Called when the picker is closed without confirming.
  */
@@ -79,7 +80,7 @@ fun MultiPlayerPickerSheet(
     initiallySelectedIds: Set<String> = emptySet(),
     maxSelectionCount: Int = 11,
     excludedPlayerIds: Set<String> = emptySet(),
-    onCreatePlayer: (String) -> PlayerProfile,
+    onCreatePlayer: (name: String, saveToMyPlayers: Boolean) -> PlayerProfile,
     onConfirm: (List<PlayerProfile>) -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -98,6 +99,7 @@ fun MultiPlayerPickerSheet(
 
     var searchQuery by remember { mutableStateOf("") }
     var newPlayerName by remember { mutableStateOf("") }
+    var saveToMyPlayers by remember { mutableStateOf(false) }
 
     // Merge savedPlayers with any locally-created profiles not yet reflected in the Room Flow.
     val knownIds = savedPlayers.map { it.id }.toSet()
@@ -126,7 +128,7 @@ fun MultiPlayerPickerSheet(
         val name = newPlayerName.trim()
         if (name.isEmpty()) return
         if (selected.size >= maxSelectionCount) return
-        val profile = onCreatePlayer(name)
+        val profile = onCreatePlayer(name, saveToMyPlayers)
         // Add to pendingProfiles immediately so the player appears in the list before Room emits.
         if (pendingProfiles.none { it.id == profile.id }) {
             pendingProfiles.add(profile)
@@ -135,6 +137,7 @@ fun MultiPlayerPickerSheet(
             selected.add(profile)
         }
         newPlayerName = ""
+        saveToMyPlayers = false
     }
 
     Dialog(
@@ -179,7 +182,7 @@ fun MultiPlayerPickerSheet(
                         ) {
                             HorizontalDivider()
                             Text(
-                                text = "Add New Player",
+                                text = "Create New Player",
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                             )
@@ -208,6 +211,24 @@ fun MultiPlayerPickerSheet(
                                     )
                                     Text("  Add Player")
                                 }
+                            }
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Checkbox(
+                                    checked = saveToMyPlayers,
+                                    onCheckedChange = { saveToMyPlayers = it },
+                                    enabled = !atLimit
+                                )
+                                Text(
+                                    text = "Save to My Players",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(
+                                        alpha = if (atLimit) 0.38f else 1f
+                                    )
+                                )
                             }
                             Button(
                                 onClick = { onConfirm(selected.toList()) },
@@ -305,18 +326,23 @@ fun MultiPlayerPickerSheet(
                     if (eligible.isEmpty()) {
                         Spacer(Modifier.height(32.dp))
                         Text(
-                            text = "No saved players yet. Add one below.",
+                            text = "No players in My Players yet. Add one below.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                         )
                     } else if (filtered.isEmpty()) {
                         Spacer(Modifier.height(32.dp))
                         Text(
-                            text = "No saved players found",
+                            text = "No players found",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                         )
                     } else {
+                        Text(
+                            text = "My Players",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        )
                         LazyColumn(
                             modifier = Modifier.fillMaxWidth(),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
