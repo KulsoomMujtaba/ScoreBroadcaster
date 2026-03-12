@@ -235,16 +235,6 @@ private fun OverCard(over: OverSummary, onBallTap: (IndexedBall) -> Unit) {
                 }
             }
 
-            // Compact ball-label sequence (e.g. "1 0 4 0 W 2")
-            val ballSequence = over.balls.joinToString(" ") { OverSummaryCalculator.ballLabel(it.event) }
-            if (ballSequence.isNotBlank()) {
-                Text(
-                    text  = ballSequence,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-            }
-
             // Ball chips in a wrapping row (interactive, for editing)
             BallChipsRow(balls = over.balls, onBallTap = onBallTap)
 
