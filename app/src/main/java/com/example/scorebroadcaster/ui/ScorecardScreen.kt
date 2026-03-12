@@ -27,6 +27,7 @@ import com.example.scorebroadcaster.data.entity.BattingEntry
 import com.example.scorebroadcaster.data.entity.BowlingEntry
 import com.example.scorebroadcaster.data.entity.FallOfWicket
 import com.example.scorebroadcaster.data.entity.Match
+import com.example.scorebroadcaster.data.entity.Player
 import com.example.scorebroadcaster.viewmodel.MatchSessionViewModel
 import com.example.scorebroadcaster.viewmodel.MatchViewModel
 
@@ -122,6 +123,7 @@ fun ScorecardScreen(
         item {
             InningsScorecardSection(
                 title = "1st Innings — ${match.battingFirst.name}",
+                teamPlayers = match.battingFirst.players,
                 battingEntries = firstBatting,
                 bowlingEntries = firstBowling,
                 fallOfWickets = firstFallOfWickets,
@@ -170,6 +172,7 @@ fun ScorecardScreen(
             item {
                 InningsScorecardSection(
                     title = "2nd Innings — ${match.bowlingFirst.name}",
+                    teamPlayers = match.bowlingFirst.players,
                     battingEntries = console.allBattingEntries,
                     bowlingEntries = console.allBowlingEntries,
                     fallOfWickets = console.currentInningsFallOfWickets,
@@ -231,6 +234,7 @@ private fun ScorecardMatchHeader(match: Match) {
 @Composable
 private fun InningsScorecardSection(
     title: String,
+    teamPlayers: List<Player>,
     battingEntries: List<BattingEntry>,
     bowlingEntries: List<BowlingEntry>,
     fallOfWickets: List<FallOfWicket>,
@@ -266,6 +270,12 @@ private fun InningsScorecardSection(
             )
         } else {
             BattingTable(entries = battingEntries)
+        }
+
+        // --- YET TO BAT ---
+        val yetToBat = deriveYetToBatPlayers(teamPlayers, battingEntries)
+        if (yetToBat.isNotEmpty()) {
+            YetToBatSection(players = yetToBat)
         }
 
         // --- Extras breakdown ---
@@ -529,6 +539,42 @@ private fun FallOfWicketsSection(entries: List<FallOfWicket>) {
                 text = "${entry.wicketNumber}-${entry.teamScore} (${entry.batterName}, ${entry.overs})",
                 style = MaterialTheme.typography.bodySmall
             )
+        }
+    }
+}
+
+// =============================================================================
+// Yet To Bat section
+// =============================================================================
+
+/**
+ * Returns the players from [teamPlayers] who do not yet have a [BattingEntry],
+ * preserving the original team order.
+ */
+fun deriveYetToBatPlayers(
+    teamPlayers: List<Player>,
+    battingEntries: List<BattingEntry>
+): List<Player> {
+    val battedIds = battingEntries.map { it.player.id }.toSet()
+    return teamPlayers.filter { it.id !in battedIds }
+}
+
+@Composable
+private fun YetToBatSection(players: List<Player>) {
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(
+            "YET TO BAT",
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary
+        )
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            players.forEach { player ->
+                Text(
+                    text = player.name,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
         }
     }
 }
