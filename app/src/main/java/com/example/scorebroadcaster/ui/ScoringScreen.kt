@@ -301,8 +301,8 @@ fun ScoringScreen(
                     console.inningsNumber == 1 -> activeMatch.bowlingFirst.players
                     else -> activeMatch.battingFirst.players
                 }
-                if (currentExtrasType == ExtraType.WIDE || currentExtrasType == ExtraType.NO_BALL) {
-                    WideNoBallEntryDialog(
+                when (currentExtrasType) {
+                    ExtraType.WIDE, ExtraType.NO_BALL -> WideNoBallEntryDialog(
                         type = currentExtrasType,
                         onConfirm = { ballEvent ->
                             extrasDialogType = null
@@ -310,12 +310,8 @@ fun ScoringScreen(
                         },
                         onDismiss = { extrasDialogType = null }
                     )
-                } else {
-                    ExtrasEntryDialog(
-                        initialType = currentExtrasType,
-                        striker = console.striker,
-                        nonStriker = console.nonStriker,
-                        bowlingTeamPlayers = bowlingTeamPlayers,
+                    ExtraType.BYE, ExtraType.LEG_BYE -> ByeLegByeEntryDialog(
+                        type = currentExtrasType,
                         onConfirm = { ballEvent ->
                             extrasDialogType = null
                             matchViewModel.addBallEvent(ballEvent)
@@ -1910,6 +1906,84 @@ private fun buildWideNoBallEvent(
             countsAsBall = false
         )
         else -> error("buildWideNoBallEvent called with non-wide/no-ball type: $type")
+    }
+}
+
+// =============================================================================
+// Bye / Leg Bye dedicated entry dialog
+// =============================================================================
+
+/**
+ * Quick-selection dialog for Bye and Leg Bye deliveries.
+ *
+ * Shows a 3-column grid of buttons (B+1 … B+6 or LB+1 … LB+6). Tapping a button
+ * immediately builds and dispatches the [BallEvent] — no confirmation step.
+ *
+ * Bye:     extras.byes = runs;    countsAsBall = true.
+ * Leg Bye: extras.legByes = runs; countsAsBall = true.
+ */
+@Composable
+internal fun ByeLegByeEntryDialog(
+    type: ExtraType,
+    onConfirm: (BallEvent) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val prefix = if (type == ExtraType.BYE) "B" else "LB"
+    val title = if (type == ExtraType.BYE) "Bye Runs" else "Leg Bye Runs"
+    val options = (1..6).toList()
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(3),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier.wrapContentHeight()
+            ) {
+                items(options) { runs ->
+                    Button(
+                        onClick = {
+                            onConfirm(buildByeLegByeEvent(type, runs))
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .defaultMinSize(minHeight = 48.dp)
+                    ) {
+                        Text("$prefix+$runs", style = MaterialTheme.typography.labelLarge)
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
+}
+
+/**
+ * Constructs a [BallEvent] for a Bye or Leg Bye delivery.
+ *
+ * - **Bye**: all runs go to [ExtrasBreakdown.byes]; counts as a legal ball.
+ * - **Leg Bye**: all runs go to [ExtrasBreakdown.legByes]; counts as a legal ball.
+ */
+private fun buildByeLegByeEvent(type: ExtraType, runs: Int): BallEvent {
+    return when (type) {
+        ExtraType.BYE -> BallEvent(
+            extras = ExtrasBreakdown(byes = runs),
+            wicket = false,
+            dismissalDetail = null,
+            countsAsBall = true
+        )
+        ExtraType.LEG_BYE -> BallEvent(
+            extras = ExtrasBreakdown(legByes = runs),
+            wicket = false,
+            dismissalDetail = null,
+            countsAsBall = true
+        )
+        else -> error("buildByeLegByeEvent called with non-bye/leg-bye type: $type")
     }
 }
 

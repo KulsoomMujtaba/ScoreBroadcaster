@@ -1448,6 +1448,18 @@ Replaced the four fixed extra buttons (`Wd+1`, `NB+1`, `Bye`, `LB`) with a prope
 
 ---
 
+### 2026-03-12 – Scoring UX Fix: Bye and Leg Bye dialogs
+
+- Removed invalid scoring options from Bye and Leg Bye dialogs.
+- Each dialog now only shows valid run options (1–6) in a compact 3-column grid.
+- Bye dialog title: **Bye Runs**; buttons: B+1 … B+6.
+- Leg Bye dialog title: **Leg Bye Runs**; buttons: LB+1 … LB+6.
+- Wide, No Ball, Extra, and other scoring types no longer appear inside these dialogs.
+- Improved scoring accuracy and simplified UI.
+- New `ByeLegByeEntryDialog` composable and `buildByeLegByeEvent` helper added to `ScoringScreen.kt`.
+
+---
+
 ### 2026-03-11 – Feature: Maiden Overs (corrected rule)
 
 - Bowling stats now track maiden overs correctly.
