@@ -7,6 +7,24 @@ import org.junit.Test
 class ScorecardFormatterTest {
 
     // -------------------------------------------------------------------------
+    // formatOvers
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun formatOvers_zeroBalls_showsOnlyOvers() {
+        assertEquals("0", ScorecardFormatter.formatOvers(0, 0))
+        assertEquals("4", ScorecardFormatter.formatOvers(4, 0))
+        assertEquals("10", ScorecardFormatter.formatOvers(10, 0))
+    }
+
+    @Test
+    fun formatOvers_partialOver_showsOversAndBalls() {
+        assertEquals("0.1", ScorecardFormatter.formatOvers(0, 1))
+        assertEquals("2.3", ScorecardFormatter.formatOvers(2, 3))
+        assertEquals("10.5", ScorecardFormatter.formatOvers(10, 5))
+    }
+
+    // -------------------------------------------------------------------------
     // formatRunRate
     // -------------------------------------------------------------------------
 

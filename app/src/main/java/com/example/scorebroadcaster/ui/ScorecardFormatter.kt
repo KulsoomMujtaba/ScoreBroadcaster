@@ -26,10 +26,11 @@ object ScorecardFormatter {
     }
 
     /**
-     * Returns an overs string in cricket notation (e.g. "10.3" meaning 10 complete overs
-     * plus 3 balls of the next over).
+     * Returns an overs string in cricket notation.
+     * Complete overs are shown as a plain number (e.g. "4"); partial overs include
+     * the ball count after a decimal (e.g. "2.3").
      */
-    fun formatOvers(overs: Int, balls: Int): String = "$overs.$balls"
+    fun formatOvers(overs: Int, balls: Int): String = if (balls == 0) "$overs" else "$overs.$balls"
 
     /**
      * Returns the run rate (runs per over) as a formatted string rounded to 2 decimal

@@ -262,11 +262,14 @@ fun ScoringScreen(
             var showWicketDialog by remember { mutableStateOf(false) }
             // Extras entry dialog state
             var extrasDialogType by remember { mutableStateOf<ExtraType?>(null) }
+            // Overthrow delivery dialog state
+            var showOverthrowDialog by remember { mutableStateOf(false) }
             ScoringButtonsSection(
                 onEvent = { matchViewModel.addEvent(it) },
                 onUndo = { matchViewModel.undo() },
                 onWicket = { showWicketDialog = true },
                 onExtras = { type -> extrasDialogType = type },
+                onOverthrows = { showOverthrowDialog = true },
                 enabled = scoringEnabled
             )
             if (showWicketDialog) {
@@ -319,6 +322,16 @@ fun ScoringScreen(
                         onDismiss = { extrasDialogType = null }
                     )
                 }
+            }
+            // Overthrow delivery dialog
+            if (showOverthrowDialog) {
+                OverthrowRunDialog(
+                    onConfirm = { ballEvent ->
+                        showOverthrowDialog = false
+                        matchViewModel.addBallEvent(ballEvent)
+                    },
+                    onDismiss = { showOverthrowDialog = false }
+                )
             }
             Spacer(modifier = Modifier.height(8.dp))
 
@@ -818,7 +831,7 @@ private fun PlayersSection(console: ScoringConsoleState) {
             // Bowler
             console.currentBowlerEntry?.let { BowlerRow(entry = it) }
                 ?: console.currentBowler?.let {
-                    Text("⚾ ${it.name}", style = MaterialTheme.typography.bodySmall)
+                    Text(it.name, style = MaterialTheme.typography.bodySmall)
                 }
         }
     }
@@ -860,13 +873,13 @@ private fun BowlerRow(entry: BowlingEntry) {
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
-            text = "⚾ ${entry.player.name}",
+            text = entry.player.name,
             style = MaterialTheme.typography.bodyMedium,
             modifier = Modifier.weight(1f)
         )
         Text(
-            // Format: overs.balls - maidens - runs - wickets  (e.g. 3.0-1-12-2)
-            text = "${entry.overs}.${entry.balls}-${entry.maidens}-${entry.runs}-${entry.wickets}w",
+            // Format: Overs-Maidens-Runs-Wickets  (e.g. 3.2-1-12-2)
+            text = "${ScorecardFormatter.formatOvers(entry.overs, entry.balls)}-${entry.maidens}-${entry.runs}-${entry.wickets}",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
         )
@@ -926,12 +939,13 @@ private fun ScoringControlsSection(
 }
 
 /**
- * 2 × 3 grid of run buttons (0, 1, 2, 3, 4, 6).
+ * 2 × 3 grid of run buttons (0, 1, 2, 3, 4, 6) plus an Overthrows button.
  * Boundary buttons (4 and 6) use theme-aware container colours to stand out.
  */
 @Composable
 private fun RunButtonsGrid(
     onEvent: (ScoreEvent) -> Unit,
+    onOverthrows: () -> Unit,
     enabled: Boolean
 ) {
     Column(
@@ -983,6 +997,16 @@ private fun RunButtonsGrid(
                     contentColor = OnBoundarySixContainer
                 )
             )
+        }
+        // Row 3: Overthrows (advanced delivery)
+        OutlinedButton(
+            onClick = onOverthrows,
+            enabled = enabled,
+            modifier = Modifier
+                .fillMaxWidth()
+                .defaultMinSize(minHeight = 48.dp)
+        ) {
+            Text("Overthrows", style = MaterialTheme.typography.labelLarge)
         }
     }
 }
@@ -1087,6 +1111,7 @@ private fun ScoringButtonsSection(
     onUndo: () -> Unit,
     onWicket: () -> Unit,
     onExtras: (ExtraType) -> Unit,
+    onOverthrows: () -> Unit,
     enabled: Boolean
 ) {
     Column(
@@ -1096,7 +1121,7 @@ private fun ScoringButtonsSection(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         ScoringControlsSection(label = "Runs") {
-            RunButtonsGrid(onEvent = onEvent, enabled = enabled)
+            RunButtonsGrid(onEvent = onEvent, onOverthrows = onOverthrows, enabled = enabled)
         }
         ScoringControlsSection(label = "Extras") {
             ExtrasButtonsGrid(onExtras = onExtras, enabled = enabled)
@@ -1537,15 +1562,30 @@ internal fun ExtrasEntryDialog(
     var hasWicket by remember { mutableStateOf(false) }
     var batterOut by remember { mutableStateOf(striker ?: nonStriker) }
     var selectedFielder by remember { mutableStateOf<Player?>(null) }
+    // Overthrow state — only used when extraType is BYE or LEG_BYE
+    var hasOverthrows by remember { mutableStateOf(false) }
+    var overthrowRuns by remember { mutableStateOf(1) }
+    var overthrowCustomText by remember { mutableStateOf("") }
+    var overthrowUseCustom by remember { mutableStateOf(false) }
 
     // Reset wicket state whenever the extra type changes
     LaunchedEffect(extraType) {
         hasWicket = false
         batterOut = striker ?: nonStriker
         selectedFielder = null
+        hasOverthrows = false
+        overthrowRuns = 1
+        overthrowCustomText = ""
+        overthrowUseCustom = false
     }
 
     val totalRuns = if (useCustomRuns) customRunsText.toIntOrNull()?.coerceAtLeast(1) ?: selectedRuns else selectedRuns
+    val finalOverthrowRuns = if (overthrowUseCustom)
+        overthrowCustomText.toIntOrNull()?.coerceAtLeast(1) ?: overthrowRuns
+    else
+        overthrowRuns
+    val overthrowsApply = hasOverthrows &&
+            (extraType == ExtraType.BYE || extraType == ExtraType.LEG_BYE)
 
     val isValid = !hasWicket || batterOut != null
 
@@ -1598,6 +1638,59 @@ internal fun ExtrasEntryDialog(
                 }
 
                 HorizontalDivider()
+
+                // --- Overthrow section (Bye / Leg Bye only) ---
+                if (extraType == ExtraType.BYE || extraType == ExtraType.LEG_BYE) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Checkbox(
+                            checked = hasOverthrows,
+                            onCheckedChange = { checked ->
+                                hasOverthrows = checked
+                                if (!checked) {
+                                    overthrowRuns = 1
+                                    overthrowCustomText = ""
+                                    overthrowUseCustom = false
+                                }
+                            }
+                        )
+                        Text("Overthrows happened", style = MaterialTheme.typography.bodyMedium)
+                    }
+                    if (hasOverthrows) {
+                        Text("Overthrow runs", style = MaterialTheme.typography.labelMedium)
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            listOf(1, 2, 3, 4).forEach { runs ->
+                                FilterChip(
+                                    selected = !overthrowUseCustom && overthrowRuns == runs,
+                                    onClick = { overthrowRuns = runs; overthrowUseCustom = false },
+                                    label = { Text("$runs") }
+                                )
+                            }
+                            FilterChip(
+                                selected = overthrowUseCustom,
+                                onClick = { overthrowUseCustom = true },
+                                label = { Text("5+") }
+                            )
+                        }
+                        if (overthrowUseCustom) {
+                            OutlinedTextField(
+                                value = overthrowCustomText,
+                                onValueChange = { overthrowCustomText = it.filter { char -> char.isDigit() } },
+                                label = { Text("Overthrow runs") },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                        Text(
+                            "Total: ${totalRuns + finalOverthrowRuns} (${extraType.label.lowercase()}: $totalRuns + overthrow: $finalOverthrowRuns)",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    HorizontalDivider()
+                }
 
                 // --- Wicket toggle ---
                 Row(
@@ -1661,7 +1754,8 @@ internal fun ExtrasEntryDialog(
         confirmButton = {
             Button(
                 onClick = {
-                    val ballEvent = buildExtrasEvent(extraType, totalRuns, hasWicket, batterOut, selectedFielder)
+                    val overthrowsToAdd = if (overthrowsApply) finalOverthrowRuns else 0
+                    val ballEvent = buildExtrasEvent(extraType, totalRuns, overthrowsToAdd, hasWicket, batterOut, selectedFielder)
                     onConfirm(ballEvent)
                 },
                 enabled = isValid
@@ -1679,13 +1773,15 @@ internal fun ExtrasEntryDialog(
  * Run mapping:
  * - **Wide**: all runs go to wides (including the 1-run penalty). User sees "total runs".
  * - **No Ball**: 1 run is the no-ball penalty (extras); remaining runs are credited off bat.
- * - **Bye / Leg Bye**: all runs go directly to byes / leg-byes.
+ * - **Bye / Leg Bye**: all runs (including any overthrow runs) go directly to byes / leg-byes.
  *
+ * [overthrowRuns] is folded into the byes/legByes total for Bye and Leg Bye deliveries.
  * A wicket on an extras delivery is always a **Run Out** and does NOT credit the bowler.
  */
 private fun buildExtrasEvent(
     type: ExtraType,
     runs: Int,
+    overthrowRuns: Int = 0,
     hasWicket: Boolean,
     batterOut: Player?,
     fielder: Player?
@@ -1714,13 +1810,13 @@ private fun buildExtrasEvent(
             countsAsBall = false
         )
         ExtraType.BYE -> BallEvent(
-            extras = ExtrasBreakdown(byes = runs),
+            extras = ExtrasBreakdown(byes = runs + overthrowRuns),
             wicket = hasWicket,
             dismissalDetail = dismissal,
             countsAsBall = true
         )
         ExtraType.LEG_BYE -> BallEvent(
-            extras = ExtrasBreakdown(legByes = runs),
+            extras = ExtrasBreakdown(legByes = runs + overthrowRuns),
             wicket = hasWicket,
             dismissalDetail = dismissal,
             countsAsBall = true
@@ -1975,6 +2071,114 @@ private fun buildWideNoBallEvent(
         )
         else -> error("buildWideNoBallEvent called with non-wide/no-ball type: $type")
     }
+}
+
+// =============================================================================
+// Overthrow delivery dialog
+// =============================================================================
+
+/**
+ * Dialog for recording a delivery where overthrows occurred.
+ *
+ * The scorer specifies:
+ * - Base runs off bat (0, 1, 2, 3, 4, 6)
+ * - Additional overthrow runs (1, 2, 3, 4, 5+)
+ *
+ * The final [BallEvent] folds both into [BallEvent.runsOffBat]:
+ *   runsOffBat = baseRuns + overthrowRuns
+ */
+@Composable
+internal fun OverthrowRunDialog(
+    onConfirm: (BallEvent) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var baseRuns by remember { mutableStateOf(0) }
+    var overthrowRuns by remember { mutableStateOf(1) }
+    var overthrowCustomText by remember { mutableStateOf("") }
+    var overthrowUseCustom by remember { mutableStateOf(false) }
+
+    val finalOverthrowRuns = if (overthrowUseCustom)
+        overthrowCustomText.toIntOrNull()?.coerceAtLeast(1) ?: overthrowRuns
+    else
+        overthrowRuns
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Runs with Overthrows") },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.verticalScroll(rememberScrollState())
+            ) {
+                // --- Base runs (off bat) ---
+                Text("Runs off bat", style = MaterialTheme.typography.labelMedium)
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    listOf(0, 1, 2, 3, 4, 6).forEach { runs ->
+                        FilterChip(
+                            selected = baseRuns == runs,
+                            onClick = { baseRuns = runs },
+                            label = { Text("$runs") }
+                        )
+                    }
+                }
+
+                HorizontalDivider()
+
+                // --- Overthrow runs ---
+                Text("Overthrow runs", style = MaterialTheme.typography.labelMedium)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf(1, 2, 3, 4).forEach { runs ->
+                        FilterChip(
+                            selected = !overthrowUseCustom && overthrowRuns == runs,
+                            onClick = { overthrowRuns = runs; overthrowUseCustom = false },
+                            label = { Text("$runs") }
+                        )
+                    }
+                    FilterChip(
+                        selected = overthrowUseCustom,
+                        onClick = { overthrowUseCustom = true },
+                        label = { Text("5+") }
+                    )
+                }
+                if (overthrowUseCustom) {
+                    OutlinedTextField(
+                        value = overthrowCustomText,
+                        onValueChange = { overthrowCustomText = it.filter { char -> char.isDigit() } },
+                        label = { Text("Overthrow runs") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
+                HorizontalDivider()
+
+                // --- Summary ---
+                Text(
+                    "Total runs: ${baseRuns + finalOverthrowRuns} (bat: $baseRuns + overthrow: $finalOverthrowRuns)",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    onConfirm(
+                        BallEvent(
+                            runsOffBat = baseRuns + finalOverthrowRuns,
+                            countsAsBall = true
+                        )
+                    )
+                }
+            ) { Text("Confirm") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
 }
 
 // =============================================================================
