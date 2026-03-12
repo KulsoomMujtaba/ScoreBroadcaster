@@ -320,6 +320,23 @@ Scoring is modelled as an append-only event log:
 
 ## Development Log
 
+### 2026-03-12 – UI Improvement: Blue Sports Theme
+
+- **Replaced green brand palette with modern cricket-style blue theme**: primary colour changed from `#008F5A` green to `#1E5EFF` blue across all Material3 colorScheme roles.
+- **Updated tabs, navigation, scoring chips and forms**: selected tabs, active buttons, selected chips, and important highlights now use the primary blue.
+- **Improved readability and sports-app feel**: cleaner light background (`#F6F8FB`), white surfaces, and high-contrast dark text (`#0F172A`) for outdoor readability during live matches.
+- **Boundary chips updated**: FOUR chip uses primary blue (`#1E5EFF`), SIX chip uses darker blue (`#0B3FB3`), extras remain warm amber (`#F59E0B`), wickets remain red (`#D32F2F`).
+- **Background stays light**: app background is a very light blue tone; the entire app is not blue — only interactive/highlighted elements use blue.
+
+**Files modified:**
+| File | Action |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/ui/theme/Color.kt` | Replaced green palette with blue palette (`CricketBlue`, `CricketDarkBlue`, `CricketLightBlue`, updated boundary and extras colours) |
+| `app/src/main/java/com/example/scorebroadcaster/ui/theme/Theme.kt` | Updated Material3 colorScheme roles to map to new blue palette |
+| `README.md` | Updated |
+
+---
+
 ### 2026-03-12 – Scorecard Improvement: Yet To Bat
 
 - **Scorecard now shows players who have not yet batted**: a "Yet To Bat" section appears below the batting table in each innings.

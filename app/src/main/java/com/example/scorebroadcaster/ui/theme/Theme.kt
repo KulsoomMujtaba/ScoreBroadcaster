@@ -12,18 +12,18 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 
 // =============================================================================
-// Cricket-green light theme — primary brand identity
+// Cricket-blue light theme — modern sports visual identity
 // =============================================================================
 
 private val LightColorScheme = lightColorScheme(
-    // Primary: cricket brand green
-    primary = CricketGreen,
+    // Primary: cricket brand blue
+    primary = CricketBlue,
     onPrimary = Color.White,
-    primaryContainer = CricketLightGreen,
+    primaryContainer = CricketLightBlue,
     onPrimaryContainer = CricketTextPrimary,
 
-    // Secondary: four-accent mid-green (boundary highlight secondary role)
-    secondary = FourAccentMid,
+    // Secondary: blue accent mid-tone (boundary highlight secondary role)
+    secondary = BlueAccentMid,
     onSecondary = Color.White,
     secondaryContainer = BoundaryFourContainer,
     onSecondaryContainer = OnBoundaryFourContainer,
@@ -50,16 +50,16 @@ private val LightColorScheme = lightColorScheme(
     outline = CricketOutline,
 )
 
-// Dark scheme retains the cricket-green identity with inverted contrasts.
+// Dark scheme retains the cricket-blue identity with inverted contrasts.
 private val DarkColorScheme = darkColorScheme(
-    primary = CricketLightGreen,
-    onPrimary = CricketDarkGreen,
-    primaryContainer = CricketDarkGreen,
-    onPrimaryContainer = CricketLightGreen,
-    secondary = FourAccentMid,
+    primary = CricketLightBlue,
+    onPrimary = CricketDarkBlue,
+    primaryContainer = CricketDarkBlue,
+    onPrimaryContainer = CricketLightBlue,
+    secondary = BlueAccentMid,
     onSecondary = CricketTextPrimary,
-    secondaryContainer = Color(0xFF1E4D36),
-    onSecondaryContainer = BoundaryFourContainer,
+    secondaryContainer = Color(0xFF1E3A8A),
+    onSecondaryContainer = CricketLightBlue,
     tertiary = ExtrasAmber,
     onTertiary = Color.White,
     tertiaryContainer = Color(0xFF3B2500),
@@ -73,7 +73,7 @@ private val DarkColorScheme = darkColorScheme(
 @Composable
 fun ScoreBroadcasterTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    // Dynamic colour is disabled by default to preserve the cricket-green brand identity.
+    // Dynamic colour is disabled by default to preserve the cricket-blue brand identity.
     dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {
