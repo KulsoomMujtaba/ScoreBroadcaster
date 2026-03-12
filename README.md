@@ -86,6 +86,45 @@ The core promise is simple: open the app, start a match, score every ball, and s
 
 ---
 
+## UI Improvement: Cricinfo-Inspired Theme Refresh
+
+### What changed
+
+- **Refreshed app colour system** with a cricket-green brand identity:
+  - Primary Green: `#008F5A`, Primary Dark Green: `#006C44`, Primary Light Green: `#DDF4EA`
+  - Background: `#F7F9F8` (very light neutral), Surfaces: white (`#FFFFFF`)
+  - Surface Variant: `#EEF3F0`, Outline: `#D9E2DD`
+  - Text Primary: `#0F1720`, Text Secondary: `#5B6871`
+  - Error / Wicket: `#C83A3A` (strong red, unchanged intent)
+
+- **Cleaner white surfaces and darker text hierarchy** — replaced purple/pink Material defaults with cricket-native greens and neutral text.
+
+- **Reduced inconsistent blue styling** — disabled dynamic colour so the green brand identity is always applied consistently.
+
+- **Updated tabs, navigation, scoring controls, chips, and forms**:
+  - Selected tab indicator, primary buttons, and active states now use brand green.
+  - Bottom navigation selected item uses primary green; unselected items are muted grey.
+  - Top app bar uses white surface with dark title text.
+
+- **Boundary ball chips now semantically distinct**:
+  - **4**: light-green container (`#CEF0DF` / dark text) — subtly highlighted.
+  - **6**: dark-green container (`#0E6B43` / white text) — stronger emphasis.
+  - **W**: red (`errorContainer`) — clearly destructive.
+  - **Extras (Wd/NB)**: warm amber container (`#FFE8B2`) — visible but restrained.
+  - Applies in both the recent-ball chips row (`ScoringScreen`) and the ball-timeline chip grid (`BallTimelineScreen`).
+
+- **Chase / target info panels** use `primaryContainer` (light green) instead of tertiary amber, giving a cleaner cricket-native look during run chases.
+
+- **App now has a more cricket-native, stats-first visual feel** — less generic Material demo, less blue-heavy, more like a polished cricket utility app.
+
+### What did NOT change
+
+- `MatchViewModel`, `ScoreReducer`, `BallEvent`, Room entities — untouched.
+- Navigation behaviour — untouched.
+- All scoring logic — untouched.
+
+---
+
 ## UI Improvement: Run Rate Display + Recent Ball Chip Colours
 
 ### What changed

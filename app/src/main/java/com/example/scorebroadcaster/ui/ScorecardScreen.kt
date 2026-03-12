@@ -148,7 +148,7 @@ fun ScorecardScreen(
             // Target info
             item {
                 Surface(
-                    color = MaterialTheme.colorScheme.tertiaryContainer,
+                    color = MaterialTheme.colorScheme.primaryContainer,
                     shape = MaterialTheme.shapes.medium,
                     modifier = Modifier.fillMaxWidth()
                 ) {
