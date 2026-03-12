@@ -12,6 +12,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -299,10 +303,7 @@ fun ScoringScreen(
                 }
                 if (currentExtrasType == ExtraType.WIDE || currentExtrasType == ExtraType.NO_BALL) {
                     WideNoBallEntryDialog(
-                        initialType = currentExtrasType,
-                        striker = console.striker,
-                        nonStriker = console.nonStriker,
-                        bowlingTeamPlayers = bowlingTeamPlayers,
+                        type = currentExtrasType,
                         onConfirm = { ballEvent ->
                             extrasDialogType = null
                             matchViewModel.addBallEvent(ballEvent)
@@ -1829,202 +1830,50 @@ private fun buildExtrasEvent(
 // =============================================================================
 
 /**
- * Dedicated dialog for Wide and No Ball deliveries.
+ * Quick-selection dialog for Wide and No Ball deliveries.
  *
- * The dialog makes the automatic +1 extra run explicit:
- * - The scorer enters only the **additional** runs taken by running (0 by default).
- * - The final extras value is always `1 + additionalRuns`.
+ * Shows a grid of buttons (Wd / Nb through Wd+6 / Nb+6). Tapping a button
+ * immediately builds and dispatches the [BallEvent] — no confirmation step.
  *
- * Wide:  total wides = 1 + additionalRuns; countsAsBall = false.
- * No Ball: noBalls = 1; runsOffBat = additionalRuns; countsAsBall = false.
+ * Wide:  extras.wides = 1 + additionalRuns; countsAsBall = false.
+ * No Ball: extras.noBalls = 1; runsOffBat = additionalRuns; countsAsBall = false.
  */
 @Composable
 internal fun WideNoBallEntryDialog(
-    initialType: ExtraType,
-    striker: Player?,
-    nonStriker: Player?,
-    bowlingTeamPlayers: List<Player>,
+    type: ExtraType,
     onConfirm: (BallEvent) -> Unit,
     onDismiss: () -> Unit
 ) {
-    var extraType by remember { mutableStateOf(initialType) }
-    var selectedAdditionalRuns by remember { mutableStateOf(0) }
-    var customRunsText by remember { mutableStateOf("") }
-    var useCustomRuns by remember { mutableStateOf(false) }
-    var hasWicket by remember { mutableStateOf(false) }
-    var batterOut by remember { mutableStateOf(striker ?: nonStriker) }
-    var selectedFielder by remember { mutableStateOf<Player?>(null) }
-
-    // Reset wicket state and runs whenever the extra type changes
-    LaunchedEffect(extraType) {
-        hasWicket = false
-        batterOut = striker ?: nonStriker
-        selectedFielder = null
-        selectedAdditionalRuns = 0
-        customRunsText = ""
-        useCustomRuns = false
-    }
-
-    val additionalRuns = if (useCustomRuns) customRunsText.toIntOrNull()?.coerceAtLeast(0) ?: selectedAdditionalRuns else selectedAdditionalRuns
-    val totalRuns = 1 + additionalRuns
-
-    val isValid = !hasWicket || batterOut != null
-
-    val runsWord = if (additionalRuns == 1) "run" else "runs"
-    val summaryText = if (extraType == ExtraType.WIDE) {
-        "Total extras on this ball: $totalRuns (1 wide + $additionalRuns $runsWord)"
-    } else {
-        "Total on this ball: $totalRuns (1 no-ball + $additionalRuns additional $runsWord)"
-    }
+    val prefix = if (type == ExtraType.WIDE) "Wd" else "Nb"
+    // 0 additional runs = base extra only; 1..6 = base + additional runs
+    val options = (0..6).toList()
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(extraType.label) },
+        title = { Text(type.label) },
         text = {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier.verticalScroll(rememberScrollState())
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(3),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier.wrapContentHeight()
             ) {
-                // --- Automatic extra explanation ---
-                Text(
-                    "Includes 1 automatic extra run",
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium
-                )
-                Text(
-                    "Add any additional runs taken by running",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                )
-
-                HorizontalDivider()
-
-                // --- Extra type selector (Wide / No Ball only) ---
-                Text("Extra type", style = MaterialTheme.typography.labelMedium)
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    listOf(ExtraType.WIDE, ExtraType.NO_BALL).forEach { type ->
-                        FilterChip(
-                            selected = extraType == type,
-                            onClick = { extraType = type },
-                            label = { Text(type.label) }
-                        )
-                    }
-                }
-
-                HorizontalDivider()
-
-                // --- Additional runs selector ---
-                val runsLabel = if (extraType == ExtraType.WIDE) "Additional runs taken" else "Additional runs after no-ball"
-                val supportingLabel = if (extraType == ExtraType.WIDE) "1 wide is added automatically" else "1 no-ball is added automatically"
-                Text(runsLabel, style = MaterialTheme.typography.labelMedium)
-                Text(
-                    supportingLabel,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    listOf(0, 1, 2, 3, 4).forEach { runs ->
-                        FilterChip(
-                            selected = !useCustomRuns && selectedAdditionalRuns == runs,
-                            onClick = { selectedAdditionalRuns = runs; useCustomRuns = false },
-                            label = { Text("$runs") }
-                        )
-                    }
-                    FilterChip(
-                        selected = useCustomRuns,
-                        onClick = { useCustomRuns = true },
-                        label = { Text("5+") }
-                    )
-                }
-                if (useCustomRuns) {
-                    OutlinedTextField(
-                        value = customRunsText,
-                        onValueChange = { customRunsText = it.filter { char -> char.isDigit() } },
-                        label = { Text("Additional runs") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-
-                HorizontalDivider()
-
-                // --- Summary ---
-                Text(
-                    summaryText,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.primary
-                )
-
-                HorizontalDivider()
-
-                // --- Wicket toggle ---
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Checkbox(
-                        checked = hasWicket,
-                        onCheckedChange = { checked ->
-                            hasWicket = checked
-                            if (!checked) { batterOut = striker ?: nonStriker; selectedFielder = null }
-                        }
-                    )
-                    Text("Wicket on this ball (Run Out only)", style = MaterialTheme.typography.bodyMedium)
-                }
-
-                // --- Wicket detail section (only when hasWicket is true) ---
-                if (hasWicket) {
-                    HorizontalDivider()
-                    Text("Who was run out?", style = MaterialTheme.typography.labelMedium)
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        if (striker != null) {
-                            FilterChip(
-                                selected = batterOut?.id == striker.id,
-                                onClick = { batterOut = striker },
-                                label = { Text("${striker.name} (striker)") }
-                            )
-                        }
-                        if (nonStriker != null) {
-                            FilterChip(
-                                selected = batterOut?.id == nonStriker.id,
-                                onClick = { batterOut = nonStriker },
-                                label = { Text("${nonStriker.name} (non-striker)") }
-                            )
-                        }
-                    }
-
-                    Text("Fielder (optional)", style = MaterialTheme.typography.labelMedium)
-                    if (bowlingTeamPlayers.isEmpty()) {
-                        Text(
-                            "No fielding team players registered.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                        )
-                    } else {
-                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            bowlingTeamPlayers.forEach { player ->
-                                FilterChip(
-                                    selected = selectedFielder?.id == player.id,
-                                    onClick = {
-                                        selectedFielder = if (selectedFielder?.id == player.id) null else player
-                                    },
-                                    label = { Text(player.name) }
-                                )
-                            }
-                        }
+                items(options) { additionalRuns ->
+                    val label = if (additionalRuns == 0) prefix else "$prefix +$additionalRuns"
+                    Button(
+                        onClick = {
+                            onConfirm(buildWideNoBallEvent(type, additionalRuns))
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .defaultMinSize(minHeight = 48.dp)
+                    ) {
+                        Text(label, style = MaterialTheme.typography.labelLarge)
                     }
                 }
             }
         },
-        confirmButton = {
-            Button(
-                onClick = {
-                    val ballEvent = buildWideNoBallEvent(extraType, additionalRuns, hasWicket, batterOut, selectedFielder)
-                    onConfirm(ballEvent)
-                },
-                enabled = isValid
-            ) { Text("Confirm") }
-        },
+        confirmButton = {},
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("Cancel") }
         }
@@ -2041,32 +1890,20 @@ internal fun WideNoBallEntryDialog(
  */
 private fun buildWideNoBallEvent(
     type: ExtraType,
-    additionalRuns: Int,
-    hasWicket: Boolean,
-    batterOut: Player?,
-    fielder: Player?
+    additionalRuns: Int
 ): BallEvent {
-    val dismissal: DismissalDetail? = if (hasWicket && batterOut != null) {
-        DismissalDetail(
-            batter = batterOut,
-            dismissalType = DismissalType.RUN_OUT,
-            fielders = listOfNotNull(fielder),
-            bowler = null
-        )
-    } else null
-
     return when (type) {
         ExtraType.WIDE -> BallEvent(
             extras = ExtrasBreakdown(wides = 1 + additionalRuns),
-            wicket = hasWicket,
-            dismissalDetail = dismissal,
+            wicket = false,
+            dismissalDetail = null,
             countsAsBall = false
         )
         ExtraType.NO_BALL -> BallEvent(
             runsOffBat = additionalRuns,
             extras = ExtrasBreakdown(noBalls = 1),
-            wicket = hasWicket,
-            dismissalDetail = dismissal,
+            wicket = false,
+            dismissalDetail = null,
             countsAsBall = false
         )
         else -> error("buildWideNoBallEvent called with non-wide/no-ball type: $type")
