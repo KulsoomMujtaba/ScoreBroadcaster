@@ -397,7 +397,7 @@ class MatchViewModel : ViewModel() {
             persistCurrentInningsEvents()
         }
     }
-     * (or the first-innings log when [inFirstInnings] is true).
+     /* (or the first-innings log when [inFirstInnings] is true).
      *
      * The innings aggregate [MatchState] is rebuilt by replaying the remaining events.
      * Per-player batting/bowling stats in [ScoringConsoleState] are **not** rebuilt
@@ -429,7 +429,7 @@ class MatchViewModel : ViewModel() {
             persistCurrentInningsEvents()
         }
     }
-     * replaying [firstEvents] through the reducer.
+     /* replaying [firstEvents] through the reducer.
      *
      * Called after [replaceBallEvent] or [deleteBallEvent] modifies the first-innings log.
      * Only aggregate totals (runs, wickets, extras, overs, target) are updated; per-player
