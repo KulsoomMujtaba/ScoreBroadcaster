@@ -261,6 +261,25 @@ Scoring is modelled as an append-only event log:
 
 ## Development Log
 
+### 2026-03-12 – UX Improvement: Bulk Team Player Selection
+
+- **Removed one-by-one player entry from team creation flow**: `CreateSavedTeamDialog` and `PlayerSetupScreen` no longer show repeated text-field rows for individual player slots.
+- **Team creation now uses a dedicated Add Players flow**: a single **Add Players** button opens `MultiPlayerPickerSheet` — the existing full-screen bulk-selection screen.
+- **Users can search and multi-select saved players at once**: the picker supports instant search, checkbox-based multi-selection with ordered results, and a hard cap of 11 players per team.
+- **New players can be created inline and are immediately added and auto-selected**: typing a name in the "Create new player" field within the picker persists the new `PlayerProfile` and auto-selects it without closing the sheet.
+- **Selected players shown as a compact list with remove icons**: after confirming the picker, each team's section shows the selected player names with a count and individual remove buttons.
+- **Cross-team conflict prevention preserved**: `PlayerSetupScreen` continues to exclude the opposing team's players from the picker so the same player cannot be assigned to both teams in one match.
+- **Faster and cleaner team-building experience**: the old repeated-input UX is gone; the only path is Add Players → select / create → confirm.
+
+**Files modified:**
+| File | Action |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/ui/SavedTeamsScreen.kt` | Refactored `CreateSavedTeamDialog` to use bulk picker |
+| `app/src/main/java/com/example/scorebroadcaster/ui/PlayerSetupScreen.kt` | Replaced `PlayerListEditor` with `TeamPlayerSection` + bulk picker |
+| `README.md` | Updated |
+
+---
+
 ### 2026-03-12 – UI + Scoring Improvement: Bowler Figures Cleanup and Overthrows
 
 - **Bowler figures now use standard cricket notation**: `Overs-Maidens-Runs-Wickets` (e.g. `3.2-1-18-2`). The previous non-standard `w` suffix after wickets has been removed.

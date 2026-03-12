@@ -10,20 +10,17 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
@@ -34,7 +31,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.example.scorebroadcaster.data.entity.Player
 import com.example.scorebroadcaster.data.entity.PlayerProfile
@@ -51,24 +47,17 @@ fun PlayerSetupScreen(
     val match = pending ?: return
     val savedPlayers by matchSessionViewModel.savedPlayers.collectAsState()
 
-    // Local state: mutable lists of player name strings for each team
-    val teamAPlayers = remember { mutableStateListOf<String>().also { list ->
-        match.teamA.players.forEach { list.add(it.name) }
-        if (list.isEmpty()) list.add("")
-    }}
-    val teamBPlayers = remember { mutableStateListOf<String>().also { list ->
-        match.teamB.players.forEach { list.add(it.name) }
-        if (list.isEmpty()) list.add("")
-    }}
-
-    // Track the sourceProfileId for slots filled via PlayerPickerDialog so the
-    // match-level Player snapshot preserves the link back to the reusable profile.
-    val teamASourceIds = remember { hashMapOf<Int, String>() }
-    val teamBSourceIds = remember { hashMapOf<Int, String>() }
-
-    // Index of the slot that has the picker dialog open; null = closed
-    // Negative indices represent team B: -(index+1)
-    var pickerForIndex by remember { mutableStateOf<Int?>(null) }
+    // Local state: mutable lists of Player snapshots for each team
+    val teamAPlayers = remember {
+        mutableStateListOf<Player>().also { list ->
+            match.teamA.players.forEach { list.add(it) }
+        }
+    }
+    val teamBPlayers = remember {
+        mutableStateListOf<Player>().also { list ->
+            match.teamB.players.forEach { list.add(it) }
+        }
+    }
 
     // null = closed; true = multi-picker for Team A; false = multi-picker for Team B
     var multiPickerForTeamA by remember { mutableStateOf<Boolean?>(null) }
@@ -77,62 +66,18 @@ fun PlayerSetupScreen(
     // Cross-team exclusion sets (recomputed whenever either roster changes)
     // ---------------------------------------------------------------------------
 
-    // Excluded profile IDs for Team A picker = profile IDs currently in Team B
+    // Profile IDs currently in Team B — used to exclude from Team A picker
     val excludedForA_ProfileIds by remember {
-        derivedStateOf { teamBSourceIds.values.toSet() }
+        derivedStateOf { teamBPlayers.mapNotNull { it.sourceProfileId }.toSet() }
     }
-    // Excluded normalised names for Team A picker = ad-hoc names in Team B
-    val excludedForA_Names by remember {
-        derivedStateOf {
-            teamBPlayers.indices
-                .filter { i -> teamBSourceIds[i] == null && teamBPlayers[i].isNotBlank() }
-                .map { i -> normalizePlayerName(teamBPlayers[i]) }
-                .toSet()
-        }
-    }
-
-    // Excluded profile IDs for Team B picker = profile IDs currently in Team A
+    // Profile IDs currently in Team A — used to exclude from Team B picker
     val excludedForB_ProfileIds by remember {
-        derivedStateOf { teamASourceIds.values.toSet() }
-    }
-    // Excluded normalised names for Team B picker = ad-hoc names in Team A
-    val excludedForB_Names by remember {
-        derivedStateOf {
-            teamAPlayers.indices
-                .filter { i -> teamASourceIds[i] == null && teamAPlayers[i].isNotBlank() }
-                .map { i -> normalizePlayerName(teamAPlayers[i]) }
-                .toSet()
-        }
+        derivedStateOf { teamAPlayers.mapNotNull { it.sourceProfileId }.toSet() }
     }
 
-    // Per-slot conflict flags for inline error display
-    // A slot conflicts if its name / sourceProfileId matches any entry on the other side.
-    val teamAConflicts by remember {
-        derivedStateOf {
-            teamAPlayers.indices.map { i ->
-                val name = teamAPlayers[i]
-                if (name.isBlank()) return@map false
-                val srcId = teamASourceIds[i]
-                if (srcId != null) srcId in excludedForA_ProfileIds
-                else normalizePlayerName(name) in excludedForA_Names
-            }
-        }
-    }
-    val teamBConflicts by remember {
-        derivedStateOf {
-            teamBPlayers.indices.map { i ->
-                val name = teamBPlayers[i]
-                if (name.isBlank()) return@map false
-                val srcId = teamBSourceIds[i]
-                if (srcId != null) srcId in excludedForB_ProfileIds
-                else normalizePlayerName(name) in excludedForB_Names
-            }
-        }
-    }
-
-    // Continue is disabled while any cross-team conflict exists.
+    // Cross-team conflict: any player appearing in both rosters
     val hasCrossTeamConflict by remember {
-        derivedStateOf { teamAConflicts.any { it } || teamBConflicts.any { it } }
+        derivedStateOf { hasCrossTeamDuplicate(teamAPlayers, teamBPlayers) }
     }
 
     Column(
@@ -144,8 +89,7 @@ fun PlayerSetupScreen(
     ) {
         Text("Add Players", style = MaterialTheme.typography.headlineMedium)
         Text(
-            "Enter player names for each team. You can add up to 11 players. " +
-                    "Tap the person icon to pick from your saved players.",
+            "Select players for each team using the Add Players button.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
         )
@@ -154,73 +98,28 @@ fun PlayerSetupScreen(
 
         // Team A
         Text(match.teamA.name, style = MaterialTheme.typography.titleMedium)
-        PlayerListEditor(
+        TeamPlayerSection(
             players = teamAPlayers,
-            conflictSlots = teamAConflicts,
-            onPlayerChange = { index, value ->
-                teamAPlayers[index] = value
-                // Clear the profile link when the user manually edits the name
-                teamASourceIds.remove(index)
-            },
-            onAddPlayer = { if (teamAPlayers.size < 11) teamAPlayers.add("") },
-            onRemovePlayer = { index ->
-                if (teamAPlayers.size > 1) {
-                    teamAPlayers.removeAt(index)
-                    teamASourceIds.remove(index)
-                }
-            },
-            onPickSaved = { index -> pickerForIndex = index },
-            onPickMultiple = { multiPickerForTeamA = true }
+            onAddPlayers = { multiPickerForTeamA = true },
+            onRemovePlayer = { index -> teamAPlayers.removeAt(index) }
         )
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
         // Team B
         Text(match.teamB.name, style = MaterialTheme.typography.titleMedium)
-        PlayerListEditor(
+        TeamPlayerSection(
             players = teamBPlayers,
-            conflictSlots = teamBConflicts,
-            onPlayerChange = { index, value ->
-                teamBPlayers[index] = value
-                teamBSourceIds.remove(index)
-            },
-            onAddPlayer = { if (teamBPlayers.size < 11) teamBPlayers.add("") },
-            onRemovePlayer = { index ->
-                if (teamBPlayers.size > 1) {
-                    teamBPlayers.removeAt(index)
-                    teamBSourceIds.remove(index)
-                }
-            },
-            onPickSaved = { index -> pickerForIndex = -(index + 1) },
-            onPickMultiple = { multiPickerForTeamA = false }
+            onAddPlayers = { multiPickerForTeamA = false },
+            onRemovePlayer = { index -> teamBPlayers.removeAt(index) }
         )
 
         Spacer(modifier = Modifier.height(16.dp))
 
         Button(
             onClick = {
-                // Build Player snapshots, preserving the sourceProfileId for slots that
-                // were filled via PlayerPickerDialog.
-                val updatedTeamA = match.teamA.copy(
-                    players = teamAPlayers.mapIndexed { i, name -> Pair(i, name) }
-                        .filter { (_, n) -> n.isNotBlank() }
-                        .map { (origIdx, name) ->
-                            Player(
-                                name = name.trim(),
-                                sourceProfileId = teamASourceIds[origIdx]
-                            )
-                        }
-                )
-                val updatedTeamB = match.teamB.copy(
-                    players = teamBPlayers.mapIndexed { i, name -> Pair(i, name) }
-                        .filter { (_, n) -> n.isNotBlank() }
-                        .map { (origIdx, name) ->
-                            Player(
-                                name = name.trim(),
-                                sourceProfileId = teamBSourceIds[origIdx]
-                            )
-                        }
-                )
+                val updatedTeamA = match.teamA.copy(players = teamAPlayers.toList())
+                val updatedTeamB = match.teamB.copy(players = teamBPlayers.toList())
                 val updatedMatch = match.copy(
                     teamA = updatedTeamA,
                     teamB = updatedTeamB,
@@ -246,54 +145,19 @@ fun PlayerSetupScreen(
         }
     }
 
-    // Player picker dialog — opens when the person icon is tapped in any player slot.
-    // Shown for both existing saved players (onSelect) and new inline creation (onCreateAndSelect).
-    val pickerIdx = pickerForIndex
-    if (pickerIdx != null) {
-        val isTeamB = pickerIdx < 0
-        val slotIndex = if (isTeamB) -(pickerIdx + 1) else pickerIdx
-
-        fun applyProfile(profile: PlayerProfile) {
-            if (isTeamB) {
-                teamBPlayers[slotIndex] = profile.displayName
-                teamBSourceIds[slotIndex] = profile.id
-            } else {
-                teamAPlayers[slotIndex] = profile.displayName
-                teamASourceIds[slotIndex] = profile.id
-            }
-            pickerForIndex = null
-        }
-
-        PlayerPickerDialog(
-            savedPlayers = savedPlayers,
-            onDismiss = { pickerForIndex = null },
-            onSelect = { profile -> applyProfile(profile) },
-            onCreateAndSelect = { profile ->
-                matchSessionViewModel.addSavedPlayer(profile)
-                applyProfile(profile)
-            },
-            excludedProfileIds = if (isTeamB) excludedForB_ProfileIds else excludedForA_ProfileIds,
-            excludedNames = if (isTeamB) excludedForB_Names else excludedForA_Names
-        )
-    }
-
-    // Multi-select player picker — opens when "Pick from saved players" is tapped.
+    // Multi-select player picker — opens when "Add Players" is tapped for a team.
     val isPickingForTeamA = multiPickerForTeamA
     if (isPickingForTeamA != null) {
-        val currentSourceIds = if (isPickingForTeamA) teamASourceIds else teamBSourceIds
         val currentPlayers = if (isPickingForTeamA) teamAPlayers else teamBPlayers
-        // Exclude: already in this team (via profile) + in the other team (cross-team conflict)
-        val alreadyInTeam = currentSourceIds.values.toSet()
         val otherTeamExcluded = if (isPickingForTeamA) excludedForA_ProfileIds else excludedForB_ProfileIds
-        val allExcluded = alreadyInTeam + otherTeamExcluded
-        // Remaining slots available in this team
-        val filledSlots = currentPlayers.count { it.isNotBlank() }
-        val remainingSlots = 11 - filledSlots
+        // Pre-select players already in this team (so they appear checked when re-opening picker)
+        val initiallySelectedIds = currentPlayers.mapNotNull { it.sourceProfileId }.toSet()
 
         MultiPlayerPickerSheet(
             savedPlayers = savedPlayers,
-            maxSelectionCount = remainingSlots.coerceAtLeast(0),
-            excludedPlayerIds = allExcluded,
+            initiallySelectedIds = initiallySelectedIds,
+            maxSelectionCount = 11,
+            excludedPlayerIds = otherTeamExcluded,
             onCreatePlayer = { name ->
                 val profile = PlayerProfile(
                     displayName = name,
@@ -303,14 +167,16 @@ fun PlayerSetupScreen(
                 profile
             },
             onConfirm = { profiles ->
-                profiles.forEach { profile ->
-                    if (isPickingForTeamA) {
-                        teamAPlayers.add(profile.displayName)
-                        teamASourceIds[teamAPlayers.size - 1] = profile.id
-                    } else {
-                        teamBPlayers.add(profile.displayName)
-                        teamBSourceIds[teamBPlayers.size - 1] = profile.id
-                    }
+                if (isPickingForTeamA) {
+                    teamAPlayers.clear()
+                    teamAPlayers.addAll(
+                        profiles.map { Player(name = it.displayName, sourceProfileId = it.id) }
+                    )
+                } else {
+                    teamBPlayers.clear()
+                    teamBPlayers.addAll(
+                        profiles.map { Player(name = it.displayName, sourceProfileId = it.id) }
+                    )
                 }
                 multiPickerForTeamA = null
             },
@@ -320,98 +186,58 @@ fun PlayerSetupScreen(
 }
 
 // =============================================================================
-// Player list editor
+// Team player section — shows Add Players button + selected player list
 // =============================================================================
 
 @Composable
-private fun PlayerListEditor(
-    players: List<String>,
-    conflictSlots: List<Boolean> = emptyList(),
-    onPlayerChange: (Int, String) -> Unit,
-    onAddPlayer: () -> Unit,
-    onRemovePlayer: (Int) -> Unit,
-    onPickSaved: (Int) -> Unit,
-    onPickMultiple: (() -> Unit)? = null
+private fun TeamPlayerSection(
+    players: List<Player>,
+    onAddPlayers: () -> Unit,
+    onRemovePlayer: (Int) -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        players.forEachIndexed { index, name ->
-            val hasConflict = conflictSlots.getOrElse(index) { false }
-            Column {
+        OutlinedButton(
+            onClick = onAddPlayers,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Icon(
+                Icons.Default.Add,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp)
+            )
+            Text("  Add Players")
+        }
+
+        if (players.isNotEmpty()) {
+            val count = players.size
+            Text(
+                text = "$count player${if (count == 1) "" else "s"} selected",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary
+            )
+            players.forEachIndexed { index, player ->
                 Row(
+                    modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    OutlinedTextField(
-                        value = name,
-                        onValueChange = { onPlayerChange(index, it) },
-                        label = { Text("Player ${index + 1}") },
-                        modifier = Modifier.weight(1f),
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-                        isError = hasConflict
+                    Text(
+                        text = player.name,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.weight(1f)
                     )
-                    // Always show the picker icon — tapping it opens PlayerPickerDialog which
-                    // supports both selecting saved players and creating a new one inline.
                     IconButton(
-                        onClick = { onPickSaved(index) },
+                        onClick = { onRemovePlayer(index) },
                         modifier = Modifier.size(40.dp)
                     ) {
                         Icon(
-                            Icons.Default.Person,
-                            contentDescription = "Pick or create player",
-                            tint = MaterialTheme.colorScheme.primary
+                            Icons.Default.Close,
+                            contentDescription = "Remove ${player.name}",
+                            tint = MaterialTheme.colorScheme.error
                         )
                     }
-                    if (players.size > 1) {
-                        IconButton(
-                            onClick = { onRemovePlayer(index) },
-                            modifier = Modifier.size(40.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.Close,
-                                contentDescription = "Remove player",
-                                tint = MaterialTheme.colorScheme.error
-                            )
-                        }
-                    }
                 }
-                if (hasConflict) {
-                    Text(
-                        text = "This player is already assigned to the other team.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.padding(start = 4.dp, top = 2.dp)
-                    )
-                }
-            }
-        }
-        if (players.size < 11) {
-            TextButton(
-                onClick = onAddPlayer,
-                modifier = Modifier.align(Alignment.Start)
-            ) {
-                Icon(
-                    Icons.Default.Add,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp)
-                )
-                Text("  Add player")
-            }
-        }
-        if (onPickMultiple != null) {
-            TextButton(
-                onClick = onPickMultiple,
-                modifier = Modifier.align(Alignment.Start)
-            ) {
-                Icon(
-                    Icons.Default.Person,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp)
-                )
-                Text("  Pick from saved players")
             }
         }
     }
 }
-
-
