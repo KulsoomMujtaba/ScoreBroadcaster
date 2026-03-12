@@ -261,6 +261,20 @@ Scoring is modelled as an append-only event log:
 
 ## Development Log
 
+### 2026-03-12 – Scorecard Improvement: Yet To Bat
+
+- **Scorecard now shows players who have not yet batted**: a "Yet To Bat" section appears below the batting table in each innings.
+- **Yet To Bat section appears below batting table**: the section is shown only when there are players remaining who have not yet come in to bat.
+- **Players derived from team roster minus batting entries**: `deriveYetToBatPlayers` filters the batting team's player list by excluding any player who already has a `BattingEntry`, preserving original team order.
+
+**Files modified:**
+| File | Action |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/ui/ScorecardScreen.kt` | Added `deriveYetToBatPlayers` helper, `YetToBatSection` composable, and wired team players into `InningsScorecardSection` |
+| `README.md` | Updated |
+
+---
+
 ### 2026-03-12 – UX Improvement: Bulk Team Player Selection
 
 - **Removed one-by-one player entry from team creation flow**: `CreateSavedTeamDialog` and `PlayerSetupScreen` no longer show repeated text-field rows for individual player slots.
