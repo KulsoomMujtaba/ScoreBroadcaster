@@ -20,6 +20,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.scorebroadcaster.data.InningsPhase
 import com.example.scorebroadcaster.data.ScoringConsoleState
@@ -561,20 +562,18 @@ fun deriveYetToBatPlayers(
 
 @Composable
 private fun YetToBatSection(players: List<Player>) {
-    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(
             "YET TO BAT",
             style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.Bold,
+            fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.primary
         )
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            players.forEach { player ->
-                Text(
-                    text = player.name,
-                    style = MaterialTheme.typography.bodySmall
-                )
-            }
-        }
+        Text(
+            text = players.joinToString(", ") { it.name },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            overflow = TextOverflow.Visible
+        )
     }
 }

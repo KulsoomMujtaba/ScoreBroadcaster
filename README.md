@@ -337,6 +337,21 @@ Scoring is modelled as an append-only event log:
 
 ---
 
+### 2026-03-12 – UI Improvement: Compact Yet-to-Bat Display
+
+- **Converted Yet-to-Bat player list from vertical layout to comma-separated line**: `YetToBatSection` now renders all players as a single `joinToString(", ")` text instead of one `Text` per player.
+- **Reduced scorecard vertical height**: the section now occupies one or two lines instead of up to nine, keeping the scorecard compact.
+- **Improved readability and alignment with real cricket scorecards**: names wrap automatically if they exceed screen width; the list is never truncated.
+- **"YET TO BAT" label uses `FontWeight.SemiBold`**: slightly bolder label for visual hierarchy without overpowering the section.
+
+**Files modified:**
+| File | Action |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/ui/ScorecardScreen.kt` | Replaced per-player `Column` with a single comma-separated `Text`; updated label weight and spacing |
+| `README.md` | Updated |
+
+---
+
 ### 2026-03-12 – Scorecard Improvement: Yet To Bat
 
 - **Scorecard now shows players who have not yet batted**: a "Yet To Bat" section appears below the batting table in each innings.
