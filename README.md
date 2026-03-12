@@ -1216,6 +1216,40 @@ Added a full ball-by-ball timeline and over history screen (`BallTimelineScreen`
 
 ---
 
+### 2026-03-12 – UX Improvement: Wide and No Ball dialogs
+
+**What changed:**
+Wide and No Ball scoring now uses quick-select buttons instead of a multi-step form. The scorer taps a single button to record the full result — no confirmation step required.
+
+**Key changes:**
+
+- `WideNoBallEntryDialog` replaced with a quick-selection grid dialog:
+  - Title shows "Wide" or "No Ball".
+  - 7 buttons displayed in a 3-column grid: `Wd` / `Nb` through `Wd +6` / `Nb +6`.
+  - Tapping a button immediately creates the `BallEvent`, dispatches it, and closes the dialog.
+  - No confirmation button; no additional inputs.
+
+- **Bye and Leg Bye** taps continue to open the existing `ExtrasEntryDialog` — behaviour unchanged.
+
+**Scoring rules (unchanged):**
+- Wide: `extras.wides = 1 + additionalRuns`, `countsAsBall = false`.
+- No Ball: `extras.noBalls = 1`, `runsOffBat = additionalRuns`, `countsAsBall = false`.
+
+**Files changed:**
+
+| File | Action |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/ui/ScoringScreen.kt` | Replaced `WideNoBallEntryDialog` with quick-select grid; simplified `buildWideNoBallEvent` signature; updated call site |
+| `README.md` | Updated |
+
+**What did NOT change:**
+- `BallEvent` structure — untouched.
+- `ScoreReducer` — untouched.
+- Undo / timeline logic — untouched.
+- Bye / Leg Bye `ExtrasEntryDialog` — untouched.
+
+---
+
 ### 2026-03-10 – UI Improvement: Separate Wide / No Ball Extras Dialog
 
 **What changed:**
