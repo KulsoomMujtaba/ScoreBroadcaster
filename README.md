@@ -217,6 +217,28 @@ Scoring is modelled as an append-only event log:
 
 ## Development Log
 
+### 2026-03-12 – UX Improvement: Bulk Player Selection
+
+- **Multi-select player picker**: new `MultiPlayerPickerSheet` composable provides a full-screen picker for bulk team-building flows.
+- **Search and select multiple players**: users can search saved players and select many at once with checkboxes; selection is preserved while searching.
+- **Inline player creation**: a "Create new player" form at the bottom lets users create and immediately select new players without leaving the picker.
+- **Ordered selection**: selected players are added to the team in the order they were tapped.
+- **Team size enforcement**: selection is capped at the remaining available slots (max 11 per team); further selection is disabled once the limit is reached with a helper text shown.
+- **Empty state**: when no saved players exist, a friendly empty-state message guides the user to create players instead.
+- **Duplicate prevention**: players already assigned to the team are excluded from the picker list.
+- **"Pick from saved players" button**: added to `PlayerSetupScreen` (for Team A and Team B) and `CreateSavedTeamDialog` in `SavedTeamsScreen`.
+- **Single-player picker unchanged**: `PlayerPickerDialog` and all single-select flows (next batter, bowler change, innings setup) are unaffected.
+
+**Files created/modified:**
+| File | Action |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/ui/MultiPlayerPickerSheet.kt` | Created |
+| `app/src/main/java/com/example/scorebroadcaster/ui/PlayerSetupScreen.kt` | Updated |
+| `app/src/main/java/com/example/scorebroadcaster/ui/SavedTeamsScreen.kt` | Updated |
+| `README.md` | Updated |
+
+---
+
 ### 2026-03-11 – UX Improvement: Add Player Dialog
 
 - **Search-first player picker**: `PlayerPickerDialog` redesigned with a clean three-section layout — search field at the top, scrollable saved-player list in the middle, quick-create form at the bottom.
