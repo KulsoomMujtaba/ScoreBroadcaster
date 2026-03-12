@@ -94,7 +94,7 @@ private fun topBarTitle(route: String?): String = when (route) {
     "stream_setup" -> "Stream Setup"
     "stream_preview" -> "Go Live"
     "saved_teams" -> "Saved Teams"
-    "saved_players" -> "Saved Players"
+    "saved_players" -> "My Players"
     else -> "Scored"
 }
 
@@ -262,7 +262,7 @@ fun AppDrawer(
         )
         DrawerNavItem(
             icon = Icons.Default.Person,
-            label = "Saved Players",
+            label = "My Players",
             selected = currentRoute == "saved_players",
             onClick = { onNavigate("saved_players") }
         )

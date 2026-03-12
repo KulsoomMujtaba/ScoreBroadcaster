@@ -158,12 +158,14 @@ fun PlayerSetupScreen(
             initiallySelectedIds = initiallySelectedIds,
             maxSelectionCount = 11,
             excludedPlayerIds = otherTeamExcluded,
-            onCreatePlayer = { name ->
+            onCreatePlayer = { name, saveToMyPlayers ->
                 val profile = PlayerProfile(
                     displayName = name,
                     playerSourceType = PlayerSourceType.PRIVATE
                 )
-                matchSessionViewModel.addSavedPlayer(profile)
+                if (saveToMyPlayers) {
+                    matchSessionViewModel.addSavedPlayer(profile)
+                }
                 profile
             },
             onConfirm = { profiles ->

@@ -50,7 +50,7 @@ The core promise is simple: open the app, start a match, score every ball, and s
 | My Matches (local in-memory list) | ✅ Done | `MyMatchesScreen` |
 | Add player after match start | ✅ Done | `ScoringScreen`, `MatchDetailsScreen` |
 | Saved teams (create, view, reuse) | ✅ Done | `SavedTeamsScreen`, `CreateMatchScreen` |
-| Reusable player profiles (private) | ✅ Done | `SavedPlayersScreen`, `PlayerProfile`, `SavedPlayerRepository` |
+| Reusable player profiles (My Players — private) | ✅ Done | `MyPlayersScreen`, `PlayerProfile`, `SavedPlayerRepository` |
 | Player picker (search-first, saved players, quick create, one-tap selection) | ✅ Done | `PlayerPickerDialog` |
 | Player picker integrated into team setup | ✅ Done | `PlayerSetupScreen`, `SavedTeamsScreen` |
 | Player picker integrated into match-time flows | ✅ Done | `ScoringScreen` |
@@ -319,6 +319,31 @@ Scoring is modelled as an append-only event log:
 ---
 
 ## Development Log
+
+### 2026-03-12 – Player Flow Refactor: Team-First Structure with My Players
+
+**Feature:** Renamed "Saved Players" to "My Players" and introduced team-first player management.
+
+- **Renamed Saved Players to My Players**: updated all navigation labels, screen titles, and UI text throughout the app. The side drawer now shows "My Players". The top bar title for the screen now reads "My Players".
+- **Introduced team-first player management**: when creating or editing a team, players are managed primarily within the team roster. The `MultiPlayerPickerSheet` now shows a clear "My Players" section label for the reusable player directory.
+- **Added optional saving of players to My Players**: when creating a new player inside any team creation flow (`PlayerSetupScreen`, `CreateSavedTeamDialog`), a checkbox labelled "Save to My Players" is shown (default: unchecked). Players are only added to the My Players directory when the checkbox is checked; otherwise the player exists only in the team roster.
+- **Prevented players from appearing on both teams in the same match**: cross-team conflict detection was already implemented; this refactor preserves that behaviour.
+- **Simplified team creation UX**: "Add Players" button in the Create Saved Team dialog is now labelled "Add from My Players" to make the source explicit. The Create New Player section in `MultiPlayerPickerSheet` is labelled "Create New Player" (was "Add New Player").
+
+**Files created/modified:**
+| File | Action |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/ui/MyPlayersScreen.kt` | Created — `MyPlayersScreen` composable (renamed from `SavedPlayersScreen`) with updated UI text |
+| `app/src/main/java/com/example/scorebroadcaster/ui/SavedPlayersScreen.kt` | Gutted — composables moved to `MyPlayersScreen.kt` |
+| `app/src/main/java/com/example/scorebroadcaster/ui/AppShell.kt` | Updated — drawer label and top bar title changed to "My Players" |
+| `app/src/main/java/com/example/scorebroadcaster/ui/MultiPlayerPickerSheet.kt` | Updated — added "My Players" section label, "Create New Player" label, "Save to My Players" checkbox, updated empty state text |
+| `app/src/main/java/com/example/scorebroadcaster/ui/PlayerSetupScreen.kt` | Updated — `onCreatePlayer` lambda now respects the `saveToMyPlayers` flag |
+| `app/src/main/java/com/example/scorebroadcaster/ui/SavedTeamsScreen.kt` | Updated — "Add from My Players" button label; `onCreatePlayer` lambda now respects the `saveToMyPlayers` flag |
+| `app/src/main/java/com/example/scorebroadcaster/ui/PlayerPickerDialog.kt` | Updated — section label and subtitle changed to "My Players" |
+| `app/src/main/java/com/example/scorebroadcaster/MainActivity.kt` | Updated — uses `MyPlayersScreen` instead of `SavedPlayersScreen` |
+| `README.md` | Updated |
+
+---
 
 ### 2026-03-12 – UI Improvement: Blue Sports Theme
 

@@ -197,7 +197,7 @@ fun CreateSavedTeamDialog(
                         contentDescription = null,
                         modifier = Modifier.size(18.dp)
                     )
-                    Text("  Add Players")
+                    Text("  Add from My Players")
                 }
 
                 if (selectedPlayers.isNotEmpty()) {
@@ -252,12 +252,14 @@ fun CreateSavedTeamDialog(
             savedPlayers = savedPlayers,
             initiallySelectedIds = selectedPlayers.mapNotNull { it.sourceProfileId }.toSet(),
             maxSelectionCount = 11,
-            onCreatePlayer = { name ->
+            onCreatePlayer = { name, saveToMyPlayers ->
                 val profile = PlayerProfile(
                     displayName = name,
                     playerSourceType = PlayerSourceType.PRIVATE
                 )
-                onCreatePlayer(profile)
+                if (saveToMyPlayers) {
+                    onCreatePlayer(profile)
+                }
                 profile
             },
             onConfirm = { profiles ->

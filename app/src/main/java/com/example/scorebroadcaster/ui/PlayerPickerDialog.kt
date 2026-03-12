@@ -39,12 +39,12 @@ import com.example.scorebroadcaster.data.entity.PlayerSourceType
  * Reusable "Add Player" dialog used throughout the app wherever a player must be chosen.
  *
  * Layout hierarchy:
- * 1. **Search** — top search field that instantly filters the saved-player list.
- * 2. **Saved Players** — scrollable list; one tap selects a player and closes the dialog.
- *    Hidden entirely when there are no eligible saved players.
+ * 1. **Search** — top search field that instantly filters the My Players list.
+ * 2. **My Players** — scrollable list; one tap selects a player and closes the dialog.
+ *    Hidden entirely when there are no eligible players in My Players.
  * 3. **Quick Create** — inline text field + button to create a brand-new private player.
  *
- * @param savedPlayers        Existing private player profiles to display and search.
+ * @param savedPlayers        Existing private player profiles (My Players) to display and search.
  * @param onDismiss           Called when the dialog is cancelled without a selection.
  * @param onSelect            Called with an *existing* [PlayerProfile] that was tapped.
  *                            The caller should **not** persist it again — it is already saved.
@@ -127,11 +127,11 @@ fun PlayerPickerDialog(
                     )
                 }
 
-                // --- Section 2: Saved Players (only when saved players exist) ---
+                // --- Section 2: My Players (only when saved players exist) ---
                 if (hasSavedPlayers) {
                     if (filtered.isEmpty()) {
                         Text(
-                            text = "No saved players found",
+                            text = "No players found",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                         )
@@ -159,7 +159,7 @@ fun PlayerPickerDialog(
                                             style = MaterialTheme.typography.bodyMedium
                                         )
                                         Text(
-                                            text = "Saved player",
+                                            text = "My Players",
                                             style = MaterialTheme.typography.labelSmall,
                                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                                         )
