@@ -38,6 +38,8 @@ import com.example.scorebroadcaster.domain.BallTimelineFormatter
 import com.example.scorebroadcaster.domain.IndexedBall
 import com.example.scorebroadcaster.domain.OverSummary
 import com.example.scorebroadcaster.domain.OverSummaryCalculator
+import com.example.scorebroadcaster.ui.theme.BoundarySixContainer
+import com.example.scorebroadcaster.ui.theme.OnBoundarySixContainer
 import com.example.scorebroadcaster.viewmodel.MatchViewModel
 
 /**
@@ -298,19 +300,24 @@ private fun BallChip(ball: IndexedBall, onClick: () -> Unit) {
     val isWicket     = ball.event.wicket
     val isExtra      = ball.event.extras.wides > 0 || ball.event.extras.noBalls > 0 ||
             ball.event.extras.byes > 0 || ball.event.extras.legByes > 0
-    val isBoundary   = ball.event.runsOffBat >= 4 && !isExtra
+    val isSix        = ball.event.runsOffBat == 6 && !isExtra
+    val isFour       = ball.event.runsOffBat >= 4 && !isExtra && !isSix
 
     val containerColor = when {
-        isWicket   -> MaterialTheme.colorScheme.errorContainer
-        isBoundary -> MaterialTheme.colorScheme.primaryContainer
-        isExtra    -> MaterialTheme.colorScheme.tertiaryContainer
-        else       -> MaterialTheme.colorScheme.surfaceVariant
+        isWicket -> MaterialTheme.colorScheme.errorContainer
+        // BoundarySixContainer is a cricket-domain semantic colour (dark green for a six)
+        // that has no standard M3 equivalent in our scheme — used directly for explicitness.
+        isSix    -> BoundarySixContainer
+        isFour   -> MaterialTheme.colorScheme.secondaryContainer
+        isExtra  -> MaterialTheme.colorScheme.tertiaryContainer
+        else     -> MaterialTheme.colorScheme.surfaceVariant
     }
     val contentColor = when {
-        isWicket   -> MaterialTheme.colorScheme.onErrorContainer
-        isBoundary -> MaterialTheme.colorScheme.onPrimaryContainer
-        isExtra    -> MaterialTheme.colorScheme.onTertiaryContainer
-        else       -> MaterialTheme.colorScheme.onSurfaceVariant
+        isWicket -> MaterialTheme.colorScheme.onErrorContainer
+        isSix    -> OnBoundarySixContainer
+        isFour   -> MaterialTheme.colorScheme.onSecondaryContainer
+        isExtra  -> MaterialTheme.colorScheme.onTertiaryContainer
+        else     -> MaterialTheme.colorScheme.onSurfaceVariant
     }
 
     Surface(

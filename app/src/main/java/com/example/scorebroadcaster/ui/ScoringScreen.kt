@@ -716,7 +716,7 @@ private fun ChaseInfoSection(
     val ballsRemaining = (totalBalls - ballsBowled).coerceAtLeast(0)
 
     Surface(
-        color = MaterialTheme.colorScheme.tertiaryContainer,
+        color = MaterialTheme.colorScheme.primaryContainer,
         shape = MaterialTheme.shapes.medium,
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -747,7 +747,7 @@ private fun ChaseInfoItem(label: String, value: String) {
         Text(
             text = label,
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.7f)
+            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
         )
     }
 }
@@ -763,15 +763,18 @@ private fun LastBallsRow(lastBalls: List<String>) {
             val bgColor = when {
                 ball == "W" -> MaterialTheme.colorScheme.error
                 ball == "4" -> MaterialTheme.colorScheme.secondaryContainer
-                ball == "6" -> MaterialTheme.colorScheme.tertiaryContainer
-                ball.startsWith("Wd") || ball.startsWith("NB") -> MaterialTheme.colorScheme.tertiary
+                // BoundarySixContainer is a cricket-domain semantic colour (dark green emphasis
+                // for a six) that has no equivalent standard M3 role in our scheme — it is used
+                // directly here and in BallTimelineScreen to keep the design intent explicit.
+                ball == "6" -> BoundarySixContainer
+                ball.startsWith("Wd") || ball.startsWith("NB") -> MaterialTheme.colorScheme.tertiaryContainer
                 else -> MaterialTheme.colorScheme.surfaceVariant
             }
             val textColor = when {
                 ball == "W" -> MaterialTheme.colorScheme.onError
                 ball == "4" -> MaterialTheme.colorScheme.onSecondaryContainer
-                ball == "6" -> MaterialTheme.colorScheme.onTertiaryContainer
-                ball.startsWith("Wd") || ball.startsWith("NB") -> MaterialTheme.colorScheme.onTertiary
+                ball == "6" -> OnBoundarySixContainer
+                ball.startsWith("Wd") || ball.startsWith("NB") -> MaterialTheme.colorScheme.onTertiaryContainer
                 else -> MaterialTheme.colorScheme.onSurfaceVariant
             }
             Surface(color = bgColor, shape = MaterialTheme.shapes.small) {
