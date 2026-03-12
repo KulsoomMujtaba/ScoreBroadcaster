@@ -261,6 +261,24 @@ Scoring is modelled as an append-only event log:
 
 ## Development Log
 
+### 2026-03-12 – UI + Scoring Improvement: Bowler Figures Cleanup and Overthrows
+
+- **Bowler figures now use standard cricket notation**: `Overs-Maidens-Runs-Wickets` (e.g. `3.2-1-18-2`). The previous non-standard `w` suffix after wickets has been removed.
+- **Cleaner overs display**: `ScorecardFormatter.formatOvers` now omits the decimal part when there are zero partial balls (e.g. `4` instead of `4.0`). Partial overs continue to show as `2.3`.
+- **Removed the bowler icon** (⚾) from the scoring screen's player panel — the bowler name and figures are now shown without a prefix icon.
+- **Overthrow handling for normal runs**: a new **Overthrows** button in the Runs section opens an `OverthrowRunDialog` where the scorer specifies base runs off bat and additional overthrow runs. The final `BallEvent` has `runsOffBat = baseRuns + overthrowRuns`.
+- **Overthrow handling for Bye / Leg Bye**: the `ExtrasEntryDialog` now includes an "Overthrows happened" toggle (only shown for Bye and Leg Bye types). When enabled, the scorer picks additional overthrow runs which are folded into the byes/legByes total: `byes = baseByeRuns + overthrowRuns`.
+
+**Files modified:**
+| File | Action |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/ui/ScoringScreen.kt` | BowlerRow icon/format fix; overthrow dialog and UI |
+| `app/src/main/java/com/example/scorebroadcaster/ui/ScorecardFormatter.kt` | `formatOvers` updated for clean cricket notation |
+| `app/src/test/java/com/example/scorebroadcaster/ScorecardFormatterTest.kt` | Added `formatOvers` tests |
+| `README.md` | Updated |
+
+---
+
 ### 2026-03-12 – UX Improvement: Bulk Player Selection
 
 - **Multi-select player picker**: new `MultiPlayerPickerSheet` composable provides a full-screen picker for bulk team-building flows.
