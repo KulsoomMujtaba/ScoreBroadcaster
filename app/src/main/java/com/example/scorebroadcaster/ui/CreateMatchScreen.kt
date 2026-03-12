@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.dp
 import com.example.scorebroadcaster.data.entity.Match
 import com.example.scorebroadcaster.data.entity.MatchFormat
 import com.example.scorebroadcaster.data.entity.Player
+import com.example.scorebroadcaster.data.entity.PlayerProfile
 import com.example.scorebroadcaster.data.entity.SavedTeam
 import com.example.scorebroadcaster.data.entity.Team
 import com.example.scorebroadcaster.data.entity.TossDecision
@@ -85,6 +86,7 @@ fun CreateMatchScreen(
     var tossDecision by remember { mutableStateOf(TossDecision.BAT) }
 
     val savedTeams by matchSessionViewModel.savedTeams.collectAsState()
+    val savedPlayers by matchSessionViewModel.savedPlayers.collectAsState()
 
     // Derived names used for toss labels and match creation
     val finalTeamAName = teamAName.trim()
@@ -136,6 +138,8 @@ fun CreateMatchScreen(
             teamName = teamAName,
             onTeamNameChange = { teamAName = it; teamAPlayers = emptyList(); teamASelectedSaved = null },
             savedTeams = savedTeams,
+            savedPlayers = savedPlayers,
+            onCreatePlayer = { profile -> matchSessionViewModel.addSavedPlayer(profile) },
             excludedTeam = teamBSelectedSaved,
             onTeamSelected = { saved ->
                 teamAName = saved.name
@@ -177,6 +181,8 @@ fun CreateMatchScreen(
             teamName = teamBName,
             onTeamNameChange = { teamBName = it; teamBPlayers = emptyList(); teamBSelectedSaved = null },
             savedTeams = savedTeams,
+            savedPlayers = savedPlayers,
+            onCreatePlayer = { profile -> matchSessionViewModel.addSavedPlayer(profile) },
             excludedTeam = teamASelectedSaved,
             onTeamSelected = { saved ->
                 teamBName = saved.name
@@ -326,6 +332,8 @@ fun TeamSelectorField(
     teamName: String,
     onTeamNameChange: (String) -> Unit,
     savedTeams: List<SavedTeam>,
+    savedPlayers: List<PlayerProfile> = emptyList(),
+    onCreatePlayer: (PlayerProfile) -> Unit = {},
     onTeamSelected: (SavedTeam) -> Unit,
     onNewTeamCreated: (SavedTeam) -> Unit,
     excludedTeam: SavedTeam? = null,
@@ -434,11 +442,13 @@ fun TeamSelectorField(
 
     if (showCreateDialog) {
         CreateSavedTeamDialog(
+            savedPlayers = savedPlayers,
             onDismiss = { showCreateDialog = false },
             onConfirm = { team ->
                 onNewTeamCreated(team)
                 showCreateDialog = false
-            }
+            },
+            onCreatePlayer = onCreatePlayer
         )
     }
 }
