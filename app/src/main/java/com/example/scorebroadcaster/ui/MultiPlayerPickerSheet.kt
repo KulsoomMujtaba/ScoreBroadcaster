@@ -92,20 +92,24 @@ fun MultiPlayerPickerSheet(
         }
     }
 
+    // Profiles created in this picker session that may not yet be in savedPlayers (Room async).
+    // They are merged with savedPlayers so the player appears in the list immediately.
+    val pendingProfiles = remember { mutableStateListOf<PlayerProfile>() }
+
     var searchQuery by remember { mutableStateOf("") }
     var newPlayerName by remember { mutableStateOf("") }
 
-    // Visible candidates: exclude players that are already in the excluded set
-    val eligible = remember(savedPlayers, excludedPlayerIds) {
-        savedPlayers.filter { it.id !in excludedPlayerIds }
-    }
+    // Merge savedPlayers with any locally-created profiles not yet reflected in the Room Flow.
+    val knownIds = savedPlayers.map { it.id }.toSet()
+    val allProfiles = savedPlayers + pendingProfiles.filter { it.id !in knownIds }
 
-    val filtered = remember(eligible, searchQuery) {
-        if (searchQuery.isBlank()) eligible
+    // Visible candidates: exclude players that are already in the excluded set
+    val eligible = allProfiles.filter { it.id !in excludedPlayerIds }
+
+    val filtered = if (searchQuery.isBlank()) eligible
         else eligible.filter {
             it.displayName.contains(searchQuery.trim(), ignoreCase = true)
         }
-    }
 
     val atLimit = selected.size >= maxSelectionCount
 
@@ -123,6 +127,10 @@ fun MultiPlayerPickerSheet(
         if (name.isEmpty()) return
         if (selected.size >= maxSelectionCount) return
         val profile = onCreatePlayer(name)
+        // Add to pendingProfiles immediately so the player appears in the list before Room emits.
+        if (pendingProfiles.none { it.id == profile.id }) {
+            pendingProfiles.add(profile)
+        }
         if (selected.none { it.id == profile.id }) {
             selected.add(profile)
         }
@@ -297,7 +305,7 @@ fun MultiPlayerPickerSheet(
                     if (eligible.isEmpty()) {
                         Spacer(Modifier.height(32.dp))
                         Text(
-                            text = "No saved players yet.\nCreate a player below to start building your team.",
+                            text = "No saved players yet. Add one below.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                         )

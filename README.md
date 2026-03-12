@@ -913,6 +913,31 @@ The `ScoringScreen` top navigation has been refactored from `FilterChip`-style b
 
 ---
 
+### 2026-03-12 – Bug Fix: Saved Players Sync Across Team Creation
+
+Fixed an inconsistency where the **Create Match → Create new team → Add Players** flow did not show Saved Players and silently discarded any newly created players.
+
+**Root cause:**
+`CreateMatchScreen`'s `TeamSelectorField` composable was calling `CreateSavedTeamDialog` without passing `savedPlayers` or `onCreatePlayer`.  This caused:
+- The Add Players picker inside the dialog to always show an empty list (fell back to the default `emptyList()`).
+- New players created from that flow to be silently dropped (fell back to the default no-op callback `{}`).
+
+**Additional improvement:**
+`MultiPlayerPickerSheet` now shows a newly created player in the checkbox list **immediately** after creation — before Room emits the updated snapshot — by maintaining a local `pendingProfiles` list that is merged with `savedPlayers` for the eligible-player computation.
+
+**Files modified:**
+
+| File | Change |
+|------|--------|
+| `ui/CreateMatchScreen.kt` | `TeamSelectorField` now accepts `savedPlayers: List<PlayerProfile>` and `onCreatePlayer: (PlayerProfile) -> Unit`; `CreateSavedTeamDialog` receives both; `CreateMatchScreen` collects `savedPlayers` from the ViewModel and passes it through |
+| `ui/MultiPlayerPickerSheet.kt` | Added `pendingProfiles` local state; newly created profiles are added there immediately so they appear in the checkbox list before Room emits; removed stale `remember(savedPlayers, …)` memoisation in favour of direct derivation; updated empty-state copy |
+
+**What is NOT changed:**
+- `MatchSessionViewModel`, `SavedPlayerRepository`, `SavedPlayersScreen`, `PlayerSetupScreen`, `SavedTeamsScreen`, `ScoringScreen` — no changes.
+- Scoring logic, streaming, and all other flows — untouched.
+
+---
+
 ### 2026-03-08 – Phase 11: Saved Player Profiles Persistence with Room
 
 Room persistence has been activated for Saved Player Profiles. Profiles now survive app restarts — creating a player profile, killing the app, and reopening it will show the profile exactly as saved.
