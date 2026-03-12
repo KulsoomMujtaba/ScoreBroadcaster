@@ -57,10 +57,54 @@ The core promise is simple: open the app, start a match, score every ball, and s
 | New player auto-saved as private profile in match flows | ✅ Done | `ScoringScreen`, `MatchSessionViewModel` |
 | Scorecard view (batting + bowling summary, both innings) | ✅ Done | `ScorecardScreen` |
 | Ball timeline / over history (per-ball, grouped by over) | ✅ Done | `BallTimelineScreen` |
+| Run rate display (CRR always; RRR during chase) | ✅ Done | `ScoringScreen` |
+| Recent-ball chip colours (W/4/6/extras visually distinct) | ✅ Done | `ScoringScreen` |
 | Domain entities (Team, Player, Match, …) | ✅ Done | `data/entity/` |
 | Publish-ready match model (MatchVisibility, ownerUserId, remoteId, shareCode) | ✅ Done | `data/entity/Match`, `data/entity/MatchVisibility` |
 | Local in-memory repository | ✅ Done | `repository/MatchRepository` |
 | Match session management | ✅ Done | `MatchSessionViewModel` |
+
+---
+
+## UI Improvement: Run Rate Display + Recent Ball Chip Colours
+
+### What changed
+
+- **ScoringScreen** now shows a compact run rate row in the `CompactMatchHeader` during active innings:
+  - **First innings**: Current Run Rate (CRR) is always displayed.
+  - **Second innings**: Both Current Run Rate and Required Run Rate (RRR) are shown side-by-side.
+  - The row is hidden during Innings Break and Match Complete phases.
+
+- **Run rate formulas**:
+  - CRR = `runs × 6 / totalBallsBowled` (same cricket-over logic as bowling economy).
+  - RRR = `runsNeeded × 6 / ballsRemaining`. Returns "-" when no balls remain or target already reached.
+  - Both rounded to 2 decimal places. Display: `CRR 8.42  •  RRR 9.75`.
+
+- **Recent-ball chips** (`LastBallsRow`) colour treatment updated:
+  - `W` → `error` / `onError` (kept, strongest alert)
+  - `4` → `secondaryContainer` / `onSecondaryContainer`
+  - `6` → `tertiaryContainer` / `onTertiaryContainer`
+  - `Wd` / `NB` → `tertiary` / `onTertiary`
+  - All other balls (`.`, singles, etc.) → `surfaceVariant` / `onSurfaceVariant`
+  - No hard-coded colours; all use Material3 theme tokens only.
+
+- **ScorecardFormatter** extended with two new pure helpers:
+  - `formatRunRate(runs, overs, balls)` – returns CRR as a 2 dp string.
+  - `formatRequiredRunRate(runsNeeded, ballsRemaining)` – returns RRR as a 2 dp string.
+
+### What did NOT change
+
+- `ScoreReducer`, `MatchState` schema, event log logic — untouched.
+- Wicket / extras behaviour — untouched.
+- All other screens — untouched.
+
+### Files changed
+
+| File | Action |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/ui/ScoringScreen.kt` | Updated – `RunRateRow` composable added, called from `CompactMatchHeader`; `LastBallsRow` chip colours revised |
+| `app/src/main/java/com/example/scorebroadcaster/ui/ScorecardFormatter.kt` | Updated – `formatRunRate` and `formatRequiredRunRate` helpers added |
+| `README.md` | Updated – this development log entry |
 
 ---
 

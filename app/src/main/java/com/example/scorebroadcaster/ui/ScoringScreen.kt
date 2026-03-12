@@ -547,6 +547,12 @@ private fun CompactMatchHeader(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                // --- Run rate row (active innings only) ---
+                RunRateRow(
+                    state = state,
+                    consoleState = consoleState,
+                    oversLimit = match.overs
+                )
             }
         }
     }
@@ -557,6 +563,51 @@ private fun formatCurrentBallIndicator(matchState: MatchState): String {
     val currentOverNumber = matchState.overs + 1
     val currentBallNumber = matchState.balls + 1
     return "Over $currentOverNumber • Ball $currentBallNumber of 6"
+}
+
+// =============================================================================
+// Run rate info row
+// =============================================================================
+
+@Composable
+private fun RunRateRow(
+    state: MatchState,
+    consoleState: ScoringConsoleState,
+    oversLimit: Int
+) {
+    val crr = ScorecardFormatter.formatRunRate(state.runs, state.overs, state.balls)
+
+    val rrr: String? = if (consoleState.phase == InningsPhase.SECOND_INNINGS) {
+        val runsNeeded = (consoleState.target - state.runs).coerceAtLeast(0)
+        val ballsBowled = state.overs * 6 + state.balls
+        val ballsRemaining = (oversLimit * 6 - ballsBowled).coerceAtLeast(0)
+        ScorecardFormatter.formatRequiredRunRate(runsNeeded, ballsRemaining)
+    } else {
+        null
+    }
+
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = "CRR $crr",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        if (rrr != null) {
+            Text(
+                text = "•",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+            )
+            Text(
+                text = "RRR $rrr",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
 }
 
 // =============================================================================
@@ -697,14 +748,23 @@ private fun LastBallsRow(lastBalls: List<String>) {
         lastBalls.forEach { ball ->
             val bgColor = when {
                 ball == "W" -> MaterialTheme.colorScheme.error
-                ball.startsWith("Wd") || ball.startsWith("NB") -> MaterialTheme.colorScheme.secondary
-                else -> MaterialTheme.colorScheme.primary
+                ball == "4" -> MaterialTheme.colorScheme.secondaryContainer
+                ball == "6" -> MaterialTheme.colorScheme.tertiaryContainer
+                ball.startsWith("Wd") || ball.startsWith("NB") -> MaterialTheme.colorScheme.tertiary
+                else -> MaterialTheme.colorScheme.surfaceVariant
+            }
+            val textColor = when {
+                ball == "W" -> MaterialTheme.colorScheme.onError
+                ball == "4" -> MaterialTheme.colorScheme.onSecondaryContainer
+                ball == "6" -> MaterialTheme.colorScheme.onTertiaryContainer
+                ball.startsWith("Wd") || ball.startsWith("NB") -> MaterialTheme.colorScheme.onTertiary
+                else -> MaterialTheme.colorScheme.onSurfaceVariant
             }
             Surface(color = bgColor, shape = MaterialTheme.shapes.small) {
                 Text(
                     text = ball,
                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                    color = MaterialTheme.colorScheme.onPrimary,
+                    color = textColor,
                     style = MaterialTheme.typography.bodySmall
                 )
             }
