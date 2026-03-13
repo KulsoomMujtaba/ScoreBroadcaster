@@ -374,6 +374,23 @@ Scoring is modelled as an append-only event log:
 
 ## Development Log
 
+### 2026-03-13 – UI Improvement: Scoring Pad Button Styling and Overthrows Grouping
+
+- Updated 0, 1, 2, 3 run buttons to use a lighter neutral style (`NormalRunContainer` — soft blue-grey `#DEE8F7` with dark navy text).
+- Preserved stronger visual emphasis for 4 (accent blue) and 6 (deep navy), keeping boundaries clearly distinct from normal runs.
+- Moved Overthrows from the Runs section into the Extras section, grouping it with Wide, No Ball, Bye, and Leg Bye for improved scoring-pad scanability.
+- Overthrows dialog/flow is unchanged — only the UI entry point moved.
+
+**Files changed:**
+
+| File | Change |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/ui/theme/Color.kt` | Added `NormalRunContainer` and `OnNormalRunContainer` colour tokens |
+| `app/src/main/java/com/example/scorebroadcaster/ui/ScoringScreen.kt` | Removed Overthrows from `RunButtonsGrid`; added it to `ExtrasButtonsGrid`; applied neutral style to 0–3 buttons |
+| `README.md` | Added this Development Log entry |
+
+---
+
 ### 2026-03-12 – Player Flow Refactor: Team-First Structure with My Players
 
 **Feature:** Renamed "Saved Players" to "My Players" and introduced team-first player management.

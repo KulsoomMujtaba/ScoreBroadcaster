@@ -29,6 +29,10 @@ val OnBoundaryFourContainer = Color(0xFFFFFFFF)
 val BoundarySixContainer = Color(0xFF253F7A)
 val OnBoundarySixContainer = Color(0xFFFFFFFF)
 
+// Normal run buttons (0, 1, 2, 3) — light blue-grey neutral tone
+val NormalRunContainer = Color(0xFFDEE8F7)   // Soft blue-grey container
+val OnNormalRunContainer = Color(0xFF1A2E52) // Dark navy text for readability
+
 // Extras accent
 val ExtrasAccentContainer = Color(0xFFFFF4CC)
 val OnExtrasAccentContainer = Color(0xFF8A4B00)
