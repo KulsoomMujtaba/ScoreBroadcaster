@@ -79,6 +79,8 @@ import com.example.scorebroadcaster.ui.theme.BoundaryFourContainer
 import com.example.scorebroadcaster.ui.theme.OnBoundaryFourContainer
 import com.example.scorebroadcaster.ui.theme.BoundarySixContainer
 import com.example.scorebroadcaster.ui.theme.OnBoundarySixContainer
+import com.example.scorebroadcaster.ui.theme.NormalRunContainer
+import com.example.scorebroadcaster.ui.theme.OnNormalRunContainer
 
 /** Tabs shown in the top navigation of [ScoringScreen]. */
 enum class ScoringScreenTab(val title: String) {
@@ -995,20 +997,20 @@ private fun ScoringControlsSection(
 }
 
 /**
- * 2 × 3 grid of run buttons (0, 1, 2, 3, 4, 6) plus an Overthrows button.
- * Boundary buttons (4 and 6) use theme-aware container colours to stand out.
+ * 2 × 3 grid of run buttons (0, 1, 2, 3, 4, 6).
+ * Normal run buttons (0–3) use a light blue-grey neutral style.
+ * Boundary buttons (4 and 6) use stronger accent colours to stand out.
  */
 @Composable
 private fun RunButtonsGrid(
     onEvent: (ScoreEvent) -> Unit,
-    onOverthrows: () -> Unit,
     enabled: Boolean
 ) {
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        // Row 1: 0, 1, 2
+        // Row 1: 0, 1, 2 — neutral light style
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -1018,11 +1020,15 @@ private fun RunButtonsGrid(
                     text = "$run",
                     onClick = { onEvent(ScoreEvent.Run(run)) },
                     enabled = enabled,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = NormalRunContainer,
+                        contentColor = OnNormalRunContainer
+                    )
                 )
             }
         }
-        // Row 2: 3, 4, 6 — boundary buttons subtly highlighted
+        // Row 2: 3 (neutral), 4 and 6 (boundary highlighted)
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -1031,7 +1037,11 @@ private fun RunButtonsGrid(
                 text = "3",
                 onClick = { onEvent(ScoreEvent.Run(3)) },
                 enabled = enabled,
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = NormalRunContainer,
+                    contentColor = OnNormalRunContainer
+                )
             )
             ScoringActionButton(
                 text = "4",
@@ -1056,26 +1066,18 @@ private fun RunButtonsGrid(
                 fontWeight = FontWeight.ExtraBold
             )
         }
-        // Row 3: Overthrows (advanced delivery)
-        OutlinedButton(
-            onClick = onOverthrows,
-            enabled = enabled,
-            modifier = Modifier
-                .fillMaxWidth()
-                .defaultMinSize(minHeight = 48.dp)
-        ) {
-            Text("Overthrows", style = MaterialTheme.typography.labelLarge)
-        }
     }
 }
 
 /**
- * 2 × 2 grid of extras buttons (Wide, No Ball, Bye, Leg Bye).
+ * Extras buttons grid: Wide, No Ball, Bye, Leg Bye, and Overthrows.
  * Styled as OutlinedButtons to appear secondary to run buttons.
+ * Layout: 2 rows × 2 columns for the four standard extras, then a full-width Overthrows button.
  */
 @Composable
 private fun ExtrasButtonsGrid(
     onExtras: (ExtraType) -> Unit,
+    onOverthrows: () -> Unit,
     enabled: Boolean
 ) {
     Column(
@@ -1113,6 +1115,16 @@ private fun ExtrasButtonsGrid(
                     Text(type.label, style = MaterialTheme.typography.labelLarge)
                 }
             }
+        }
+        // Overthrows — situational extra, grouped with extras for clarity
+        OutlinedButton(
+            onClick = onOverthrows,
+            enabled = enabled,
+            modifier = Modifier
+                .fillMaxWidth()
+                .defaultMinSize(minHeight = 48.dp)
+        ) {
+            Text("Overthrows", style = MaterialTheme.typography.labelLarge)
         }
     }
 }
@@ -1181,10 +1193,10 @@ private fun ScoringButtonsSection(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         ScoringControlsSection(label = "Runs") {
-            RunButtonsGrid(onEvent = onEvent, onOverthrows = onOverthrows, enabled = enabled)
+            RunButtonsGrid(onEvent = onEvent, enabled = enabled)
         }
         ScoringControlsSection(label = "Extras") {
-            ExtrasButtonsGrid(onExtras = onExtras, enabled = enabled)
+            ExtrasButtonsGrid(onExtras = onExtras, onOverthrows = onOverthrows, enabled = enabled)
         }
         ScoringControlsSection(label = "Actions") {
             ActionButtonsRow(onWicket = onWicket, onUndo = onUndo, wicketEnabled = enabled)
