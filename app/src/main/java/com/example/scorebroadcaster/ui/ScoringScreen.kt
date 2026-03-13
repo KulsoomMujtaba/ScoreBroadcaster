@@ -158,6 +158,14 @@ fun ScoringScreen(
     // Tab selection state — survives recomposition without resetting scoring state
     var selectedTab by rememberSaveable { mutableStateOf(ScoringScreenTab.SCORE) }
 
+    // State for the dismissible select-bowler bottom sheet.
+    // Auto-opens when the over ends and SelectBowler becomes pending; can be dismissed
+    // to unblock navigation while scoring remains gated until a bowler is chosen.
+    var showSelectBowlerSheet by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(console.pendingAction is PendingAction.SelectBowler) {
+        showSelectBowlerSheet = console.pendingAction is PendingAction.SelectBowler
+    }
+
     Box(modifier = modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize()) {
             // --- Compact match header (always visible above tabs) ---
@@ -249,6 +257,46 @@ fun ScoringScreen(
                                 "Setup",
                                 color = MaterialTheme.colorScheme.onErrorContainer
                             )
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+
+            // --- Next bowler required banner ---
+            // Shown when an over has ended and bowler selection is pending but the
+            // bottom sheet has been dismissed.  Keeps scoring clearly blocked without
+            // trapping the user in a modal dialog.
+            if (console.pendingAction is PendingAction.SelectBowler && !showSelectBowlerSheet) {
+                Surface(
+                    color = MaterialTheme.colorScheme.secondaryContainer,
+                    shape = MaterialTheme.shapes.medium,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = "Next bowler required",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                        Text(
+                            text = "Select the bowler for the new over before continuing",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                        TextButton(
+                            onClick = { showSelectBowlerSheet = true },
+                            colors = ButtonDefaults.textButtonColors(
+                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                        ) {
+                            Text("Select Bowler")
                         }
                     }
                 }
@@ -424,18 +472,25 @@ fun ScoringScreen(
                     onAllOut = { matchViewModel.endInningsAsAllOut() }
                 )
             }
-            is PendingAction.SelectBowler -> SelectPlayerDialog(
-                title = "Select Bowler",
-                players = action.availablePlayers,
-                savedPlayers = savedPlayers,
-                onPickFromSaved = { profile, isNew ->
-                    if (isNew) onSavePrivatePlayer(profile)
-                    val player = profile.toMatchPlayer()
-                    matchViewModel.addPlayerToTeam(player, addToBattingTeam = false)
-                    matchViewModel.changeBowler(player)
-                },
-                onPlayerSelected = { matchViewModel.changeBowler(it) }
-            )
+            is PendingAction.SelectBowler -> {
+                // Dismissible bottom sheet: user can close it and use the rest of the app.
+                // Scoring remains disabled (pendingAction != null) until a bowler is chosen.
+                // An inline banner on the Score tab explains the blocked state.
+                if (showSelectBowlerSheet) {
+                    SelectBowlerBottomSheet(
+                        availablePlayers = action.availablePlayers,
+                        savedPlayers = savedPlayers,
+                        onPlayerSelected = { matchViewModel.changeBowler(it) },
+                        onPickFromSaved = { profile, isNew ->
+                            if (isNew) onSavePrivatePlayer(profile)
+                            val player = profile.toMatchPlayer()
+                            matchViewModel.addPlayerToTeam(player, addToBattingTeam = false)
+                            matchViewModel.changeBowler(player)
+                        },
+                        onDismiss = { showSelectBowlerSheet = false }
+                    )
+                }
+            }
             null -> Unit
         }
 
@@ -899,7 +954,8 @@ private fun ScoringActionButton(
     onClick: () -> Unit,
     enabled: Boolean,
     modifier: Modifier = Modifier,
-    colors: androidx.compose.material3.ButtonColors = ButtonDefaults.buttonColors()
+    colors: androidx.compose.material3.ButtonColors = ButtonDefaults.buttonColors(),
+    fontWeight: FontWeight? = null
 ) {
     Button(
         onClick = onClick,
@@ -907,7 +963,7 @@ private fun ScoringActionButton(
         colors = colors,
         modifier = modifier.defaultMinSize(minHeight = 52.dp)
     ) {
-        Text(text, style = MaterialTheme.typography.labelLarge)
+        Text(text, style = MaterialTheme.typography.labelLarge, fontWeight = fontWeight)
     }
 }
 
@@ -985,7 +1041,8 @@ private fun RunButtonsGrid(
                 colors = ButtonDefaults.buttonColors(
                     containerColor = BoundaryFourContainer,
                     contentColor = OnBoundaryFourContainer
-                )
+                ),
+                fontWeight = FontWeight.Bold
             )
             ScoringActionButton(
                 text = "6",
@@ -995,7 +1052,8 @@ private fun RunButtonsGrid(
                 colors = ButtonDefaults.buttonColors(
                     containerColor = BoundarySixContainer,
                     contentColor = OnBoundarySixContainer
-                )
+                ),
+                fontWeight = FontWeight.ExtraBold
             )
         }
         // Row 3: Overthrows (advanced delivery)
@@ -1062,7 +1120,8 @@ private fun ExtrasButtonsGrid(
 /**
  * Side-by-side Wicket and Undo buttons.
  * Wicket uses errorContainer for a destructive appearance.
- * Undo uses secondaryContainer and is always clickable (matches original behaviour).
+ * Undo uses secondary/onSecondary for a clearly visible filled button that is
+ * secondary in visual weight (distinct from the red Wicket) and always clickable.
  */
 @Composable
 private fun ActionButtonsRow(
@@ -1087,10 +1146,11 @@ private fun ActionButtonsRow(
         ) {
             Text("Wicket", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
         }
-        OutlinedButton(
+        Button(
             onClick = onUndo,
-            colors = ButtonDefaults.outlinedButtonColors(
-                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.secondary,
+                contentColor = MaterialTheme.colorScheme.onSecondary
             ),
             modifier = Modifier
                 .weight(1f)
@@ -2492,5 +2552,108 @@ private fun InningsBreakSection(
                 }
             }
         }
+    }
+}
+
+// =============================================================================
+// Select bowler bottom sheet (dismissible — non-blocking after over end)
+// =============================================================================
+
+/**
+ * A dismissible [ModalBottomSheet] shown when an over ends and a new bowler must be selected.
+ *
+ * Unlike the blocking [SelectPlayerDialog] previously used for this flow, this sheet can be
+ * swiped down or dismissed by tapping outside.  When dismissed:
+ * - The [PendingAction.SelectBowler] state is preserved in the ViewModel (scoring stays gated).
+ * - An inline "Next bowler required" banner is shown on the Score tab so the scorer always
+ *   knows why the run buttons are disabled.
+ *
+ * Once a bowler is selected here the pending action clears and scoring resumes normally.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SelectBowlerBottomSheet(
+    availablePlayers: List<Player>,
+    savedPlayers: List<PlayerProfile>,
+    onPlayerSelected: (Player) -> Unit,
+    onPickFromSaved: (profile: PlayerProfile, isNew: Boolean) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var showSavedPicker by rememberSaveable { mutableStateOf(false) }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 32.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(0.dp)
+        ) {
+            Text(
+                text = "Select Bowler",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(bottom = 4.dp)
+            )
+            Text(
+                text = "New over — select the bowler to continue scoring.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 16.dp)
+            )
+
+            if (availablePlayers.isEmpty()) {
+                Text(
+                    text = "No bowlers available.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+            }
+            availablePlayers.forEach { player ->
+                TextButton(
+                    onClick = { onPlayerSelected(player) },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = player.name,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+            OutlinedButton(
+                onClick = { showSavedPicker = true },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(
+                    Icons.Default.Person,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp)
+                )
+                Text("Add Player")
+            }
+        }
+    }
+
+    if (showSavedPicker) {
+        PlayerPickerDialog(
+            savedPlayers = savedPlayers,
+            onDismiss = { showSavedPicker = false },
+            onSelect = { profile ->
+                showSavedPicker = false
+                onPickFromSaved(profile, false)
+            },
+            onCreateAndSelect = { profile ->
+                showSavedPicker = false
+                onPickFromSaved(profile, true)
+            }
+        )
     }
 }

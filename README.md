@@ -66,6 +66,60 @@ The core promise is simple: open the app, start a match, score every ball, and s
 
 ---
 
+## UX Improvements: Team Selection, Scoring Buttons, and Bowler Change Flow
+
+### What changed
+
+**Create Match — Team Selection (Part 1)**
+
+- **Team A and Team B fields are now selection-only**: the `TeamSelectorField` composable no longer accepts free-text keyboard input.
+- The field is rendered as a read-only tap-to-open selector (non-editable `OutlinedTextField` with `MenuAnchorType.PrimaryNotEditable`).
+- Tapping the field opens a dropdown that lists all saved teams (excluding the team already selected on the other side).
+- A **"+ Create new team"** option at the bottom of the dropdown opens the existing `CreateSavedTeamDialog`, saves the new team, and auto-selects it in the field.
+- Text-based filtering of the team list has been removed (no typing = no need to filter by input).
+- The same-team error validation, swap-teams button, and overall form logic are unchanged.
+
+**Scoring Screen — Undo Button Visibility (Part 2)**
+
+- **Undo button re-styled** from an `OutlinedButton` (which had near-invisible white text on a white/surface background due to `onSecondaryContainer = white` in the blue theme) to a **filled `Button`** using `secondary`/`onSecondary` colours.
+- Result: clearly visible medium-blue filled button that is secondary in weight (not as prominent as the red Wicket button) but fully readable.
+
+**Scoring Screen — Boundary Button Distinction (Part 3)**
+
+- **4 button** now renders its label with `FontWeight.Bold`, visually reinforcing it as a boundary hit.
+- **6 button** now renders its label with `FontWeight.ExtraBold`, giving it the strongest visual weight of the run buttons — a maximum-boundary feel without changing colours or layout.
+- The existing custom container colours (`BoundaryFourContainer` / `BoundarySixContainer`) are retained; only text weight is added.
+
+**Scoring Screen — Non-Blocking Bowler Change Flow (Part 4)**
+
+- **After an over ends**, the "Select Bowler" prompt is now shown as a **dismissible `ModalBottomSheet`** instead of a blocking `AlertDialog`.
+- If the user dismisses the sheet, they are free to navigate elsewhere in the app (other tabs, back to Home, etc.).
+- **Scoring remains gated**: the run/wicket/extras buttons stay disabled until a bowler is chosen (`pendingAction == SelectBowler` keeps `scoringEnabled = false`).
+- When the sheet is dismissed, an **inline "Next bowler required" card** appears on the Score tab showing:
+  - Title: "Next bowler required"
+  - Subtitle: "Select the bowler for the new over before continuing"
+  - CTA button: "Select Bowler" (re-opens the bottom sheet)
+- The card uses `secondaryContainer` / `onSecondaryContainer` colours — distinct from the red innings-setup banner but clearly visible.
+- When the user returns to the screen after navigating away, the banner is still shown (pending bowler state lives in the ViewModel).
+- Once a bowler is selected the pending action clears, the banner disappears, and scoring resumes normally.
+
+### What did NOT change
+
+- `ScoreReducer`, `BallEvent`, match scoring rules — untouched.
+- Undo logic itself — untouched.
+- Wicket logic, `SelectNextBatter` dialog — untouched.
+- All other screens — untouched.
+
+### Files changed
+
+| File | Action |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/ui/CreateMatchScreen.kt` | Updated – `TeamSelectorField` made read-only/non-editable; removed `onTeamNameChange` parameter and text filtering |
+| `app/src/main/java/com/example/scorebroadcaster/ui/ScoringScreen.kt` | Updated – Undo button filled; 4/6 label weights; `SelectBowlerBottomSheet` added; inline "Next bowler required" banner added |
+| `README.md` | Updated – this development log entry |
+
+---
+
 ## UX Improvement: Add Players Dialog
 
 ### What changed

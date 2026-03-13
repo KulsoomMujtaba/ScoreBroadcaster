@@ -136,7 +136,6 @@ fun CreateMatchScreen(
         TeamSelectorField(
             label = "Team A name *",
             teamName = teamAName,
-            onTeamNameChange = { teamAName = it; teamAPlayers = emptyList(); teamASelectedSaved = null },
             savedTeams = savedTeams,
             savedPlayers = savedPlayers,
             onCreatePlayer = { profile -> matchSessionViewModel.addSavedPlayer(profile) },
@@ -179,7 +178,6 @@ fun CreateMatchScreen(
         TeamSelectorField(
             label = "Team B name *",
             teamName = teamBName,
-            onTeamNameChange = { teamBName = it; teamBPlayers = emptyList(); teamBSelectedSaved = null },
             savedTeams = savedTeams,
             savedPlayers = savedPlayers,
             onCreatePlayer = { profile -> matchSessionViewModel.addSavedPlayer(profile) },
@@ -316,11 +314,11 @@ fun CreateMatchScreen(
 // =============================================================================
 
 /**
- * An editable dropdown field for selecting a team.
+ * A read-only dropdown field for selecting a team.
  *
- * - The user can type a team name freely (free-text match).
- * - As the user types, the dropdown filters saved teams by the entered text
- *   (case-insensitive).
+ * - The user cannot type a team name freely; the field is non-editable.
+ * - Tapping the field opens a dropdown listing all saved teams (excluding the
+ *   team already selected on the other side).
  * - At the bottom of the dropdown, a "＋ Create new team" action opens
  *   [CreateSavedTeamDialog].  Once created the team is saved and auto-selected.
  * - Selecting an existing saved team fills the name and pre-populates players.
@@ -330,7 +328,6 @@ fun CreateMatchScreen(
 fun TeamSelectorField(
     label: String,
     teamName: String,
-    onTeamNameChange: (String) -> Unit,
     savedTeams: List<SavedTeam>,
     savedPlayers: List<PlayerProfile> = emptyList(),
     onCreatePlayer: (PlayerProfile) -> Unit = {},
@@ -347,11 +344,6 @@ fun TeamSelectorField(
         if (excludedTeam != null) savedTeams.filter { it.id != excludedTeam.id } else savedTeams
     }
 
-    // Further filter by the currently typed text (case-insensitive)
-    val filteredTeams = remember(teamName, availableTeams) {
-        availableTeams.filter { it.name.contains(teamName, ignoreCase = true) }
-    }
-
     // True when the other side has selected a saved team and no other saved teams remain
     val noOtherTeamsAvailable = excludedTeam != null && availableTeams.isEmpty()
 
@@ -361,19 +353,16 @@ fun TeamSelectorField(
         modifier = modifier
     ) {
         OutlinedTextField(
-            value = teamName,
-            onValueChange = {
-                onTeamNameChange(it)
-                expanded = true
-            },
+            value = teamName.ifBlank { "— select team —" },
+            onValueChange = {},
+            readOnly = true,
             label = { Text(label) },
             singleLine = true,
             isError = teamName.isEmpty(),
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
             modifier = Modifier
                 .fillMaxWidth()
-                .menuAnchor(type = MenuAnchorType.PrimaryEditable),
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next)
+                .menuAnchor(type = MenuAnchorType.PrimaryNotEditable),
         )
 
         ExposedDropdownMenu(
@@ -396,8 +385,8 @@ fun TeamSelectorField(
                 HorizontalDivider()
             }
 
-            // Matching saved teams
-            filteredTeams.forEach { team ->
+            // Available saved teams
+            availableTeams.forEach { team ->
                 DropdownMenuItem(
                     text = {
                         Column {
@@ -418,8 +407,8 @@ fun TeamSelectorField(
                 )
             }
 
-            // Divider before the create action (only when there are matching teams)
-            if (filteredTeams.isNotEmpty()) {
+            // Divider before the create action (only when there are teams to show)
+            if (availableTeams.isNotEmpty()) {
                 HorizontalDivider()
             }
 
