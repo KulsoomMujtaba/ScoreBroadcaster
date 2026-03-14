@@ -412,6 +412,24 @@ Scoring is modelled as an append-only event log:
 
 ## Development Log
 
+### 2026-03-14 – UI Improvement: Swap Strike Icon and Centered Over Display
+
+- Moved swap-strike action to a compact `IconButton` (`SwapHoriz` icon, 20 dp) aligned with the
+  "At the Crease" header at the top-right of the batting section. The previous `TextButton`
+  between the two batter rows has been removed.
+- Centered the current-over delivery chips horizontally within their row using a `Box` with
+  `contentAlignment = Alignment.Center` wrapping the chip `Row`.
+- Improved scoring screen layout and usability with no changes to scoring logic or data structures.
+
+**Files changed:**
+
+| File | Change |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/ui/ScoringScreen.kt` | Replaced `TextButton` swap control with `IconButton` in header row; centered `CurrentOverRow` chips with `Box(contentAlignment = Alignment.Center)` |
+| `README.md` | Added this Development Log entry |
+
+---
+
 ### 2026-03-13 – UI Improvement: Scoring Pad Button Styling and Overthrows Grouping
 
 - Updated 0, 1, 2, 3 run buttons to use a lighter neutral style (`NormalRunContainer` — soft blue-grey `#DEE8F7` with dark navy text).

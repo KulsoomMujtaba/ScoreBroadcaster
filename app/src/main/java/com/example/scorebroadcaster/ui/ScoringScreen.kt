@@ -20,6 +20,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ModalBottomSheet
@@ -828,33 +829,38 @@ private fun CurrentOverRow(balls: List<IndexedBall>) {
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Spacer(modifier = Modifier.height(4.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            balls.forEach { indexedBall ->
-                val label = OverSummaryCalculator.ballLabel(indexedBall.event)
-                val bgColor = when {
-                    label == "W" || label.endsWith("W") -> MaterialTheme.colorScheme.error
-                    label == "4" -> MaterialTheme.colorScheme.secondaryContainer
-                    // BoundarySixContainer is a cricket-domain semantic colour (dark green emphasis
-                    // for a six) that has no equivalent standard M3 role in our scheme — it is used
-                    // directly here and in BallTimelineScreen to keep the design intent explicit.
-                    label == "6" -> BoundarySixContainer
-                    label.startsWith("Wd") || label.startsWith("Nb") -> MaterialTheme.colorScheme.tertiaryContainer
-                    else -> MaterialTheme.colorScheme.surfaceVariant
-                }
-                val textColor = when {
-                    label == "W" || label.endsWith("W") -> MaterialTheme.colorScheme.onError
-                    label == "4" -> MaterialTheme.colorScheme.onSecondaryContainer
-                    label == "6" -> OnBoundarySixContainer
-                    label.startsWith("Wd") || label.startsWith("Nb") -> MaterialTheme.colorScheme.onTertiaryContainer
-                    else -> MaterialTheme.colorScheme.onSurfaceVariant
-                }
-                Surface(color = bgColor, shape = MaterialTheme.shapes.small) {
-                    Text(
-                        text = label,
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                        color = textColor,
-                        style = MaterialTheme.typography.bodySmall
-                    )
+        Box(
+            modifier = Modifier.fillMaxWidth(),
+            contentAlignment = Alignment.Center
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                balls.forEach { indexedBall ->
+                    val label = OverSummaryCalculator.ballLabel(indexedBall.event)
+                    val bgColor = when {
+                        label == "W" || label.endsWith("W") -> MaterialTheme.colorScheme.error
+                        label == "4" -> MaterialTheme.colorScheme.secondaryContainer
+                        // BoundarySixContainer is a cricket-domain semantic colour (dark green emphasis
+                        // for a six) that has no equivalent standard M3 role in our scheme — it is used
+                        // directly here and in BallTimelineScreen to keep the design intent explicit.
+                        label == "6" -> BoundarySixContainer
+                        label.startsWith("Wd") || label.startsWith("Nb") -> MaterialTheme.colorScheme.tertiaryContainer
+                        else -> MaterialTheme.colorScheme.surfaceVariant
+                    }
+                    val textColor = when {
+                        label == "W" || label.endsWith("W") -> MaterialTheme.colorScheme.onError
+                        label == "4" -> MaterialTheme.colorScheme.onSecondaryContainer
+                        label == "6" -> OnBoundarySixContainer
+                        label.startsWith("Wd") || label.startsWith("Nb") -> MaterialTheme.colorScheme.onTertiaryContainer
+                        else -> MaterialTheme.colorScheme.onSurfaceVariant
+                    }
+                    Surface(color = bgColor, shape = MaterialTheme.shapes.small) {
+                        Text(
+                            text = label,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            color = textColor,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
                 }
             }
         }
@@ -876,30 +882,35 @@ private fun PlayersSection(console: ScoringConsoleState, onSwapStrike: () -> Uni
             modifier = Modifier.padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            Text(
-                text = "At the Crease",
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.Bold
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "At the Crease",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                if (console.striker != null && console.nonStriker != null) {
+                    IconButton(
+                        onClick = onSwapStrike,
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.SwapHoriz,
+                            contentDescription = "Swap strike",
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+            }
 
             // Striker
             console.strikerEntry?.let { BatterRow(entry = it, isStriker = true) }
                 ?: console.striker?.let {
                     Text("${it.name} *", style = MaterialTheme.typography.bodySmall)
                 }
-
-            // Swap Strike action — visible between the two batter rows when both are present
-            if (console.striker != null && console.nonStriker != null) {
-                TextButton(
-                    onClick = onSwapStrike,
-                    modifier = Modifier.align(Alignment.CenterHorizontally)
-                ) {
-                    Text(
-                        text = "⇅ Swap Strike",
-                        style = MaterialTheme.typography.labelSmall
-                    )
-                }
-            }
 
             // Non-striker
             console.nonStrikerEntry?.let { BatterRow(entry = it, isStriker = false) }
