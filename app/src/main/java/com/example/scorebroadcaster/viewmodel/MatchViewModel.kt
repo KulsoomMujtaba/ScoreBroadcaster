@@ -255,28 +255,58 @@ class MatchViewModel : ViewModel() {
             isWide || isNoBall -> false
             else -> (event.runsOffBat + event.extras.byes + event.extras.legByes) % 2 == 1
         }
-        // Strike rotation rules:
-        //  - Striker wicket: new batter comes in at striker's end (striker = null).
-        //  - Non-striker wicket (e.g. run out): new batter comes in at non-striker's end.
-        //  - Over end + odd runs: rotations cancel each other out (no net change).
-        //  - Over end OR odd runs (not both): rotate striker and non-striker.
+        // Strike rotation — three sequential steps applied in order:
+        //
+        //  1. Run-crossing rotation: odd runs on a legal delivery mean the batters crossed
+        //     during the run, so the non-striker is now at the batting end and vice versa.
+        //
+        //  2. Over-end rotation: at the end of an over the bowling direction reverses, so
+        //     the two ends swap roles.  When combined with step 1, even runs on the last ball
+        //     produce a net swap while odd runs on the last ball cancel out (no net change).
+        //
+        //  3. Wicket: null out whichever final position the dismissed batter occupies after
+        //     steps 1 and 2.  This correctly handles wickets on the last ball of an over —
+        //     the incoming batter fills the position left vacant after both rotations are applied.
+
+        // Step 1: run-crossing rotation
+        val (crossedStriker, crossedNonStriker) = if (oddRuns) {
+            Pair(console.nonStriker, console.striker)
+        } else {
+            Pair(console.striker, console.nonStriker)
+        }
+
+        // Step 2: over-end rotation
+        val (finalStriker, finalNonStriker) = if (overEnded) {
+            Pair(crossedNonStriker, crossedStriker)
+        } else {
+            Pair(crossedStriker, crossedNonStriker)
+        }
+
+        // Step 3: wicket — null out the dismissed batter's final position
+        val dismissedId: String? = when {
+            !wicketFell -> null
+            strikerIsOut -> striker.id
+            else -> console.nonStriker?.id
+        }
         val (rotatedStriker, rotatedNonStriker) = when {
-            wicketFell && strikerIsOut -> Pair(null, console.nonStriker)
-            wicketFell && !strikerIsOut -> Pair(console.striker, null)
-            overEnded && oddRuns -> Pair(console.striker, console.nonStriker)
-            overEnded || oddRuns -> Pair(console.nonStriker, console.striker)
-            else -> Pair(console.striker, console.nonStriker)
+            dismissedId == null -> Pair(finalStriker, finalNonStriker)
+            finalStriker?.id == dismissedId -> Pair(null, finalNonStriker)
+            finalNonStriker?.id == dismissedId -> Pair(finalStriker, null)
+            else -> Pair(finalStriker, finalNonStriker)
         }
 
         // --- Determine pending action ---
+        // When a wicket fell, the incoming batter's role is determined by whichever position
+        // is null after all rotations — not simply by which batter was dismissed at delivery time.
+        val incomingIsStriker = rotatedStriker == null
         val (pendingAction, bowlerChangePending) = when {
             wicketFell -> {
                 // All out when 10 wickets have fallen (only 1 batter left – can't form a partnership).
                 val allOut = newState.wickets >= 10
                 if (!allOut) {
                     val remaining = eligibleNextBatters()
-                    Log.d("WicketFlow", "pendingAction set to SelectNextBatter (${remaining.size} eligible team players, replacingStriker=$strikerIsOut)")
-                    Pair(PendingAction.SelectNextBatter(remaining, replacingStriker = strikerIsOut), overEnded)
+                    Log.d("WicketFlow", "pendingAction set to SelectNextBatter (${remaining.size} eligible team players, replacingStriker=$incomingIsStriker)")
+                    Pair(PendingAction.SelectNextBatter(remaining, replacingStriker = incomingIsStriker), overEnded)
                 } else {
                     // All out — no pending action; innings ends naturally
                     Pair(null, false)
@@ -614,6 +644,24 @@ class MatchViewModel : ViewModel() {
             currentBowlerEntry = entry,
             allBowlingEntries = updatedAll,
             pendingAction = null
+        )
+    }
+
+    /**
+     * Manually swaps the current striker and non-striker.
+     *
+     * This is a scorer-correction action only — it does not create a ball event and has no
+     * effect on score totals, the event log, or any statistics.  It is a no-op when either
+     * batter position is null.
+     */
+    fun swapStrike() {
+        val console = _consoleState.value
+        if (console.striker == null || console.nonStriker == null) return
+        _consoleState.value = console.copy(
+            striker = console.nonStriker,
+            nonStriker = console.striker,
+            strikerEntry = console.nonStrikerEntry,
+            nonStrikerEntry = console.strikerEntry
         )
     }
 
@@ -1068,13 +1116,33 @@ class MatchViewModel : ViewModel() {
         val oddRuns = !isWide && !isNoBall &&
                 (event.runsOffBat + event.extras.byes + event.extras.legByes) % 2 == 1
 
-        // Mirror the rotation rules from updateConsoleAfterEvent.
+        // Mirror the three-step rotation logic from updateConsoleAfterEvent.
+
+        // Step 1: run-crossing rotation
+        val (crossedStriker, crossedNonStriker) = if (oddRuns) {
+            Pair(preNonStriker, preStriker)
+        } else {
+            Pair(preStriker, preNonStriker)
+        }
+
+        // Step 2: over-end rotation
+        val (finalStriker, finalNonStriker) = if (overEnded) {
+            Pair(crossedNonStriker, crossedStriker)
+        } else {
+            Pair(crossedStriker, crossedNonStriker)
+        }
+
+        // Step 3: wicket — null out the dismissed batter's final position
+        val dismissedId: String? = when {
+            !wicketFell -> null
+            strikerIsOut -> preStriker?.id
+            else -> preNonStriker?.id
+        }
         return when {
-            wicketFell && strikerIsOut  -> Pair(null, preNonStriker)
-            wicketFell && !strikerIsOut -> Pair(preStriker, null)
-            overEnded && oddRuns        -> Pair(preStriker, preNonStriker)
-            overEnded || oddRuns        -> Pair(preNonStriker, preStriker)
-            else                        -> Pair(preStriker, preNonStriker)
+            dismissedId == null -> Pair(finalStriker, finalNonStriker)
+            finalStriker?.id == dismissedId -> Pair(null, finalNonStriker)
+            finalNonStriker?.id == dismissedId -> Pair(finalStriker, null)
+            else -> Pair(finalStriker, finalNonStriker)
         }
     }
 

@@ -614,6 +614,22 @@ During team setup, a player already assigned to one side is now excluded from th
 
 *`PlayerPickerDialog`* — two new optional parameters (`excludedProfileIds: Set<String>`, `excludedNames: Set<String>`) filter the visible saved-player list. If all saved players are excluded, a muted info row ("No eligible players available — already assigned to the other team.") is shown. The "Create new player" inline field has its button disabled and shows an inline error when the typed name matches an excluded ad-hoc name.
 
+### 2026-03-14 – Bug Fix + UX Improvement: Strike Rotation and Manual Swap
+
+- Fixed automatic striker/non-striker swap at over end — the rotation logic now correctly applies a three-step sequence (run-crossing → over-end reversal → wicket) so that wickets on the last ball of an over also respect the over-end position change.
+- Corrected strike handling for odd/even runs on the final legal ball: even runs produce a net swap into the next over; odd runs cancel the swap since the batters already crossed during the run.
+- Added manual "⇅ Swap Strike" action on ScoringScreen (visible between the two batter rows when both batters are present) for scorer corrections.
+- Improved reliability for real-match scoring edge cases including run-outs and wickets on the last ball.
+
+**Files changed:**
+| File | Action |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/viewmodel/MatchViewModel.kt` | Updated – `updateConsoleAfterEvent()` uses three-step rotation (run-crossing → over-end → wicket) fixing the wicket-on-last-ball swap; `deriveCurrentBatters()` mirrors the same fix; `incomingIsStriker` derived from `rotatedStriker == null` for correct `replacingStriker` placement; `swapStrike()` method added |
+| `app/src/main/java/com/example/scorebroadcaster/ui/ScoringScreen.kt` | Updated – `PlayersSection` accepts `onSwapStrike` callback; "⇅ Swap Strike" `TextButton` added between the two batter rows; call site wired to `matchViewModel.swapStrike()` |
+| `README.md` | Updated |
+
+---
+
 ### 2026-03-10 – Bug Fix: Striker / non-striker can now be swapped correctly in innings setup
 
 Previously, when only two batting players existed and both were already selected, the dropdown filtering logic prevented swapping them unless both fields were manually cleared. The innings setup UI now supports direct swapping in two ways:

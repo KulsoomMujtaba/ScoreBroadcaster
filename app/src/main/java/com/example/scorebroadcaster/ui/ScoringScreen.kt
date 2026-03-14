@@ -230,7 +230,10 @@ fun ScoringScreen(
             if (console.phase == InningsPhase.FIRST_INNINGS ||
                 console.phase == InningsPhase.SECOND_INNINGS
             ) {
-                PlayersSection(console = console)
+                PlayersSection(
+                    console = console,
+                    onSwapStrike = { matchViewModel.swapStrike() }
+                )
                 Spacer(modifier = Modifier.height(12.dp))
             }
 
@@ -847,7 +850,7 @@ private fun LastBallsRow(lastBalls: List<String>) {
 // =============================================================================
 
 @Composable
-private fun PlayersSection(console: ScoringConsoleState) {
+private fun PlayersSection(console: ScoringConsoleState, onSwapStrike: () -> Unit) {
     Surface(
         tonalElevation = 2.dp,
         shape = MaterialTheme.shapes.medium,
@@ -868,6 +871,19 @@ private fun PlayersSection(console: ScoringConsoleState) {
                 ?: console.striker?.let {
                     Text("${it.name} *", style = MaterialTheme.typography.bodySmall)
                 }
+
+            // Swap Strike action — visible between the two batter rows when both are present
+            if (console.striker != null && console.nonStriker != null) {
+                TextButton(
+                    onClick = onSwapStrike,
+                    modifier = Modifier.align(Alignment.CenterHorizontally)
+                ) {
+                    Text(
+                        text = "⇅ Swap Strike",
+                        style = MaterialTheme.typography.labelSmall
+                    )
+                }
+            }
 
             // Non-striker
             console.nonStrikerEntry?.let { BatterRow(entry = it, isStriker = false) }
