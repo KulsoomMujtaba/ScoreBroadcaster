@@ -155,6 +155,23 @@ object BallTimelineFormatter {
         return overs
     }
 
+    /**
+     * Returns the deliveries belonging to the current (latest, possibly incomplete) over.
+     *
+     * This is a convenience wrapper around [groupByOver] that extracts only the in-progress
+     * over's [IndexedBall] list.  If the most recent over is already complete (exactly 6 legal
+     * balls), a new over has effectively started with no deliveries yet, so an empty list is
+     * returned — matching the "reset automatically when a new over starts" requirement.
+     *
+     * Returns an empty list when [events] is empty.
+     */
+    fun getCurrentOverBalls(events: List<BallEvent>): List<IndexedBall> {
+        val lastOver = groupByOver(events).lastOrNull() ?: return emptyList()
+        // A completed over means the next over is starting fresh; return empty.
+        return if (lastOver.balls.count { it.event.countsAsBall } >= 6) emptyList()
+        else lastOver.balls
+    }
+
     /** Constructs an [OverSummary] from a list of [IndexedBall]s, computing derived fields. */
     private fun buildOverSummary(overNumber: Int, balls: List<IndexedBall>): OverSummary {
         val bowlerName = balls.firstNotNullOfOrNull { it.event.bowler?.name } ?: ""

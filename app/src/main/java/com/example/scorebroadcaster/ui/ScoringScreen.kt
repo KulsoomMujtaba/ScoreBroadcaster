@@ -73,6 +73,9 @@ import com.example.scorebroadcaster.data.entity.PlayerProfile
 import com.example.scorebroadcaster.data.entity.Team
 import com.example.scorebroadcaster.data.entity.toMatchPlayer
 import com.example.scorebroadcaster.domain.BallEvent
+import com.example.scorebroadcaster.domain.BallTimelineFormatter
+import com.example.scorebroadcaster.domain.IndexedBall
+import com.example.scorebroadcaster.domain.OverSummaryCalculator
 import com.example.scorebroadcaster.viewmodel.MatchViewModel
 import com.example.scorebroadcaster.viewmodel.MatchSessionViewModel
 import com.example.scorebroadcaster.ui.theme.BoundaryFourContainer
@@ -118,6 +121,7 @@ fun ScoringScreen(
     val state by matchViewModel.state.collectAsState()
     val console by matchViewModel.consoleState.collectAsState()
     val match by matchViewModel.activeMatch.collectAsState()
+    val events by matchViewModel.events.collectAsState()
     // Capture a non-nullable snapshot so inner lambdas and blocks can smart-cast.
     val activeMatch: Match? = match
 
@@ -222,8 +226,8 @@ fun ScoringScreen(
                 Spacer(modifier = Modifier.height(8.dp))
             }
 
-            // --- Last 6 balls ---
-            LastBallsRow(lastBalls = state.lastBalls)
+            // --- Current over balls ---
+            CurrentOverRow(balls = BallTimelineFormatter.getCurrentOverBalls(events))
             Spacer(modifier = Modifier.height(12.dp))
 
             // --- Current players card ---
@@ -809,37 +813,49 @@ private fun ChaseInfoItem(label: String, value: String) {
 }
 
 // =============================================================================
-// Last balls row
+// Current over row
 // =============================================================================
 
 @Composable
-private fun LastBallsRow(lastBalls: List<String>) {
-    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-        lastBalls.forEach { ball ->
-            val bgColor = when {
-                ball == "W" -> MaterialTheme.colorScheme.error
-                ball == "4" -> MaterialTheme.colorScheme.secondaryContainer
-                // BoundarySixContainer is a cricket-domain semantic colour (dark green emphasis
-                // for a six) that has no equivalent standard M3 role in our scheme — it is used
-                // directly here and in BallTimelineScreen to keep the design intent explicit.
-                ball == "6" -> BoundarySixContainer
-                ball.startsWith("Wd") || ball.startsWith("NB") -> MaterialTheme.colorScheme.tertiaryContainer
-                else -> MaterialTheme.colorScheme.surfaceVariant
-            }
-            val textColor = when {
-                ball == "W" -> MaterialTheme.colorScheme.onError
-                ball == "4" -> MaterialTheme.colorScheme.onSecondaryContainer
-                ball == "6" -> OnBoundarySixContainer
-                ball.startsWith("Wd") || ball.startsWith("NB") -> MaterialTheme.colorScheme.onTertiaryContainer
-                else -> MaterialTheme.colorScheme.onSurfaceVariant
-            }
-            Surface(color = bgColor, shape = MaterialTheme.shapes.small) {
-                Text(
-                    text = ball,
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                    color = textColor,
-                    style = MaterialTheme.typography.bodySmall
-                )
+private fun CurrentOverRow(balls: List<IndexedBall>) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.Start
+    ) {
+        Text(
+            text = "Current Over",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            balls.forEach { indexedBall ->
+                val label = OverSummaryCalculator.ballLabel(indexedBall.event)
+                val bgColor = when {
+                    label == "W" || label.endsWith("W") -> MaterialTheme.colorScheme.error
+                    label == "4" -> MaterialTheme.colorScheme.secondaryContainer
+                    // BoundarySixContainer is a cricket-domain semantic colour (dark green emphasis
+                    // for a six) that has no equivalent standard M3 role in our scheme — it is used
+                    // directly here and in BallTimelineScreen to keep the design intent explicit.
+                    label == "6" -> BoundarySixContainer
+                    label.startsWith("Wd") || label.startsWith("Nb") -> MaterialTheme.colorScheme.tertiaryContainer
+                    else -> MaterialTheme.colorScheme.surfaceVariant
+                }
+                val textColor = when {
+                    label == "W" || label.endsWith("W") -> MaterialTheme.colorScheme.onError
+                    label == "4" -> MaterialTheme.colorScheme.onSecondaryContainer
+                    label == "6" -> OnBoundarySixContainer
+                    label.startsWith("Wd") || label.startsWith("Nb") -> MaterialTheme.colorScheme.onTertiaryContainer
+                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+                }
+                Surface(color = bgColor, shape = MaterialTheme.shapes.small) {
+                    Text(
+                        text = label,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                        color = textColor,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
             }
         }
     }
