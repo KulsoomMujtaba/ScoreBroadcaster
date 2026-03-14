@@ -626,6 +626,38 @@ Scoring is modelled as an append-only event log:
 
 ---
 
+### 2026-03-14 – Bug Fix: Undo now correctly reverts batter statistics
+
+**Problem**
+
+Pressing Undo correctly reverted match totals (runs, wickets, overs) but did **not** subtract runs from the batter's score. After an undo the batter's run-count and ball-count remained at their pre-undo values, causing the scorecard to show stale per-player statistics.
+
+**Root cause**
+
+`MatchViewModel.undo()` called `refreshMaidensFromEvents()` which only recomputed maiden counts. All other per-player batting and bowling statistics — including runs, balls, fours, sixes, and wickets — were left untouched.
+
+**Fix**
+
+Added a new private helper `rebuildConsoleFromEvents(events)` that:
+1. Iterates over all remaining events after the undo.
+2. Accumulates per-player batting stats (runs, balls, 4s, 6s, isOut, dismissal) by replaying the same delivery-classification logic used in `updateConsoleAfterEvent`.
+3. Accumulates per-bowler stats (runs, overs, balls, wickets) the same way.
+4. Applies maiden counts from `MaidenOverCalculator.compute(events)`.
+5. Calls `deriveCurrentBatters(events)` to restore the correct striker / non-striker assignments.
+6. Rebuilds partnership counters by summing runs and balls since the last wicket.
+7. Clears `pendingAction` / `bowlerChangePending` (the event that triggered them was just removed).
+
+`undo()` now calls `rebuildConsoleFromEvents()` instead of the old `refreshMaidensFromEvents()` call.
+
+**Files changed:**
+
+| File | Action |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/viewmodel/MatchViewModel.kt` | Updated – `undo()` now calls `rebuildConsoleFromEvents()`; new `rebuildConsoleFromEvents()` private method added |
+| `README.md` | Updated |
+
+---
+
 ### 2026-03-10 – Cross-team player exclusivity in match setup
 
 Player cannot belong to both teams in the same match.

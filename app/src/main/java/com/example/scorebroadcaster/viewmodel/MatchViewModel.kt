@@ -381,12 +381,10 @@ class MatchViewModel : ViewModel() {
             _state.value = reduce(_events.value)
                 .copy(teamAName = currentTeamAName, teamBName = currentTeamBName)
             _fallOfWickets.value = computeFallOfWickets(_events.value)
-            // Console state is not fully rolled back (other stats require a full replay),
-            // but maiden counts are derived from the event log and can always be kept correct.
-            refreshMaidensFromEvents(_events.value)
-            _consoleState.value = _consoleState.value.copy(
-                currentInningsFallOfWickets = _fallOfWickets.value
-            )
+            // Fully rebuild all per-player stats and batter positions from the remaining
+            // events so that batting entries, bowling entries, and striker/non-striker
+            // assignments are all consistent with the updated event log.
+            rebuildConsoleFromEvents(_events.value)
             refreshCurrentInningsOverSummaries()
             persistCurrentInningsEvents()
         }
@@ -509,6 +507,187 @@ class MatchViewModel : ViewModel() {
         _consoleState.value = console.copy(
             allBowlingEntries = updatedBowling,
             currentBowlerEntry = updatedCurrentBowlerEntry
+        )
+    }
+
+    /**
+     * Rebuilds all per-player batting/bowling statistics and batter-position state in
+     * [_consoleState] by replaying [events] from scratch.
+     *
+     * This is the canonical post-undo refresh: rather than attempting to subtract values
+     * manually, every stat is recomputed purely from the event log so the result is always
+     * correct regardless of delivery type or order.
+     *
+     * The following fields are rebuilt:
+     * - [ScoringConsoleState.allBattingEntries] — runs, balls, 4s, 6s, dismissal per batter
+     * - [ScoringConsoleState.allBowlingEntries] — runs, overs, balls, wickets, maidens per bowler
+     * - [ScoringConsoleState.striker] / [ScoringConsoleState.nonStriker] — current positions
+     * - [ScoringConsoleState.currentBowler] — last bowler to bowl
+     * - [ScoringConsoleState.strikerEntry] / [ScoringConsoleState.nonStrikerEntry] / [ScoringConsoleState.currentBowlerEntry]
+     * - [ScoringConsoleState.currentPartnershipRuns] / [ScoringConsoleState.currentPartnershipBalls]
+     * - [ScoringConsoleState.currentInningsFallOfWickets]
+     * - [ScoringConsoleState.pendingAction] is cleared (undo removes the event that caused any pending action)
+     *
+     * Fields that belong to the innings lifecycle ([ScoringConsoleState.phase],
+     * [ScoringConsoleState.inningsNumber], first-innings snapshot fields, target, etc.) are
+     * preserved unchanged.
+     */
+    private fun rebuildConsoleFromEvents(events: List<BallEvent>) {
+        val console = _consoleState.value
+        if (console.phase == InningsPhase.SETUP || console.phase == InningsPhase.MATCH_COMPLETE) return
+
+        if (events.isEmpty()) {
+            // No events remain: reset per-player stats to their initial values while keeping
+            // the player assignments that were made in setOpeners().
+            val resetBatting = console.allBattingEntries.map {
+                it.copy(runs = 0, balls = 0, fours = 0, sixes = 0, isOut = false, dismissal = null)
+            }
+            val resetBowling = console.allBowlingEntries.map {
+                it.copy(runs = 0, balls = 0, overs = 0, wickets = 0, maidens = 0)
+            }
+            _consoleState.value = console.copy(
+                allBattingEntries = resetBatting,
+                allBowlingEntries = resetBowling,
+                strikerEntry = resetBatting.find { it.player.id == console.striker?.id },
+                nonStrikerEntry = resetBatting.find { it.player.id == console.nonStriker?.id },
+                currentBowlerEntry = resetBowling.find { it.player.id == console.currentBowler?.id },
+                pendingAction = null,
+                bowlerChangePending = false,
+                currentPartnershipRuns = 0,
+                currentPartnershipBalls = 0,
+                currentInningsFallOfWickets = _fallOfWickets.value
+            )
+            _currentPartnership.value = _currentPartnership.value?.copy(runs = 0, balls = 0)
+            return
+        }
+
+        // ── Initialise per-player stat accumulators ─────────────────────────────────────────────
+        // Use a LinkedHashMap to preserve the order in which players first appear in the log.
+        val battingById = LinkedHashMap<String, BattingEntry>()
+        val bowlingById = LinkedHashMap<String, BowlingEntry>()
+
+        for (event in events) {
+            event.striker?.let { if (it.id !in battingById) battingById[it.id] = BattingEntry(player = it) }
+            event.nonStriker?.let { if (it.id !in battingById) battingById[it.id] = BattingEntry(player = it) }
+            event.bowler?.let { if (it.id !in bowlingById) bowlingById[it.id] = BowlingEntry(player = it) }
+        }
+
+        // ── Replay events to accumulate stats ───────────────────────────────────────────────────
+        for (event in events) {
+            val striker = event.striker ?: continue
+            val isWide   = event.extras.wides   > 0
+            val isNoBall = event.extras.noBalls > 0
+            val isBye    = event.extras.byes    > 0
+            val isLegBye = event.extras.legByes > 0
+            val strikerIsOut = event.wicket && event.dismissalDetail?.batter?.id == striker.id
+
+            // Striker batting stats (mirrors updateConsoleAfterEvent logic)
+            battingById[striker.id]?.let { entry ->
+                battingById[striker.id] = when {
+                    isWide -> entry
+                    event.wicket && strikerIsOut ->
+                        entry.copy(balls = entry.balls + 1, isOut = true, dismissal = event.dismissalDetail)
+                    event.wicket ->
+                        entry.copy(balls = entry.balls + 1)
+                    isNoBall ->
+                        entry.copy(
+                            runs  = entry.runs  + event.runsOffBat,
+                            fours = if (event.runsOffBat == 4) entry.fours + 1 else entry.fours,
+                            sixes = if (event.runsOffBat == 6) entry.sixes + 1 else entry.sixes
+                        )
+                    isBye || isLegBye ->
+                        entry.copy(balls = entry.balls + 1)
+                    else ->
+                        entry.copy(
+                            runs  = entry.runs  + event.runsOffBat,
+                            balls = entry.balls + 1,
+                            fours = if (event.runsOffBat == 4) entry.fours + 1 else entry.fours,
+                            sixes = if (event.runsOffBat == 6) entry.sixes + 1 else entry.sixes
+                        )
+                }
+            }
+
+            // Non-striker: only updated when dismissed (run out)
+            if (event.wicket && !strikerIsOut) {
+                event.nonStriker?.let { ns ->
+                    battingById[ns.id]?.let { entry ->
+                        battingById[ns.id] = entry.copy(isOut = true, dismissal = event.dismissalDetail)
+                    }
+                }
+            }
+
+            // Bowler stats (mirrors updateConsoleAfterEvent logic)
+            event.bowler?.let { bowler ->
+                bowlingById[bowler.id]?.let { entry ->
+                    bowlingById[bowler.id] = when {
+                        isWide ->
+                            entry.copy(runs = entry.runs + event.extras.wides)
+                        isNoBall ->
+                            entry.copy(runs = entry.runs + event.extras.noBalls + event.runsOffBat)
+                        event.wicket -> {
+                            val (o, b) = incrementBall(entry.overs, entry.balls)
+                            if (event.dismissalDetail?.bowlerCredited == true)
+                                entry.copy(wickets = entry.wickets + 1, overs = o, balls = b)
+                            else
+                                entry.copy(overs = o, balls = b)
+                        }
+                        isBye || isLegBye -> {
+                            val (o, b) = incrementBall(entry.overs, entry.balls)
+                            entry.copy(overs = o, balls = b)
+                        }
+                        else -> {
+                            val (o, b) = incrementBall(entry.overs, entry.balls)
+                            entry.copy(runs = entry.runs + event.runsOffBat, overs = o, balls = b)
+                        }
+                    }
+                }
+            }
+        }
+
+        // Apply maiden counts (always derived from the full event log).
+        val maidensMap = MaidenOverCalculator.compute(events)
+        for (id in bowlingById.keys.toList()) {
+            bowlingById[id] = bowlingById[id]!!.copy(maidens = maidensMap[id] ?: 0)
+        }
+
+        // ── Derive current player positions ─────────────────────────────────────────────────────
+        val (currentStriker, currentNonStriker) = deriveCurrentBatters(events)
+        val currentBowler = events.lastOrNull { it.bowler != null }?.bowler
+
+        val allBatting = battingById.values.toList()
+        val allBowling = bowlingById.values.toList()
+
+        val strikerEntry = currentStriker?.let { s -> allBatting.find { it.player.id == s.id } }
+        val nonStrikerEntry = currentNonStriker?.let { ns -> allBatting.find { it.player.id == ns.id } }
+        val currentBowlerEntry = currentBowler?.let { b -> allBowling.find { it.player.id == b.id } }
+
+        // ── Rebuild partnership counters ─────────────────────────────────────────────────────────
+        // Partnership resets on each wicket; sum runs and balls from events since the last wicket.
+        val lastWicketIdx = events.indexOfLast { it.wicket }
+        val partnershipEvents = if (lastWicketIdx < 0) events else events.drop(lastWicketIdx + 1)
+        val partnershipRuns  = partnershipEvents.sumOf { it.runsOffBat + it.extras.total }
+        val partnershipBalls = partnershipEvents.count { it.countsAsBall }
+
+        _consoleState.value = console.copy(
+            striker              = currentStriker,
+            nonStriker           = currentNonStriker,
+            currentBowler        = currentBowler,
+            strikerEntry         = strikerEntry,
+            nonStrikerEntry      = nonStrikerEntry,
+            currentBowlerEntry   = currentBowlerEntry,
+            allBattingEntries    = allBatting,
+            allBowlingEntries    = allBowling,
+            pendingAction        = null,
+            bowlerChangePending  = false,
+            currentPartnershipRuns  = partnershipRuns,
+            currentPartnershipBalls = partnershipBalls,
+            currentInningsFallOfWickets = _fallOfWickets.value
+        )
+
+        // Keep the live partnership object in sync with the rebuilt counters.
+        _currentPartnership.value = _currentPartnership.value?.copy(
+            runs  = partnershipRuns,
+            balls = partnershipBalls
         )
     }
 
