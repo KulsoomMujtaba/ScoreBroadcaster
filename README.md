@@ -179,6 +179,44 @@ The core promise is simple: open the app, start a match, score every ball, and s
 
 ---
 
+## UI Improvement: Current Over Display on Scoring Screen
+
+### What changed
+
+- **ScoringScreen** now shows a `CurrentOverRow` labelled **"Current Over"** instead of the
+  previous `LastBallsRow` that tracked the most recent 6 deliveries across over boundaries.
+- Current over chips reset automatically when a new over starts: the row is empty at the start
+  of each new over and grows ball-by-ball as deliveries are recorded.
+- Wides and no-balls appear in the current over sequence (as **Wd** / **Nb** chips) but do not
+  advance the legal ball counter — matching real cricket over-progression rules.
+- Chip colours are unchanged: W / run-out = error red, 4 = secondary container, 6 = dark green,
+  Wd / Nb = tertiary/amber, all others = surface variant.
+
+### How it works
+
+- `BallTimelineFormatter.getCurrentOverBalls(events)` (new helper) calls the existing
+  `groupByOver` and returns the in-progress over's `IndexedBall` list.  When the most recent
+  over just completed (6 legal balls), it returns an empty list so the row resets immediately.
+- `ScoringScreen` collects `MatchViewModel.events` and passes the result of
+  `getCurrentOverBalls` to the new `CurrentOverRow` composable.
+- Ball labels use `OverSummaryCalculator.ballLabel` for consistent compact notation.
+
+### What did NOT change
+
+- `ScoreReducer`, `MatchState.lastBalls`, `BallEvent` structure — untouched.
+- `BallTimelineScreen` / scorecard logic / over counting rules — untouched.
+- `BroadcastOverlayMapper` / streaming overlay — untouched.
+
+### Files changed
+
+| File | Action |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/domain/BallTimelineFormatter.kt` | Added `getCurrentOverBalls` helper |
+| `app/src/main/java/com/example/scorebroadcaster/ui/ScoringScreen.kt` | Replaced `LastBallsRow` with `CurrentOverRow`; collects `events` flow |
+| `README.md` | Added this development log entry |
+
+---
+
 ## UI Improvement: Run Rate Display + Recent Ball Chip Colours
 
 ### What changed
