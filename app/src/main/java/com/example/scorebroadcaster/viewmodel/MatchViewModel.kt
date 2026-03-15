@@ -69,6 +69,25 @@ class MatchViewModel : ViewModel() {
     val completedPartnerships: StateFlow<List<Partnership>> = _completedPartnerships.asStateFlow()
 
     /**
+     * Snapshot of the opener assignments made when [setOpeners] was called.
+     * Keyed by innings number (1 or 2). Preserved across undo so that
+     * [rebuildConsoleFromEvents] can restore the correct striker/non-striker/bowler
+     * when the event list is emptied by undoing the first ball.
+     */
+    private data class InningsOpenersSnapshot(
+        val striker: Player,
+        val nonStriker: Player,
+        val bowler: Player
+    )
+    private val inningsOpenersSnapshot = mutableMapOf<Int, InningsOpenersSnapshot>()
+
+    /** One-shot message emitted after a successful undo. Cleared by [clearUndoMessage]. */
+    private val _undoMessage = MutableStateFlow<String?>(null)
+    val undoMessage: StateFlow<String?> = _undoMessage.asStateFlow()
+
+    fun clearUndoMessage() { _undoMessage.value = null }
+
+    /**
      * Completed partnerships from the first innings.
      * Populated when the first innings ends; stays empty until then.
      */
@@ -387,6 +406,7 @@ class MatchViewModel : ViewModel() {
             rebuildConsoleFromEvents(_events.value)
             refreshCurrentInningsOverSummaries()
             persistCurrentInningsEvents()
+            _undoMessage.value = "Last ball undone"
         }
     }
 
@@ -537,26 +557,48 @@ class MatchViewModel : ViewModel() {
         if (console.phase == InningsPhase.SETUP || console.phase == InningsPhase.MATCH_COMPLETE) return
 
         if (events.isEmpty()) {
-            // No events remain: reset per-player stats to their initial values while keeping
-            // the player assignments that were made in setOpeners().
-            val resetBatting = console.allBattingEntries.map {
-                it.copy(runs = 0, balls = 0, fours = 0, sixes = 0, isOut = false, dismissal = null)
+            val snapshot = inningsOpenersSnapshot[console.inningsNumber]
+            if (snapshot != null) {
+                // Setup was completed; restore the original opener assignments with zeroed stats.
+                val strikerEntry = BattingEntry(player = snapshot.striker)
+                val nonStrikerEntry = BattingEntry(player = snapshot.nonStriker)
+                val bowlerEntry = BowlingEntry(player = snapshot.bowler)
+                _consoleState.value = console.copy(
+                    striker = snapshot.striker,
+                    nonStriker = snapshot.nonStriker,
+                    currentBowler = snapshot.bowler,
+                    strikerEntry = strikerEntry,
+                    nonStrikerEntry = nonStrikerEntry,
+                    currentBowlerEntry = bowlerEntry,
+                    allBattingEntries = listOf(strikerEntry, nonStrikerEntry),
+                    allBowlingEntries = listOf(bowlerEntry),
+                    pendingAction = null,
+                    bowlerChangePending = false,
+                    currentPartnershipRuns = 0,
+                    currentPartnershipBalls = 0,
+                    currentInningsFallOfWickets = emptyList()
+                )
+            } else {
+                // No snapshot: fall back to existing reset logic (for old matches / app restarts).
+                val resetBatting = console.allBattingEntries.map {
+                    it.copy(runs = 0, balls = 0, fours = 0, sixes = 0, isOut = false, dismissal = null)
+                }
+                val resetBowling = console.allBowlingEntries.map {
+                    it.copy(runs = 0, balls = 0, overs = 0, wickets = 0, maidens = 0)
+                }
+                _consoleState.value = console.copy(
+                    allBattingEntries = resetBatting,
+                    allBowlingEntries = resetBowling,
+                    strikerEntry = resetBatting.find { it.player.id == console.striker?.id },
+                    nonStrikerEntry = resetBatting.find { it.player.id == console.nonStriker?.id },
+                    currentBowlerEntry = resetBowling.find { it.player.id == console.currentBowler?.id },
+                    pendingAction = null,
+                    bowlerChangePending = false,
+                    currentPartnershipRuns = 0,
+                    currentPartnershipBalls = 0,
+                    currentInningsFallOfWickets = _fallOfWickets.value
+                )
             }
-            val resetBowling = console.allBowlingEntries.map {
-                it.copy(runs = 0, balls = 0, overs = 0, wickets = 0, maidens = 0)
-            }
-            _consoleState.value = console.copy(
-                allBattingEntries = resetBatting,
-                allBowlingEntries = resetBowling,
-                strikerEntry = resetBatting.find { it.player.id == console.striker?.id },
-                nonStrikerEntry = resetBatting.find { it.player.id == console.nonStriker?.id },
-                currentBowlerEntry = resetBowling.find { it.player.id == console.currentBowler?.id },
-                pendingAction = null,
-                bowlerChangePending = false,
-                currentPartnershipRuns = 0,
-                currentPartnershipBalls = 0,
-                currentInningsFallOfWickets = _fallOfWickets.value
-            )
             _currentPartnership.value = _currentPartnership.value?.copy(runs = 0, balls = 0)
             return
         }
@@ -723,6 +765,7 @@ class MatchViewModel : ViewModel() {
         _firstInningsCompletedPartnerships.value = emptyList()
         currentTeamAName = "Team A"
         currentTeamBName = "Team B"
+        inningsOpenersSnapshot.clear()
         if (matchId != null) {
             viewModelScope.launch {
                 MatchRepository.deleteAllBallEvents(matchId)
@@ -741,8 +784,13 @@ class MatchViewModel : ViewModel() {
         val strikerEntry = BattingEntry(player = striker)
         val nonStrikerEntry = BattingEntry(player = nonStriker)
         val bowlerEntry = BowlingEntry(player = bowler)
-        val phase = if (_consoleState.value.inningsNumber == 1) InningsPhase.FIRST_INNINGS
+        val inningsNumber = _consoleState.value.inningsNumber
+        val phase = if (inningsNumber == 1) InningsPhase.FIRST_INNINGS
                     else InningsPhase.SECOND_INNINGS
+        // Record the snapshot before updating console state so it is always available
+        // to rebuildConsoleFromEvents if undo is pressed immediately after.
+        inningsOpenersSnapshot[inningsNumber] =
+            InningsOpenersSnapshot(striker = striker, nonStriker = nonStriker, bowler = bowler)
         _consoleState.value = _consoleState.value.copy(
             phase = phase,
             striker = striker,
@@ -756,7 +804,8 @@ class MatchViewModel : ViewModel() {
             pendingAction = null,
             bowlerChangePending = false,
             currentPartnershipRuns = 0,
-            currentPartnershipBalls = 0
+            currentPartnershipBalls = 0,
+            inningsSetupCompleted = true
         )
         _currentPartnership.value = Partnership(
             strikerName = striker.name,
