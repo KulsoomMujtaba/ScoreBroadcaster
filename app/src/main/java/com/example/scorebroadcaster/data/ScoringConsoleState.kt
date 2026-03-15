@@ -110,7 +110,14 @@ data class ScoringConsoleState(
     val currentPartnershipRuns: Int = 0,
 
     /** Legal deliveries faced by the current batting pair since their partnership began. */
-    val currentPartnershipBalls: Int = 0
+    val currentPartnershipBalls: Int = 0,
+
+    /**
+     * True once [com.example.scorebroadcaster.viewmodel.MatchViewModel.setOpeners] has been
+     * called for the current innings. Survives undo. Used by ScoringScreen to distinguish
+     * "setup never done" from "setup done but zero deliveries remain after undo".
+     */
+    val inningsSetupCompleted: Boolean = false
 ) {
     /**
      * Partnership duration expressed as overs, e.g. 33 balls → "5.3 overs".

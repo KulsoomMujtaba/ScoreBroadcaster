@@ -41,6 +41,10 @@ import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.ScrollableTabRow
+import androidx.compose.material3.Snackbar
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
@@ -130,23 +134,19 @@ fun ScoringScreen(
     // Show openers-setup dialog when setup is genuinely required.
     // Setup is required when:
     //  - The innings phase is SETUP (fresh innings, never started), OR
-    //  - The innings is active (FIRST_INNINGS / SECOND_INNINGS) but the current striker,
-    //    non-striker, or bowler is missing — e.g. after an app restart where the live
-    //    player references cannot be reconstructed from the persisted event log alone.
+    //  - The innings is active (FIRST_INNINGS / SECOND_INNINGS) but setup was never completed.
     //
-    // IMPORTANT: exclude the transient null produced by a wicket falling.  After a wicket
-    // updateConsoleAfterEvent sets striker (or nonStriker) to null and simultaneously sets
-    // pendingAction = SelectNextBatter.  That null is intentional — the next batter has not
-    // yet been chosen — and must NOT be treated as "innings not initialised".  If we did not
-    // check for this, the LaunchedEffect below would fire and re-open the innings-setup sheet
-    // every time the scorer records a wicket.
-    val needsInningsSetup = console.phase == InningsPhase.SETUP ||
-            ((console.phase == InningsPhase.FIRST_INNINGS ||
-                    console.phase == InningsPhase.SECOND_INNINGS) &&
-                    console.pendingAction !is PendingAction.SelectNextBatter &&
-                    (console.striker == null ||
-                            console.nonStriker == null ||
-                            console.currentBowler == null))
+    // IMPORTANT: do NOT treat "zero deliveries after undo" as missing setup.
+    // inningsSetupCompleted is set to true by setOpeners() and is never cleared by undo,
+    // so it correctly distinguishes "setup never done" from "setup done, first ball undone".
+    val needsInningsSetup = when (console.phase) {
+        InningsPhase.SETUP -> true
+        InningsPhase.FIRST_INNINGS,
+        InningsPhase.SECOND_INNINGS ->
+            !console.inningsSetupCompleted &&
+                console.pendingAction !is PendingAction.SelectNextBatter
+        else -> false
+    }
 
     var setupDialogVisible by remember { mutableStateOf(false) }
     LaunchedEffect(needsInningsSetup) {
@@ -165,6 +165,17 @@ fun ScoringScreen(
 
     // Tab selection state — survives recomposition without resetting scoring state
     var selectedTab by rememberSaveable { mutableStateOf(ScoringScreenTab.SCORE) }
+
+    // Undo message snackbar
+    val undoMessage by matchViewModel.undoMessage.collectAsState()
+    val snackbarHostState = remember { SnackbarHostState() }
+    LaunchedEffect(undoMessage) {
+        val msg = undoMessage
+        if (!msg.isNullOrEmpty()) {
+            snackbarHostState.showSnackbar(message = msg, duration = SnackbarDuration.Short)
+            matchViewModel.clearUndoMessage()
+        }
+    }
 
     // State for the dismissible select-bowler bottom sheet.
     // Auto-opens when the over ends and SelectBowler becomes pending; can be dismissed
@@ -537,6 +548,12 @@ fun ScoringScreen(
                 }
             )
         }
+
+        // --- Undo snackbar ---
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier.align(Alignment.BottomCenter)
+        )
     }
 }
 

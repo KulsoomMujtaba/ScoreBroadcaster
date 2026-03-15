@@ -412,6 +412,32 @@ Scoring is modelled as an append-only event log:
 
 ## Development Log
 
+### 2026-03-15 – Bug Fix: Stable Undo After First Ball
+
+**Problem**
+
+Undoing the first recorded delivery of an innings caused the innings setup dialog (SetupOpenersBottomSheet) to reopen incorrectly. The scorer was thrown back to the opener-selection flow even though striker, non-striker, and bowler had already been confirmed.
+
+**Root cause**
+
+`rebuildConsoleFromEvents()` tried to restore striker/non-striker/currentBowler from `console.striker` / `console.nonStriker` / `console.currentBowler` after dropping the last event. However, those fields had already been mutated by `updateConsoleAfterEvent` (which applied end-of-delivery rotations and wicket nulling). After the first ball was undone, all three became null or stale, triggering `needsInningsSetup = true` in `ScoringScreen`, which reopened the setup dialog.
+
+**Fix**
+
+1. **Opener snapshot** — `MatchViewModel` now records an `InningsOpenersSnapshot` (striker, non-striker, bowler) in a per-innings map when `setOpeners()` is called. The snapshot survives undo.
+2. **Rebuild from snapshot** — `rebuildConsoleFromEvents()` now restores opener assignments from the snapshot when the event list is emptied by undo, rather than relying on the (stale) console fields.
+3. **`inningsSetupCompleted` flag** — `ScoringConsoleState` gains an `inningsSetupCompleted` flag (set to `true` by `setOpeners`, reset only on new innings or match reset). `needsInningsSetup` in `ScoringScreen` now uses this flag as its primary gate, ensuring the dialog is never shown for an innings whose setup was already confirmed.
+4. **Snackbar UX** — Pressing Undo now shows a brief "Last ball undone" snackbar, giving the scorer clear feedback and making the undo feel intentional.
+
+**Files changed:**
+
+| File | Action |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/data/ScoringConsoleState.kt` | Added `inningsSetupCompleted: Boolean = false` |
+| `app/src/main/java/com/example/scorebroadcaster/viewmodel/MatchViewModel.kt` | Added `InningsOpenersSnapshot`; updated `setOpeners`, `rebuildConsoleFromEvents`, `resetMatch`; added `undoMessage` StateFlow |
+| `app/src/main/java/com/example/scorebroadcaster/ui/ScoringScreen.kt` | Updated `needsInningsSetup`; added `SnackbarHost` + undo message `LaunchedEffect` |
+| `README.md` | Added this Development Log entry |
+
 ### 2026-03-14 – UI Improvement: Swap Strike Icon and Centered Over Display
 
 - Moved swap-strike action to a compact `IconButton` (`SwapHoriz` icon, 20 dp) aligned with the
