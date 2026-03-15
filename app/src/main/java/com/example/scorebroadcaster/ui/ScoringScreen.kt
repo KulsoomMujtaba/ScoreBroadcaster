@@ -20,6 +20,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.AlertDialog
@@ -122,6 +123,7 @@ fun ScoringScreen(
     onViewScorecard: () -> Unit = {},
     onCameraPreview: () -> Unit = {},
     onViewTimeline: () -> Unit = {},
+    onPreviewMatch: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val state by matchViewModel.state.collectAsState()
@@ -191,7 +193,8 @@ fun ScoringScreen(
             CompactMatchHeader(
                 match = activeMatch,
                 state = state,
-                consoleState = console
+                consoleState = console,
+                onPreviewMatch = onPreviewMatch
             )
 
             // --- Tab navigation ---
@@ -565,7 +568,8 @@ fun ScoringScreen(
 private fun CompactMatchHeader(
     match: Match?,
     state: MatchState,
-    consoleState: ScoringConsoleState
+    consoleState: ScoringConsoleState,
+    onPreviewMatch: () -> Unit = {}
 ) {
     if (match == null) return
     Surface(
@@ -606,6 +610,17 @@ private fun CompactMatchHeader(
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                     )
+                    IconButton(
+                        onClick = onPreviewMatch,
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Visibility,
+                            contentDescription = "Preview Match",
+                            modifier = Modifier.size(20.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
             // --- Chase subtitle (2nd innings only) ---

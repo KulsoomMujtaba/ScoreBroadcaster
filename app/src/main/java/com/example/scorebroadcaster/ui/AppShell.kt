@@ -74,7 +74,7 @@ private fun selectedTab(route: String?): BottomNavTab? = when (route) {
     BottomNavTab.HOME.route -> BottomNavTab.HOME
     BottomNavTab.MATCHES.route, "create_match", "player_setup", "match_summary", "match_details"
         -> BottomNavTab.MATCHES
-    BottomNavTab.SCORE.route, "scoring_only", "scorecard", "ball_timeline" -> BottomNavTab.SCORE
+    BottomNavTab.SCORE.route, "scoring_only", "scorecard", "ball_timeline", "match_preview" -> BottomNavTab.SCORE
     BottomNavTab.LIVE.route, "live_preview", "stream_setup", "stream_preview" -> BottomNavTab.LIVE
     else -> null
 }
@@ -90,6 +90,7 @@ private fun topBarTitle(route: String?): String = when (route) {
     "match_details" -> "Match Details"
     "scorecard" -> "Scorecard"
     "ball_timeline" -> "Over History"
+    "match_preview" -> "Match Preview"
     "live_preview" -> "Camera Preview"
     "stream_setup" -> "Stream Setup"
     "stream_preview" -> "Go Live"

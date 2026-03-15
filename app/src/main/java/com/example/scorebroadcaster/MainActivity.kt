@@ -21,6 +21,7 @@ import com.example.scorebroadcaster.ui.CreateMatchScreen
 import com.example.scorebroadcaster.ui.HomeScreen
 import com.example.scorebroadcaster.ui.LiveHubScreen
 import com.example.scorebroadcaster.ui.MatchDetailsScreen
+import com.example.scorebroadcaster.ui.MatchPreviewScreen
 import com.example.scorebroadcaster.ui.MatchSummaryScreen
 import com.example.scorebroadcaster.ui.MyMatchesScreen
 import com.example.scorebroadcaster.ui.PlayerSetupScreen
@@ -137,7 +138,8 @@ class MainActivity : ComponentActivity() {
                                     onMatchDetails = { navController.navigate("match_details") },
                                     onViewScorecard = { navController.navigate("scorecard") },
                                     onCameraPreview = { navController.navigate("live_preview") },
-                                    onViewTimeline = { navController.navigate("ball_timeline") }
+                                    onViewTimeline = { navController.navigate("ball_timeline") },
+                                    onPreviewMatch = { navController.navigate("match_preview") }
                                 )
                             } else {
                                 ScoreEmptyState(
@@ -237,6 +239,14 @@ class MainActivity : ComponentActivity() {
                             )
                         }
 
+                        // ---- Match Preview ----
+
+                        composable("match_preview") {
+                            MatchPreviewScreen(
+                                matchViewModel = matchViewModel
+                            )
+                        }
+
                         // ---- Saved Teams ----
 
                         composable("saved_teams") {
@@ -264,7 +274,8 @@ class MainActivity : ComponentActivity() {
                                 onMatchDetails = { navController.navigate("match_details") },
                                 onViewScorecard = { navController.navigate("scorecard") },
                                 onCameraPreview = { navController.navigate("live_preview") },
-                                onViewTimeline = { navController.navigate("ball_timeline") }
+                                onViewTimeline = { navController.navigate("ball_timeline") },
+                                onPreviewMatch = { navController.navigate("match_preview") }
                             )
                         }
 
