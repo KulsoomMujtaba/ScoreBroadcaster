@@ -491,6 +491,26 @@ Scoring is modelled as an append-only event log:
 
 ## Development Log
 
+### 2026-03-15 – Create Match Flow Refactor
+
+**What changed**
+
+- **Removed manual Match Title field** — the free-text Match Title input has been removed from `CreateMatchScreen`. The match title is now automatically derived from the selected team names: `"Team A vs Team B"` (e.g. `"Karachi Kings vs Lahore Qalandars"`). This derived title is stored on the `Match` entity and used in the Match Summary screen, Scoring screen, and My Matches list.
+- **Removed team swap functionality** — the swap icon/button and the swap logic that swapped Team A and Team B have been removed. Users select the correct teams directly.
+- **Converted Create Match to a step-based flow** — the single long form is replaced by a three-step wizard:
+  - **Step 1 — Teams**: Select Team A and Team B.
+  - **Step 2 — Match Format**: Choose T20 / T10 / ODI / Tape Ball / Custom (with overs input if Custom).
+  - **Step 3 — Toss**: Select the toss winner and batting/bowling decision.
+  - Each step shows a *Back* / *Next* (or *Create Match*) navigation row, reducing cognitive load.
+- **Improved team selection UI** — the simple dropdown fields are replaced by tappable `OutlinedCard` components. Each card displays the team label ("Team A" / "Team B"), and once a team is selected, shows the team name and player count inline. Tapping the card opens the existing dropdown with saved teams and a "＋ Create new team" option. The same-team exclusion filter is preserved: if Team A is already selected, the Team B picker hides that team.
+
+**Files changed:**
+
+| File | Action |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/ui/CreateMatchScreen.kt` | Refactored |
+| `README.md` | Updated |
+
 ### 2026-03-15 – Bug Fix: Stable Undo After First Ball
 
 **Problem**
