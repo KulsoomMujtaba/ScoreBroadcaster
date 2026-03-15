@@ -13,6 +13,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -82,6 +85,7 @@ import com.example.scorebroadcaster.data.entity.toMatchPlayer
 import com.example.scorebroadcaster.domain.BallEvent
 import com.example.scorebroadcaster.domain.BallTimelineFormatter
 import com.example.scorebroadcaster.domain.IndexedBall
+import com.example.scorebroadcaster.domain.OverSummary
 import com.example.scorebroadcaster.domain.OverSummaryCalculator
 import com.example.scorebroadcaster.viewmodel.MatchViewModel
 import com.example.scorebroadcaster.viewmodel.MatchSessionViewModel
@@ -242,8 +246,8 @@ fun ScoringScreen(
                 Spacer(modifier = Modifier.height(8.dp))
             }
 
-            // --- Current over balls ---
-            CurrentOverRow(balls = BallTimelineFormatter.getCurrentOverBalls(events))
+            // --- Innings ball history ribbon ---
+            BallHistoryRibbon(overs = BallTimelineFormatter.groupByOver(events))
             Spacer(modifier = Modifier.height(12.dp))
 
             // --- Current players card ---
@@ -847,53 +851,96 @@ private fun ChaseInfoItem(label: String, value: String) {
 }
 
 // =============================================================================
-// Current over row
+// Innings ball history ribbon
 // =============================================================================
 
+/**
+ * A horizontally scrollable ribbon showing the full innings ball history grouped by over.
+ *
+ * Each over is rendered as a compact [OverBlock] containing a small over-number label and a
+ * row of colour-coded ball chips. The ribbon automatically scrolls to the latest over as new
+ * deliveries are recorded, while still allowing the scorer to scroll back to inspect earlier overs.
+ */
 @Composable
-private fun CurrentOverRow(balls: List<IndexedBall>) {
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalAlignment = Alignment.Start
-    ) {
+private fun BallHistoryRibbon(overs: List<OverSummary>) {
+    val listState = rememberLazyListState()
+
+    // Auto-scroll to the latest over block whenever the over list changes
+    LaunchedEffect(overs.size, overs.lastOrNull()?.balls?.size) {
+        if (overs.isNotEmpty()) {
+            listState.animateScrollToItem(overs.lastIndex)
+        }
+    }
+
+    Column(modifier = Modifier.fillMaxWidth()) {
         Text(
-            text = "Current Over",
+            text = "This Innings",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Spacer(modifier = Modifier.height(4.dp))
-        Box(
-            modifier = Modifier.fillMaxWidth(),
-            contentAlignment = Alignment.Center
-        ) {
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                balls.forEach { indexedBall ->
-                    val label = OverSummaryCalculator.ballLabel(indexedBall.event)
-                    val bgColor = when {
-                        label == "W" || label.endsWith("W") -> MaterialTheme.colorScheme.error
-                        label == "4" -> MaterialTheme.colorScheme.secondaryContainer
-                        // BoundarySixContainer is a cricket-domain semantic colour (dark green emphasis
-                        // for a six) that has no equivalent standard M3 role in our scheme — it is used
-                        // directly here and in BallTimelineScreen to keep the design intent explicit.
-                        label == "6" -> BoundarySixContainer
-                        label.startsWith("Wd") || label.startsWith("Nb") -> MaterialTheme.colorScheme.tertiaryContainer
-                        else -> MaterialTheme.colorScheme.surfaceVariant
-                    }
-                    val textColor = when {
-                        label == "W" || label.endsWith("W") -> MaterialTheme.colorScheme.onError
-                        label == "4" -> MaterialTheme.colorScheme.onSecondaryContainer
-                        label == "6" -> OnBoundarySixContainer
-                        label.startsWith("Wd") || label.startsWith("Nb") -> MaterialTheme.colorScheme.onTertiaryContainer
-                        else -> MaterialTheme.colorScheme.onSurfaceVariant
-                    }
-                    Surface(color = bgColor, shape = MaterialTheme.shapes.small) {
-                        Text(
-                            text = label,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                            color = textColor,
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                    }
+        if (overs.isEmpty()) {
+            Text(
+                text = "No balls bowled yet",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+            )
+        } else {
+            LazyRow(
+                state = listState,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                items(overs) { over ->
+                    OverBlock(over)
+                }
+            }
+        }
+    }
+}
+
+/**
+ * A compact block displaying a single over's number and its ball chips in a row.
+ */
+@Composable
+private fun OverBlock(over: OverSummary) {
+    Column(
+        modifier = Modifier.wrapContentHeight(),
+        horizontalAlignment = Alignment.Start,
+        verticalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        Text(
+            text = "${over.overNumber}:",
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            over.balls.forEach { indexedBall ->
+                val label = OverSummaryCalculator.ballLabel(indexedBall.event)
+                val bgColor = when {
+                    label == "W" || label.endsWith("W") -> MaterialTheme.colorScheme.error
+                    label == "4" -> MaterialTheme.colorScheme.secondaryContainer
+                    // BoundarySixContainer is a cricket-domain semantic colour (dark green emphasis
+                    // for a six) that has no equivalent standard M3 role in our scheme — it is used
+                    // directly here and in BallTimelineScreen to keep the design intent explicit.
+                    label == "6" -> BoundarySixContainer
+                    label.startsWith("Wd") || label.startsWith("Nb") -> MaterialTheme.colorScheme.tertiaryContainer
+                    else -> MaterialTheme.colorScheme.surfaceVariant
+                }
+                val textColor = when {
+                    label == "W" || label.endsWith("W") -> MaterialTheme.colorScheme.onError
+                    label == "4" -> MaterialTheme.colorScheme.onSecondaryContainer
+                    label == "6" -> OnBoundarySixContainer
+                    label.startsWith("Wd") || label.startsWith("Nb") -> MaterialTheme.colorScheme.onTertiaryContainer
+                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+                }
+                Surface(color = bgColor, shape = MaterialTheme.shapes.small) {
+                    Text(
+                        text = label,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                        color = textColor,
+                        style = MaterialTheme.typography.bodySmall
+                    )
                 }
             }
         }

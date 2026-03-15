@@ -179,6 +179,46 @@ The core promise is simple: open the app, start a match, score every ball, and s
 
 ---
 
+## UI Improvement: Horizontal Ball History on Scoring Screen
+
+### What changed
+
+- **ScoringScreen** now shows a `BallHistoryRibbon` labelled **"This Innings"** instead of the
+  previous `CurrentOverRow` that tracked only the current over's deliveries.
+- The ribbon is a horizontally scrollable `LazyRow` of compact over blocks.  Each block shows
+  the over number (e.g. `15:`) as a small bold label and a row of colour-coded ball chips below
+  it — giving a clear visual boundary between overs.
+- The ribbon automatically scrolls to the latest over as each new delivery is recorded; the
+  scorer can still scroll back to inspect any earlier over.
+- Chip colours are unchanged: W / run-out = error red, 4 = secondary container, 6 = dark green,
+  Wd / Nb = tertiary/amber, all others = surface variant.
+
+### How it works
+
+- `BallTimelineFormatter.groupByOver(events)` (existing helper) is called directly, returning
+  one `OverSummary` per over (completed or in-progress) for the current innings.
+- `BallHistoryRibbon` renders those summaries in a `LazyRow`; each item is an `OverBlock`
+  composable containing the over label and its ball chips.
+- A `LaunchedEffect` keyed on the over count and the size of the latest over triggers
+  `animateScrollToItem(overs.lastIndex)` to keep the newest over visible.
+- Ball labels reuse `OverSummaryCalculator.ballLabel` for consistent compact notation.
+
+### What did NOT change
+
+- `ScoreReducer`, `MatchState.lastBalls`, `BallEvent` structure — untouched.
+- `BallTimelineScreen` / scorecard logic / over counting rules — untouched.
+- `BroadcastOverlayMapper` / streaming overlay — untouched.
+- `BallTimelineFormatter.groupByOver` — reused as-is, no duplication of logic.
+
+### Files changed
+
+| File | Action |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/ui/ScoringScreen.kt` | Replaced `CurrentOverRow` with `BallHistoryRibbon` + `OverBlock`; updated call site |
+| `README.md` | Added this development log entry |
+
+---
+
 ## UI Improvement: Current Over Display on Scoring Screen
 
 ### What changed
