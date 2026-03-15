@@ -300,6 +300,45 @@ The core promise is simple: open the app, start a match, score every ball, and s
 
 ---
 
+## Feature: Match Preview Screen
+
+### What changed
+
+- **MatchPreviewScreen** added as a new read-only, spectator-style scoreboard screen:
+  - Accessible via the **Preview icon** (`Icons.Default.Visibility`) in the `CompactMatchHeader` on `ScoringScreen` (top-right of the live score area).
+  - Shows live match data from the same `MatchViewModel` state flows used by `ScoringScreen` — no duplication of scoring logic.
+  - Presents a clean, card-based broadcast scoreboard layout with generous spacing and larger typography.
+
+- **Screen sections:**
+  - **Score header card**: Match title (Team A vs Team B), batting team name, large `runs/wickets` score, overs, and target/chase info (second innings only — target, runs needed, balls remaining).
+  - **Run rate panel**: Current Run Rate always shown; Required Run Rate also shown when chasing.
+  - **Batters section**: Striker (marked with ★ and bold name) and non-striker with runs, balls, 4s, and 6s.
+  - **Bowler section**: Bowler name with overs–runs–wickets summary line.
+  - **Current over display**: Ball chips using the same colour scheme as `ScoringScreen` (W=red, 4=secondary-green, 6=dark-green, Wd/Nb=amber, others=surface-variant), sized slightly larger for readability.
+  - **Recent event highlight**: "Last Ball" banner showing FOUR / SIX / WICKET / WIDE / NO BALL / DOT / N RUNS, colour-matched to the delivery type.
+
+- **No scoring controls**: Run buttons, extras, undo, swap-strike, bowler-change controls, and setup dialogs are absent. The screen is strictly read-only.
+
+- **Navigation route** `match_preview` added to `MainActivity` NavHost (grouped under the Score tab in `AppShell`).
+
+### What did NOT change
+
+- `ScoreReducer`, `MatchViewModel` scoring logic, `BallEvent` model — untouched.
+- Repository and database logic — untouched.
+- All existing screens and their routing — untouched (only `onPreviewMatch` callback added to `ScoringScreen`).
+
+### Files changed
+
+| File | Action |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/ui/MatchPreviewScreen.kt` | Created – spectator-style preview composable |
+| `app/src/main/java/com/example/scorebroadcaster/ui/ScoringScreen.kt` | Updated – added `onPreviewMatch` callback and `Visibility` icon button in `CompactMatchHeader` |
+| `app/src/main/java/com/example/scorebroadcaster/ui/AppShell.kt` | Updated – added `match_preview` to tab-selection and title maps |
+| `app/src/main/java/com/example/scorebroadcaster/MainActivity.kt` | Updated – added `match_preview` route; wired `onPreviewMatch` in both `ScoringScreen` call sites |
+| `README.md` | Updated – this development log entry |
+
+---
+
 ## Phase 1 Refactor Notes
 
 Phase 1 converts the existing **ScoreBroadcaster** prototype into the **Scored** product foundation without removing or breaking any existing functionality.
