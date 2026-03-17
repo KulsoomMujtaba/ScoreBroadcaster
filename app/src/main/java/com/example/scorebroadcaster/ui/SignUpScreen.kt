@@ -64,6 +64,12 @@ fun SignUpScreen(
     var passwordError by remember { mutableStateOf<String?>(null) }
     var confirmPasswordError by remember { mutableStateOf<String?>(null) }
 
+    val trimmedEmail = email.trim()
+    val isEmailValid = trimmedEmail.isNotEmpty() && isValidEmailAddress(trimmedEmail)
+    val isPasswordValid = password.isNotBlank()
+    val isConfirmPasswordValid = confirmPassword.isNotBlank() && confirmPassword == password
+    val canSubmit = !isLoading && isEmailValid && isPasswordValid && isConfirmPasswordValid
+
     Box(
         modifier = modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
@@ -93,7 +99,12 @@ fun SignUpScreen(
                 value = email,
                 onValueChange = {
                     email = it
-                    emailError = null
+                    val trimmed = it.trim()
+                    emailError = when {
+                        trimmed.isEmpty() -> null
+                        !isValidEmailAddress(trimmed) -> "Enter a valid email address"
+                        else -> null
+                    }
                     authViewModel.clearError()
                 },
                 label = { Text("Email") },
@@ -174,7 +185,11 @@ fun SignUpScreen(
 
             Button(
                 onClick = {
-                    emailError = if (email.isBlank()) "Email is required" else null
+                    emailError = when {
+                        trimmedEmail.isBlank() -> "Email is required"
+                        !isValidEmailAddress(trimmedEmail) -> "Enter a valid email address"
+                        else -> null
+                    }
                     passwordError = if (password.isBlank()) "Password is required" else null
                     confirmPasswordError = when {
                         confirmPassword.isBlank() -> "Please confirm your password"
@@ -182,10 +197,10 @@ fun SignUpScreen(
                         else -> null
                     }
                     if (emailError == null && passwordError == null && confirmPasswordError == null) {
-                        authViewModel.signUp(email.trim(), password)
+                        authViewModel.signUp(trimmedEmail, password)
                     }
                 },
-                enabled = !isLoading,
+                enabled = canSubmit,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 if (isLoading) {
