@@ -491,6 +491,28 @@ Scoring is modelled as an append-only event log:
 
 ## Development Log
 
+### 2026-03-17 – Backend Setup: Supabase Auth
+
+**What changed**
+
+- Added email/password sign up and sign in using Supabase Auth (`signUpWith(Email)` / `signInWith(Email)`).
+- Added session restore on app launch — authenticated users skip the sign-in screen entirely.
+- Added sign out flow accessible from the side navigation drawer.
+- App is now auth-gated: unauthenticated users see the Sign In / Sign Up flow; authenticated users enter the main app directly.
+
+**Files changed:**
+
+| File | Action |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/viewmodel/AuthViewModel.kt` | Created |
+| `app/src/main/java/com/example/scorebroadcaster/ui/SignInScreen.kt` | Created |
+| `app/src/main/java/com/example/scorebroadcaster/ui/SignUpScreen.kt` | Created |
+| `app/src/main/java/com/example/scorebroadcaster/ui/AppShell.kt` | Updated — added Sign Out item to drawer |
+| `app/src/main/java/com/example/scorebroadcaster/MainActivity.kt` | Updated — auth-gated root navigation |
+| `README.md` | Updated |
+
+---
+
 ### 2026-03-15 – Create Match Flow Refactor
 
 **What changed**
