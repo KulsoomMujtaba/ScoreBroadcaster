@@ -1,0 +1,17 @@
+package com.example.scorebroadcaster.features.scoring.data
+
+import com.example.scorebroadcaster.features.teams.data.Team
+data class MatchState(
+    val teamAName: String = "Team A",
+    val teamBName: String = "Team B",
+    val runs: Int = 0,
+    val wickets: Int = 0,
+    val overs: Int = 0,
+    val balls: Int = 0,
+    val lastBalls: List<String> = emptyList(),
+    val extras: Int = 0,
+    val wides: Int = 0,
+    val noBalls: Int = 0,
+    val byes: Int = 0,
+    val legByes: Int = 0
+)

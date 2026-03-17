@@ -491,6 +491,40 @@ Scoring is modelled as an append-only event log:
 
 ## Development Log
 
+### 2026-03-17 – Refactor: Feature-Based Project Structure
+
+**What changed**
+
+- Migrated from layer-based to feature-based (modular) architecture.
+- All source files are now grouped by feature, with each feature owning its UI, ViewModels, and data layers.
+- Introduced a `core/` module for shared infrastructure (Supabase client, theme).
+- Navigation shell (`AppShell.kt`) extracted to a dedicated `navigation/` package.
+
+**New structure:**
+
+```
+com.example.scorebroadcaster/
+├── core/
+│   ├── supabase/        ← SupabaseClientProvider
+│   └── theme/           ← Color, Theme, Type
+├── navigation/          ← AppShell
+└── features/
+    ├── auth/            ← SignInScreen, SignUpScreen, AuthViewModel
+    ├── scoring/         ← ScoringScreen, MatchViewModel, ScoreReducer, BallEvent …
+    ├── match/           ← CreateMatchScreen, MatchSessionViewModel, Match …
+    ├── teams/           ← SavedTeamsScreen, SavedTeamRepository …
+    ├── players/         ← PlayerPickerDialog, SavedPlayerRepository …
+    ├── streaming/       ← StreamSetupScreen, LiveStreamViewModel, RtmpLiveStreamer …
+    └── home/            ← HomeScreen, LiveHubScreen
+```
+
+**Files modified:**
+
+All 79 Kotlin source files were moved to feature-based packages. Package declarations and all
+cross-package imports were updated accordingly. No business logic was changed.
+
+---
+
 ### 2026-03-17 – Backend Setup: Supabase Auth
 
 **What changed**
