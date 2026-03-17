@@ -6,16 +6,23 @@ import io.github.jan.supabase.postgrest.Postgrest
 
 object SupabaseClientProvider {
 
-    val client by lazy {
-        require(BuildConfig.SUPABASE_URL.isNotEmpty()) {
-            "SUPABASE_URL is not set. Add it to local.properties."
-        }
-        require(BuildConfig.SUPABASE_ANON_KEY.isNotEmpty()) {
-            "SUPABASE_ANON_KEY is not set. Add it to local.properties."
-        }
+    private val supabaseUrl: String
+        get() = BuildConfig.SUPABASE_URL.trim()
+
+    private val supabaseAnonKey: String
+        get() = BuildConfig.SUPABASE_ANON_KEY.trim()
+
+    val isConfigured: Boolean
+        get() = supabaseUrl.isNotEmpty() && supabaseAnonKey.isNotEmpty()
+
+    val missingConfigMessage: String
+        get() = "Supabase is not configured. Add SUPABASE_URL and SUPABASE_ANON_KEY to local.properties."
+
+    val clientOrNull by lazy {
+        if (!isConfigured) return@lazy null
         createSupabaseClient(
-            supabaseUrl = BuildConfig.SUPABASE_URL,
-            supabaseKey = BuildConfig.SUPABASE_ANON_KEY
+            supabaseUrl = supabaseUrl,
+            supabaseKey = supabaseAnonKey
         ) {
             install(Auth)
             install(Postgrest)

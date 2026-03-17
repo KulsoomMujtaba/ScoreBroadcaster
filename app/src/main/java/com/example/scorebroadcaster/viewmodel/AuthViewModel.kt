@@ -24,7 +24,7 @@ import kotlinx.coroutines.launch
  */
 class AuthViewModel : ViewModel() {
 
-    private val auth get() = SupabaseClientProvider.client.auth
+    private val auth get() = SupabaseClientProvider.clientOrNull?.auth
 
     // True once the initial session-restore check has completed.
     private val _isSessionChecked = MutableStateFlow(false)
@@ -47,16 +47,23 @@ class AuthViewModel : ViewModel() {
     }
 
     /**
-     * Collects [auth.sessionStatus] to keep [isAuthenticated] and [isSessionChecked] up to date.
+     * Collects Supabase session status to keep [isAuthenticated] and [isSessionChecked] up to date.
      * The first non-loading status marks the session check as complete.
      */
     private fun observeSession() {
+        val authClient = auth
+        if (authClient == null) {
+            _authError.value = SupabaseClientProvider.missingConfigMessage
+            _isSessionChecked.value = true
+            return
+        }
+
         viewModelScope.launch {
-            auth.sessionStatus.collect { status ->
+            authClient.sessionStatus.collect { status ->
                 when (status) {
                     is SessionStatus.Authenticated -> {
                         _isAuthenticated.value = true
-                        _currentUserEmail.value = auth.currentUserOrNull()?.email
+                        _currentUserEmail.value = authClient.currentUserOrNull()?.email
                         _isSessionChecked.value = true
                     }
                     is SessionStatus.NotAuthenticated -> {
@@ -78,11 +85,17 @@ class AuthViewModel : ViewModel() {
     }
 
     fun signIn(email: String, password: String) {
+        val authClient = auth
+        if (authClient == null) {
+            _authError.value = SupabaseClientProvider.missingConfigMessage
+            return
+        }
+
         viewModelScope.launch {
             _isLoading.value = true
             _authError.value = null
             try {
-                auth.signInWith(Email) {
+                authClient.signInWith(Email) {
                     this.email = email
                     this.password = password
                 }
@@ -95,11 +108,17 @@ class AuthViewModel : ViewModel() {
     }
 
     fun signUp(email: String, password: String) {
+        val authClient = auth
+        if (authClient == null) {
+            _authError.value = SupabaseClientProvider.missingConfigMessage
+            return
+        }
+
         viewModelScope.launch {
             _isLoading.value = true
             _authError.value = null
             try {
-                auth.signUpWith(Email) {
+                authClient.signUpWith(Email) {
                     this.email = email
                     this.password = password
                 }
@@ -112,11 +131,17 @@ class AuthViewModel : ViewModel() {
     }
 
     fun signOut() {
+        val authClient = auth
+        if (authClient == null) {
+            _authError.value = SupabaseClientProvider.missingConfigMessage
+            return
+        }
+
         viewModelScope.launch {
             _isLoading.value = true
             _authError.value = null
             try {
-                auth.signOut()
+                authClient.signOut()
             } catch (e: Exception) {
                 _authError.value = mapAuthError(e)
             } finally {
