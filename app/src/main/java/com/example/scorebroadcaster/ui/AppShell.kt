@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.List
@@ -126,6 +127,7 @@ private val immersiveRoutes = setOf("live_preview", "stream_preview")
 @Composable
 fun AppShell(
     navController: NavController,
+    onSignOut: () -> Unit = {},
     modifier: Modifier = Modifier,
     content: @Composable (PaddingValues) -> Unit
 ) {
@@ -155,6 +157,10 @@ fun AppShell(
                     navController.navigate(route) {
                         launchSingleTop = true
                     }
+                },
+                onSignOut = {
+                    scope.launch { drawerState.close() }
+                    onSignOut()
                 }
             )
         }
@@ -225,6 +231,7 @@ fun AppShell(
 fun AppDrawer(
     currentRoute: String?,
     onNavigate: (String) -> Unit,
+    onSignOut: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     ModalDrawerSheet(modifier = modifier) {
@@ -297,6 +304,15 @@ fun AppDrawer(
             label = "About",
             selected = false,
             onClick = { /* placeholder – no-op until about screen is added */ }
+        )
+
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
+        DrawerNavItem(
+            icon = Icons.Default.ExitToApp,
+            label = "Sign Out",
+            selected = false,
+            onClick = onSignOut
         )
     }
 }
