@@ -1,7 +1,7 @@
 package com.example.scorebroadcaster.features.scoring.data
 
 import com.example.scorebroadcaster.features.players.data.Player
- *
+ /*
  * @param batter        The player who was dismissed.
  * @param dismissalType How the batter was dismissed.
  * @param fielders      Fielders involved in the dismissal.

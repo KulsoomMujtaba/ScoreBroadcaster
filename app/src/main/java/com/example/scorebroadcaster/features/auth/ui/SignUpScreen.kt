@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.scorebroadcaster.features.auth.viewmodel.AuthViewModel
+import com.example.scorebroadcaster.ui.isValidEmailAddress
 
 /**
  * Sign-up screen with email, password, and confirm-password fields.

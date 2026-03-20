@@ -30,7 +30,6 @@ import com.example.scorebroadcaster.features.match.ui.MyMatchesScreen
 import com.example.scorebroadcaster.features.match.ui.PlayerSetupScreen
 import com.example.scorebroadcaster.features.players.ui.MyPlayersScreen
 import com.example.scorebroadcaster.features.teams.ui.SavedTeamsScreen
-import com.example.scorebroadcaster.features.scoring.ui.ScoreEmptyState
 import com.example.scorebroadcaster.features.scoring.ui.ScorecardScreen
 import com.example.scorebroadcaster.features.scoring.ui.ScoringScreen
 import com.example.scorebroadcaster.features.auth.ui.SignInScreen
@@ -42,6 +41,7 @@ import com.example.scorebroadcaster.features.auth.viewmodel.AuthViewModel
 import com.example.scorebroadcaster.features.streaming.viewmodel.LiveStreamViewModel
 import com.example.scorebroadcaster.features.match.viewmodel.MatchSessionViewModel
 import com.example.scorebroadcaster.features.scoring.viewmodel.MatchViewModel
+import com.example.scorebroadcaster.navigation.ScoreEmptyState
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -107,7 +107,7 @@ class MainActivity : ComponentActivity() {
 
                         // Build a live score summary string when there is an ongoing scoring session.
                         val scoreSummary: String? =
-                            if (matchViewModel.activeMatch.value?.id == activeMatch?.id &&
+                            if (matchViewModel.activeMatch.collectAsState().value?.id == activeMatch?.id &&
                                 scoringConsole.phase != InningsPhase.SETUP &&
                                 scoringConsole.phase != InningsPhase.MATCH_COMPLETE &&
                                 activeMatch != null
@@ -179,7 +179,7 @@ class MainActivity : ComponentActivity() {
                                 composable("score_tab") {
                                     val match = activeMatch
                                     if (match != null) {
-                                        if (matchViewModel.activeMatch.value?.id != match.id) {
+                                        if (matchViewModel.activeMatch.collectAsState().value?.id != match.id) {
                                             matchViewModel.initFromMatch(match)
                                         }
                                         ScoringScreen(

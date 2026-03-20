@@ -1,4 +1,5 @@
 package com.example.scorebroadcaster.core.supabase
+import com.example.scorebroadcaster.BuildConfig
 import io.github.jan.supabase.auth.Auth
 import io.github.jan.supabase.createSupabaseClient
 import io.github.jan.supabase.postgrest.Postgrest

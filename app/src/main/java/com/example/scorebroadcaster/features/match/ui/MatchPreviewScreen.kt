@@ -36,6 +36,7 @@ import com.example.scorebroadcaster.features.scoring.domain.IndexedBall
 import com.example.scorebroadcaster.features.scoring.domain.OverSummaryCalculator
 import com.example.scorebroadcaster.core.theme.BoundarySixContainer
 import com.example.scorebroadcaster.core.theme.OnBoundarySixContainer
+import com.example.scorebroadcaster.features.scoring.ui.ScorecardFormatter
 import com.example.scorebroadcaster.features.scoring.viewmodel.MatchViewModel
 
 /**

@@ -1,6 +1,8 @@
 package com.example.scorebroadcaster.features.scoring.data
 
 import com.example.scorebroadcaster.features.teams.data.Team
+
+data class Innings(
     val number: Int,
     val battingTeam: Team,
     val bowlingTeam: Team,

@@ -2,6 +2,8 @@ package com.example.scorebroadcaster.features.scoring.data
 import android.util.Log
 import com.example.scorebroadcaster.features.match.data.Match
 import com.example.scorebroadcaster.features.match.data.MatchDao
+import com.example.scorebroadcaster.features.match.data.toDomain
+import com.example.scorebroadcaster.features.match.data.toEntity
 import com.example.scorebroadcaster.features.scoring.domain.BallEvent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
