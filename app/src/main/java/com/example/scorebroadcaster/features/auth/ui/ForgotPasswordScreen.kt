@@ -1,4 +1,5 @@
 package com.example.scorebroadcaster.features.auth.ui
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,18 +12,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -30,36 +27,40 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.scorebroadcaster.features.auth.viewmodel.AuthViewModel
+import com.example.scorebroadcaster.ui.isValidEmailAddress
 
 /**
- * Sign-in screen with email and password fields.
+ * Forgot-password screen.
  *
- * Validates input locally before delegating to [authViewModel].
- * Navigation to the main app happens automatically when [AuthViewModel.isAuthenticated]
- * becomes true (handled by the root NavHost in MainActivity).
+ * Lets the user enter their email address and request a Supabase password-reset
+ * link.  Displays a success message on send and an error message on failure.
+ * Loading state disables the button while the request is in-flight.
  */
 @Composable
-fun SignInScreen(
+fun ForgotPasswordScreen(
     authViewModel: AuthViewModel = viewModel(),
-    onNavigateToSignUp: () -> Unit,
-    onNavigateToForgotPassword: () -> Unit = {},
+    onNavigateToSignIn: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val isLoading by authViewModel.isLoading.collectAsStateWithLifecycle()
     val authError by authViewModel.authError.collectAsStateWithLifecycle()
+    val resetSuccess by authViewModel.resetSuccess.collectAsStateWithLifecycle()
 
     var email by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
-    var passwordVisible by remember { mutableStateOf(false) }
     var emailError by remember { mutableStateOf<String?>(null) }
-    var passwordError by remember { mutableStateOf<String?>(null) }
+
+    // Clear transient VM state when leaving the screen.
+    DisposableEffect(Unit) {
+        onDispose {
+            authViewModel.clearError()
+            authViewModel.clearResetSuccess()
+        }
+    }
 
     Box(
         modifier = modifier.fillMaxSize(),
@@ -74,70 +75,43 @@ fun SignInScreen(
             verticalArrangement = Arrangement.Center
         ) {
             Text(
-                text = "Scored",
-                style = MaterialTheme.typography.displayMedium,
+                text = "Reset Password",
+                style = MaterialTheme.typography.headlineMedium,
                 color = MaterialTheme.colorScheme.primary
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "Sign in to continue",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                text = "Enter your email address and we'll send you a link to reset your password.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
             )
-            Spacer(modifier = Modifier.height(40.dp))
+            Spacer(modifier = Modifier.height(32.dp))
 
             OutlinedTextField(
                 value = email,
                 onValueChange = {
                     email = it
-                    emailError = null
+                    val trimmed = it.trim()
+                    emailError = when {
+                        trimmed.isEmpty() -> null
+                        !isValidEmailAddress(trimmed) -> "Enter a valid email address"
+                        else -> null
+                    }
                     authViewModel.clearError()
+                    authViewModel.clearResetSuccess()
                 },
                 label = { Text("Email") },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
                 isError = emailError != null,
                 supportingText = emailError?.let { err -> { Text(err) } },
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !isLoading && !resetSuccess
             )
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
-            OutlinedTextField(
-                value = password,
-                onValueChange = {
-                    password = it
-                    passwordError = null
-                    authViewModel.clearError()
-                },
-                label = { Text("Password") },
-                singleLine = true,
-                visualTransformation = if (passwordVisible) VisualTransformation.None
-                else PasswordVisualTransformation(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                trailingIcon = {
-                    IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                        Icon(
-                            imageVector = if (passwordVisible) Icons.Default.VisibilityOff
-                            else Icons.Default.Visibility,
-                            contentDescription = if (passwordVisible) "Hide password"
-                            else "Show password"
-                        )
-                    }
-                },
-                isError = passwordError != null,
-                supportingText = passwordError?.let { err -> { Text(err) } },
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-
-            TextButton(
-                onClick = onNavigateToForgotPassword,
-                modifier = Modifier.align(Alignment.End)
-            ) {
-                Text("Forgot Password?")
-            }
-            Spacer(modifier = Modifier.height(4.dp))
-
+            // ── Error message ─────────────────────────────────────────────────
             authError?.let { error ->
                 Text(
                     text = error,
@@ -149,15 +123,31 @@ fun SignInScreen(
                 Spacer(modifier = Modifier.height(8.dp))
             }
 
+            // ── Success message ───────────────────────────────────────────────
+            if (resetSuccess) {
+                Text(
+                    text = "Password reset link sent. Check your email.",
+                    color = MaterialTheme.colorScheme.primary,
+                    style = MaterialTheme.typography.bodyMedium,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+
             Button(
                 onClick = {
-                    emailError = if (email.isBlank()) "Email is required" else null
-                    passwordError = if (password.isBlank()) "Password is required" else null
-                    if (emailError == null && passwordError == null) {
-                        authViewModel.signIn(email.trim(), password)
+                    val trimmed = email.trim()
+                    emailError = when {
+                        trimmed.isBlank() -> "Email is required"
+                        !isValidEmailAddress(trimmed) -> "Enter a valid email address"
+                        else -> null
+                    }
+                    if (emailError == null) {
+                        authViewModel.sendPasswordResetEmail(trimmed)
                     }
                 },
-                enabled = !isLoading,
+                enabled = !isLoading && !resetSuccess,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 if (isLoading) {
@@ -167,13 +157,13 @@ fun SignInScreen(
                         color = MaterialTheme.colorScheme.onPrimary
                     )
                 } else {
-                    Text("Sign In")
+                    Text("Send Reset Link")
                 }
             }
             Spacer(modifier = Modifier.height(4.dp))
 
-            TextButton(onClick = onNavigateToSignUp) {
-                Text("Don't have an account? Sign Up")
+            TextButton(onClick = onNavigateToSignIn) {
+                Text("Back to Sign In")
             }
         }
     }

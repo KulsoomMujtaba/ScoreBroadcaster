@@ -2,6 +2,7 @@ package com.example.scorebroadcaster.features.auth.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.scorebroadcaster.core.supabase.SupabaseClientProvider
+import com.example.scorebroadcaster.features.auth.data.AuthErrorMapper
 import com.example.scorebroadcaster.features.auth.data.ProfileRepository
 import com.example.scorebroadcaster.features.auth.data.UserProfile
 import io.github.jan.supabase.auth.auth
@@ -46,6 +47,9 @@ class AuthViewModel : ViewModel() {
 
     private val _authError = MutableStateFlow<String?>(null)
     val authError: StateFlow<String?> = _authError.asStateFlow()
+
+    private val _resetSuccess = MutableStateFlow(false)
+    val resetSuccess: StateFlow<Boolean> = _resetSuccess.asStateFlow()
 
     init {
         observeSession()
@@ -184,22 +188,31 @@ class AuthViewModel : ViewModel() {
         _authError.value = null
     }
 
-    private fun mapAuthError(e: Exception): String {
-        val message = e.message?.lowercase() ?: ""
-        return when {
-            "invalid" in message && ("email" in message || "password" in message) ||
-                    "invalid login credentials" in message ||
-                    "credentials" in message ->
-                "Invalid email or password."
-            "already registered" in message ||
-                    "already exists" in message ||
-                    "user already" in message ->
-                "An account with this email already exists."
-            "network" in message ||
-                    "timeout" in message ||
-                    "connect" in message ->
-                "Network error. Please check your connection."
-            else -> "Something went wrong. Please try again."
+    fun clearResetSuccess() {
+        _resetSuccess.value = false
+    }
+
+    fun sendPasswordResetEmail(email: String) {
+        val authClient = auth
+        if (authClient == null) {
+            _authError.value = SupabaseClientProvider.missingConfigMessage
+            return
+        }
+
+        viewModelScope.launch {
+            _isLoading.value = true
+            _authError.value = null
+            _resetSuccess.value = false
+            try {
+                authClient.resetPasswordForEmail(email)
+                _resetSuccess.value = true
+            } catch (e: Exception) {
+                _authError.value = AuthErrorMapper.map(e)
+            } finally {
+                _isLoading.value = false
+            }
         }
     }
+
+    private fun mapAuthError(e: Exception): String = AuthErrorMapper.map(e)
 }
