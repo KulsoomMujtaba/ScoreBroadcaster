@@ -525,6 +525,36 @@ cross-package imports were updated accordingly. No business logic was changed.
 
 ---
 
+### 2026-03-25 – Backend Setup: Profiles Layer
+
+**What changed**
+
+- Added Supabase `profiles` table linked to `auth.users` via a UUID primary key reference.
+- Enabled Row Level Security (RLS) on `profiles` — authenticated users can only read/write their own row.
+- Added `UserProfile` Kotlin model (`id`, `email`, `displayName`) with Kotlinx Serialization support.
+- Added `ProfileRepository` — handles upsert (idempotent create-or-update) and fetch of the current user's profile.
+- `AuthViewModel` now auto-upserts the profile row on every successful sign-in, sign-up, and session restore. Exposes `currentProfile` as a `StateFlow`.
+- Drawer header in `AppShell` now shows the signed-in user's email as confirmation the profile layer is wired up.
+
+**Files created:**
+
+| File | Action |
+|------|--------|
+| `supabase/migrations/20260325_create_profiles.sql` | Created — profiles table, RLS enable, three RLS policies |
+| `app/src/main/java/com/example/scorebroadcaster/features/auth/data/UserProfile.kt` | Created |
+| `app/src/main/java/com/example/scorebroadcaster/features/auth/data/ProfileRepository.kt` | Created |
+
+**Files modified:**
+
+| File | Action |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/features/auth/viewmodel/AuthViewModel.kt` | Updated — added `currentProfile` state, `loadProfile()` on auth |
+| `app/src/main/java/com/example/scorebroadcaster/navigation/AppShell.kt` | Updated — drawer header shows signed-in email |
+| `app/src/main/java/com/example/scorebroadcaster/MainActivity.kt` | Updated — passes `signedInEmail` to `AppShell` |
+| `README.md` | Updated |
+
+---
+
 ### 2026-03-17 – Backend Setup: Supabase Auth
 
 **What changed**

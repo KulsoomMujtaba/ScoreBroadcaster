@@ -2,6 +2,8 @@ package com.example.scorebroadcaster.features.auth.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.scorebroadcaster.core.supabase.SupabaseClientProvider
+import com.example.scorebroadcaster.features.auth.data.ProfileRepository
+import com.example.scorebroadcaster.features.auth.data.UserProfile
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.providers.builtin.Email
 import io.github.jan.supabase.auth.status.SessionStatus
@@ -18,6 +20,7 @@ import kotlinx.coroutines.launch
  *   sign-in screen on cold start for already-authenticated users).
  * - [isAuthenticated] — true when a valid Supabase session is present.
  * - [currentUserEmail] — email of the signed-in user, or null.
+ * - [currentProfile] — the signed-in user's app-level profile, or null.
  * - [isLoading] — true while an auth network call is in-flight.
  * - [authError] — human-readable error message from the last failed operation, or null.
  */
@@ -35,6 +38,9 @@ class AuthViewModel : ViewModel() {
     private val _currentUserEmail = MutableStateFlow<String?>(null)
     val currentUserEmail: StateFlow<String?> = _currentUserEmail.asStateFlow()
 
+    private val _currentProfile = MutableStateFlow<UserProfile?>(null)
+    val currentProfile: StateFlow<UserProfile?> = _currentProfile.asStateFlow()
+
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
@@ -48,6 +54,9 @@ class AuthViewModel : ViewModel() {
     /**
      * Collects Supabase session status to keep [isAuthenticated] and [isSessionChecked] up to date.
      * The first non-loading status marks the session check as complete.
+     *
+     * When a session becomes [SessionStatus.Authenticated] the profile is automatically
+     * upserted (created on first sign-in, refreshed on subsequent logins / session restores).
      */
     private fun observeSession() {
         val authClient = auth
@@ -64,21 +73,43 @@ class AuthViewModel : ViewModel() {
                         _isAuthenticated.value = true
                         _currentUserEmail.value = authClient.currentUserOrNull()?.email
                         _isSessionChecked.value = true
+                        loadProfile()
                     }
                     is SessionStatus.NotAuthenticated -> {
                         _isAuthenticated.value = false
                         _currentUserEmail.value = null
+                        _currentProfile.value = null
                         _isSessionChecked.value = true
                     }
                     is SessionStatus.RefreshFailure -> {
                         _isAuthenticated.value = false
                         _currentUserEmail.value = null
+                        _currentProfile.value = null
                         _isSessionChecked.value = true
                     }
                     else -> {
                         // LoadingFromStorage or any future status — keep waiting.
                     }
                 }
+            }
+        }
+    }
+
+    /**
+     * Upserts the profile row for the currently signed-in user, then caches the
+     * result in [currentProfile].  Safe to call multiple times — the upsert is
+     * idempotent and will not create duplicates.
+     *
+     * Failures are surfaced through [authError] so callers are aware of backend
+     * issues (e.g. network outage, misconfigured Supabase keys).
+     */
+    private fun loadProfile() {
+        viewModelScope.launch {
+            val profile = ProfileRepository.upsertProfile()
+            if (profile != null) {
+                _currentProfile.value = profile
+            } else {
+                _authError.value = "Could not load your profile. Please check your connection."
             }
         }
     }

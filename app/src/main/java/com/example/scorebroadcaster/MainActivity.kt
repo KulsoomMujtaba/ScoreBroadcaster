@@ -122,6 +122,7 @@ class MainActivity : ComponentActivity() {
                         AppShell(
                             navController = navController,
                             onSignOut = { authViewModel.signOut() },
+                            signedInEmail = authViewModel.currentUserEmail.collectAsState().value,
                             modifier = Modifier.fillMaxSize()
                         ) { paddingValues ->
                             NavHost(
