@@ -129,6 +129,7 @@ private val immersiveRoutes = setOf("live_preview", "stream_preview")
 fun AppShell(
     navController: NavController,
     onSignOut: () -> Unit = {},
+    signedInEmail: String? = null,
     modifier: Modifier = Modifier,
     content: @Composable (PaddingValues) -> Unit
 ) {
@@ -153,6 +154,7 @@ fun AppShell(
         drawerContent = {
             AppDrawer(
                 currentRoute = currentRoute,
+                signedInEmail = signedInEmail,
                 onNavigate = { route ->
                     scope.launch { drawerState.close() }
                     navController.navigate(route) {
@@ -233,6 +235,7 @@ fun AppDrawer(
     currentRoute: String?,
     onNavigate: (String) -> Unit,
     onSignOut: () -> Unit = {},
+    signedInEmail: String? = null,
     modifier: Modifier = Modifier
 ) {
     ModalDrawerSheet(modifier = modifier) {
@@ -242,6 +245,14 @@ fun AppDrawer(
             style = MaterialTheme.typography.titleLarge,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
         )
+        if (signedInEmail != null) {
+            Text(
+                text = signedInEmail,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp)
+            )
+        }
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
         // Primary destinations
