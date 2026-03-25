@@ -491,6 +491,37 @@ Scoring is modelled as an append-only event log:
 
 ## Development Log
 
+### 2026-03-25 – Backend Setup: Forgot Password and Auth Error Handling
+
+**What changed**
+
+- Added Forgot Password flow using Supabase Auth (`resetPasswordForEmail`).
+- Added `ForgotPasswordScreen` — email input, Send Reset Link button, loading state, and inline success message.
+- Added `AuthErrorMapper` — converts raw Supabase/auth exceptions into concise, user-friendly messages.
+- Replaced the inline `mapAuthError` in `AuthViewModel` with a delegate call to `AuthErrorMapper`.
+- Improved error coverage: incorrect credentials, existing account, weak password, unconfirmed email, invalid email, network errors, and a safe fallback.
+- `SignInScreen` now has a "Forgot Password?" secondary action below the password field that navigates to `ForgotPasswordScreen`.
+- `AuthViewModel` exposes a new `resetSuccess: StateFlow<Boolean>` so the screen can show a success message without polling.
+- Auth nav graph in `MainActivity` extended with the new `forgot_password` route.
+
+**Files created:**
+
+| File | Action |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/features/auth/data/AuthErrorMapper.kt` | Created — auth error mapping helper |
+| `app/src/main/java/com/example/scorebroadcaster/features/auth/ui/ForgotPasswordScreen.kt` | Created — forgot password screen |
+
+**Files modified:**
+
+| File | Action |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/features/auth/viewmodel/AuthViewModel.kt` | Updated — `sendPasswordResetEmail`, `resetSuccess`, `clearResetSuccess`, delegates to `AuthErrorMapper` |
+| `app/src/main/java/com/example/scorebroadcaster/features/auth/ui/SignInScreen.kt` | Updated — added "Forgot Password?" link and `onNavigateToForgotPassword` callback |
+| `app/src/main/java/com/example/scorebroadcaster/MainActivity.kt` | Updated — added `forgot_password` composable route |
+| `README.md` | Updated |
+
+---
+
 ### 2026-03-17 – Refactor: Feature-Based Project Structure
 
 **What changed**

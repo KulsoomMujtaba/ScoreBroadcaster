@@ -31,6 +31,7 @@ import com.example.scorebroadcaster.features.match.ui.PlayerSetupScreen
 import com.example.scorebroadcaster.features.players.ui.MyPlayersScreen
 import com.example.scorebroadcaster.features.teams.ui.SavedTeamsScreen
 import com.example.scorebroadcaster.features.scoring.ui.ScorecardScreen
+import com.example.scorebroadcaster.features.auth.ui.ForgotPasswordScreen
 import com.example.scorebroadcaster.features.scoring.ui.ScoringScreen
 import com.example.scorebroadcaster.features.auth.ui.SignInScreen
 import com.example.scorebroadcaster.features.auth.ui.SignUpScreen
@@ -78,11 +79,24 @@ class MainActivity : ComponentActivity() {
                                         authNavController.navigate("sign_up") {
                                             launchSingleTop = true
                                         }
+                                    },
+                                    onNavigateToForgotPassword = {
+                                        authNavController.navigate("forgot_password") {
+                                            launchSingleTop = true
+                                        }
                                     }
                                 )
                             }
                             composable("sign_up") {
                                 SignUpScreen(
+                                    authViewModel = authViewModel,
+                                    onNavigateToSignIn = {
+                                        authNavController.popBackStack()
+                                    }
+                                )
+                            }
+                            composable("forgot_password") {
+                                ForgotPasswordScreen(
                                     authViewModel = authViewModel,
                                     onNavigateToSignIn = {
                                         authNavController.popBackStack()
