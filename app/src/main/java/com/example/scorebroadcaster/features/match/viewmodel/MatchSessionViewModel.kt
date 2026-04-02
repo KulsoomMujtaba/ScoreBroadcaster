@@ -109,14 +109,29 @@ class MatchSessionViewModel(application: Application) : AndroidViewModel(applica
             initialValue = emptyList()
         )
 
-    /** Persist a new private player profile. The StateFlow updates automatically via Room. */
+    /** Id of the currently authenticated user, set via [syncPlayersForUser]. */
+    private var currentUserId: String? = null
+
+    /** Persist a new private player profile locally and mirror it to Supabase when signed in. */
     fun addSavedPlayer(player: PlayerProfile) {
-        savedPlayerRepository.addPlayer(player)
+        savedPlayerRepository.addPlayer(player, currentUserId)
     }
 
     /** Remove a saved player profile by id. The StateFlow updates automatically via Room. */
     fun removeSavedPlayer(id: String) {
         savedPlayerRepository.removePlayer(id)
+    }
+
+    /**
+     * Trigger the one-way local → Supabase sync for the signed-in [userId].
+     *
+     * Safe to call multiple times (e.g. every time the profile loads); the sync
+     * strategy is idempotent.  Also stores [userId] so that subsequent calls to
+     * [addSavedPlayer] automatically mirror new players to Supabase.
+     */
+    fun syncPlayersForUser(userId: String) {
+        currentUserId = userId
+        savedPlayerRepository.syncWithRemote(userId)
     }
 
     // ---------------------------------------------------------------------------

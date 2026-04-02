@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -112,6 +113,13 @@ class MainActivity : ComponentActivity() {
                         val liveStreamViewModel: LiveStreamViewModel = viewModel()
                         val matchSessionViewModel: MatchSessionViewModel = viewModel()
                         val navController = rememberNavController()
+
+                        // Trigger player sync once the profile is available after sign-in.
+                        val currentProfile by authViewModel.currentProfile.collectAsState()
+                        LaunchedEffect(currentProfile) {
+                            val profileId = currentProfile?.id ?: return@LaunchedEffect
+                            matchSessionViewModel.syncPlayersForUser(profileId)
+                        }
 
                         val activeMatch by matchSessionViewModel.activeMatch.collectAsState()
                         val resumableMatch by matchSessionViewModel.resumableMatch.collectAsState()
