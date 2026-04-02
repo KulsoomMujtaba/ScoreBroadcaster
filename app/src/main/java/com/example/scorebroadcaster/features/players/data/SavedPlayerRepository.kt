@@ -20,12 +20,13 @@ import kotlinx.coroutines.launch
  *   Room writes are dispatched on the provided [scope] and the StateFlow updates
  *   automatically when Room confirms the change.
  * - Only [PlayerProfile.playerSourceType] == PRIVATE profiles are stored here today.
+ * - When a non-null [userId] is supplied to [addPlayer] or [syncWithRemote], the
+ *   repository also mirrors changes to Supabase via [SupabasePlayerRepository].
  */
 class SavedPlayerRepository(
     private val dao: PlayerProfileDao,
     private val scope: CoroutineScope
-) {
-    /** Reactive stream of all saved profiles, ordered by display name. */
+) {    /** Reactive stream of all saved profiles, ordered by display name. */
     val playerFlow: Flow<List<PlayerProfile>> = dao.observeAll()
         .map { entities -> entities.map { it.toDomain() } }
 
@@ -39,8 +40,17 @@ class SavedPlayerRepository(
     val players: List<PlayerProfile>
         get() = _state.value
 
-    fun addPlayer(player: PlayerProfile) {
-        scope.launch { dao.insert(player.toEntity()) }
+    /**
+     * Persist [player] locally and, when [userId] is provided, also insert it
+     * into Supabase asynchronously so the UI is never blocked.
+     */
+    fun addPlayer(player: PlayerProfile, userId: String? = null) {
+        scope.launch {
+            dao.insert(player.toEntity())
+            if (userId != null) {
+                SupabasePlayerRepository.insertRemotePlayer(player.toSupabasePlayer(userId))
+            }
+        }
     }
 
     fun removePlayer(id: String) {
@@ -55,4 +65,22 @@ class SavedPlayerRepository(
     }
 
     fun findById(id: String): PlayerProfile? = _state.value.find { it.id == id }
+
+    /**
+     * Run the one-way sync strategy for [userId]:
+     *
+     * 1. Read the current local snapshot.
+     * 2. Delegate to [SupabasePlayerRepository.syncLocalPlayersToRemote].
+     * 3. If the result is non-empty (local was empty → remote had data), insert
+     *    each remote player into the local Room database to hydrate it.
+     *
+     * All work is done off the main thread; callers do not need to suspend.
+     */
+    fun syncWithRemote(userId: String) {
+        scope.launch {
+            val local = dao.getAll().map { it.toDomain() }
+            val toHydrate = SupabasePlayerRepository.syncLocalPlayersToRemote(local, userId)
+            toHydrate.forEach { remote -> dao.insert(remote.toPlayerProfile().toEntity()) }
+        }
+    }
 }
