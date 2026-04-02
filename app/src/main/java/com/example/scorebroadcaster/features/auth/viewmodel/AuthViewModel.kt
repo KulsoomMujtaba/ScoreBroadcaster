@@ -109,10 +109,27 @@ class AuthViewModel : ViewModel() {
      */
     private fun loadProfile() {
         viewModelScope.launch {
-            val profile = ProfileRepository.upsertProfile()
-            if (profile != null) {
-                _currentProfile.value = profile
-            } else {
+            try {
+                android.util.Log.d("AuthViewModel", "loadProfile: starting profile sync")
+                val upserted = ProfileRepository.upsertProfile()
+                if (upserted != null) {
+                    // Prefer the server representation if available
+                    val server = ProfileRepository.getCurrentProfile() ?: upserted
+                    _currentProfile.value = server
+                    android.util.Log.d("AuthViewModel", "loadProfile: profile loaded: $server")
+                } else {
+                    android.util.Log.w("AuthViewModel", "loadProfile: upsert returned null; attempting to fetch existing profile")
+                    val server = ProfileRepository.getCurrentProfile()
+                    if (server != null) {
+                        _currentProfile.value = server
+                        android.util.Log.d("AuthViewModel", "loadProfile: fetched existing profile: $server")
+                    } else {
+                        _authError.value = "Could not load your profile. Please check your connection."
+                        android.util.Log.w("AuthViewModel", "loadProfile: no profile found after upsert attempt")
+                    }
+                }
+            } catch (t: Throwable) {
+                android.util.Log.e("AuthViewModel", "loadProfile failed", t)
                 _authError.value = "Could not load your profile. Please check your connection."
             }
         }

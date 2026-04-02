@@ -1,5 +1,6 @@
 package com.example.scorebroadcaster.features.auth.data
 
+import android.util.Log
 import com.example.scorebroadcaster.core.supabase.SupabaseClientProvider
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.postgrest.postgrest
@@ -16,6 +17,7 @@ import io.github.jan.supabase.postgrest.query.Columns
  */
 object ProfileRepository {
 
+    private const val TAG = "ProfileRepository"
     private val client get() = SupabaseClientProvider.clientOrNull
 
     private const val CONFLICT_COLUMN = "id"
@@ -25,15 +27,29 @@ object ProfileRepository {
      * configured, no user is signed in, or no profile row exists yet.
      */
     suspend fun getCurrentProfile(): UserProfile? {
-        val supabase = client ?: return null
-        val userId = supabase.auth.currentUserOrNull()?.id ?: return null
-        return runCatching {
-            supabase.postgrest["profiles"]
+        val supabase = client ?: run {
+            Log.w(TAG, "getCurrentProfile: Supabase client not configured")
+            return null
+        }
+        val userId = supabase.auth.currentUserOrNull()?.id
+        if (userId == null) {
+            Log.w(TAG, "getCurrentProfile: no auth user available")
+            return null
+        }
+
+        return try {
+            Log.d(TAG, "getCurrentProfile: fetching profile for userId=$userId")
+            val result = supabase.postgrest["profiles"]
                 .select(columns = Columns.ALL) {
                     filter { eq("id", userId) }
                 }
                 .decodeSingleOrNull<UserProfile>()
-        }.getOrNull()
+            Log.d(TAG, "getCurrentProfile: result=$result")
+            result
+        } catch (t: Throwable) {
+            Log.e(TAG, "getCurrentProfile failed", t)
+            null
+        }
     }
 
     /**
@@ -45,17 +61,37 @@ object ProfileRepository {
      * @return the resulting [UserProfile], or `null` on error / missing config.
      */
     suspend fun upsertProfile(): UserProfile? {
-        val supabase = client ?: return null
-        val authUser = supabase.auth.currentUserOrNull() ?: return null
-        val profile = UserProfile(
-            id = authUser.id,
-            email = authUser.email ?: return null
-        )
-        return runCatching {
-            supabase.postgrest["profiles"]
+        val supabase = client ?: run {
+            Log.w(TAG, "upsertProfile: Supabase client not configured")
+            return null
+        }
+        val authUser = supabase.auth.currentUserOrNull()
+        if (authUser == null) {
+            Log.w(TAG, "upsertProfile: no auth user available")
+            return null
+        }
+        val email = authUser.email
+        if (email.isNullOrBlank()) {
+            Log.w(TAG, "upsertProfile: auth user has no email (id=${authUser.id})")
+            return null
+        }
+
+        val profile = UserProfile(id = authUser.id, email = email)
+        return try {
+            Log.d(TAG, "upsertProfile: upserting profile for id=${profile.id}, email=${profile.email}")
+            val maybe = supabase.postgrest["profiles"]
                 .upsert(profile) { onConflict = CONFLICT_COLUMN }
                 .decodeSingleOrNull<UserProfile>()
-                ?: profile
-        }.getOrNull()
+            if (maybe == null) {
+                Log.d(TAG, "upsertProfile: upsert returned null — returning local profile")
+                profile
+            } else {
+                Log.d(TAG, "upsertProfile: result from server=$maybe")
+                maybe
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "upsertProfile failed", t)
+            null
+        }
     }
 }
