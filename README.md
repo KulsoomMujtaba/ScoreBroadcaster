@@ -491,6 +491,37 @@ Scoring is modelled as an append-only event log:
 
 ## Development Log
 
+### 2026-04-03 – UI Improvement: Portrait Overlay Layout
+
+**What changed**
+
+- Portrait mode overlay now shows team names + score/overs in a two-line format inside the center section:
+  - Line 1: team names (e.g. "Lions v Falcons") — slightly smaller text
+  - Line 2: score and overs (e.g. "177-2 • 28.5") — larger/bolder as primary info
+- Center section is center-aligned in portrait for better readability on narrow screens.
+
+**Why**
+
+- Portrait mode has less horizontal space; the previous single-row layout (match title + score + overs on one line) was harder to scan quickly in vertical video contexts.
+- The two-line hierarchy surfaces the most important information (score and overs) more prominently.
+
+**What did NOT change**
+
+- Landscape layout is completely unchanged — pixel-perfect same behavior.
+- No scoring or streaming logic was touched (ScoreReducer, MatchViewModel, RtmpLiveStreamer unmodified).
+- Overlay data source logic and the BroadcastOverlayMapper are unmodified.
+- Batter and bowler sections are unmodified in both orientations.
+
+**Files modified**
+
+| File | Action |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/features/streaming/ui/ScoreboardOverlay.kt` | Updated — portrait two-line center section (Compose) |
+| `app/src/main/java/com/example/scorebroadcaster/features/streaming/data/ScoreboardOverlayRenderer.kt` | Updated — portrait two-line center section (Canvas/stream) |
+| `README.md` | Updated |
+
+---
+
 ### 2026-03-25 – Backend Setup: Forgot Password and Auth Error Handling
 
 **What changed**

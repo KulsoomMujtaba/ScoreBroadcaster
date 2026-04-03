@@ -19,6 +19,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -201,14 +202,14 @@ private fun CenterScoreSection(
             .padding(horizontal = 6.dp, vertical = 2.dp),
         contentAlignment = Alignment.Center
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(1.dp)
-        ) {
-            // Line 1: matchTitle  score  overs – all on one row
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.CenterVertically
+        if (!isLandscape) {
+            // ── Portrait mode: two-line layout ──────────────────────────────────
+            // Line 1: team names (slightly smaller)
+            // Line 2: score + overs (larger/bolder – primary info)
+            val oversShort = model.overs.removeSuffix(" overs")
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
                 Text(
                     text = model.matchTitle,
@@ -216,50 +217,83 @@ private fun CenterScoreSection(
                     fontSize = smallFontSize,
                     fontWeight = FontWeight.Normal,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
                 )
                 Text(
-                    text = model.score,
+                    text = "${model.score} • $oversShort",
                     color = PrimaryText,
                     fontSize = scoreFontSize,
-                    fontWeight = FontWeight.ExtraBold
-                )
-                Text(
-                    text = model.overs,
-                    color = AccentColor,
-                    fontSize = smallFontSize
+                    fontWeight = FontWeight.ExtraBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
                 )
             }
-            // Line 2: run rate / chase info – label in muted grey, value in gold/white
-            val contextLine = model.contextLine ?: ""
-            if (contextLine.startsWith("RUN RATE ")) {
-                val rrValue = contextLine.removePrefix("RUN RATE ")
+        } else {
+            // ── Landscape mode: existing layout unchanged ────────────────────────
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(1.dp)
+            ) {
+                // Line 1: matchTitle  score  overs – all on one row
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(3.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "RR",
-                        color = SecondaryText,
+                        text = model.matchTitle,
+                        color = TeamNameColor,
                         fontSize = smallFontSize,
-                        fontWeight = FontWeight.SemiBold
+                        fontWeight = FontWeight.Normal,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                     Text(
-                        text = rrValue,
+                        text = model.score,
+                        color = PrimaryText,
+                        fontSize = scoreFontSize,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                    Text(
+                        text = model.overs,
                         color = AccentColor,
-                        fontSize = smallFontSize,
-                        fontWeight = FontWeight.SemiBold
+                        fontSize = smallFontSize
                     )
                 }
-            } else {
-                Text(
-                    text = contextLine,
-                    color = SecondaryText,
-                    fontSize = smallFontSize,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                // Line 2: run rate / chase info – label in muted grey, value in gold/white
+                val contextLine = model.contextLine ?: ""
+                if (contextLine.startsWith("RUN RATE ")) {
+                    val rrValue = contextLine.removePrefix("RUN RATE ")
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(3.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "RR",
+                            color = SecondaryText,
+                            fontSize = smallFontSize,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            text = rrValue,
+                            color = AccentColor,
+                            fontSize = smallFontSize,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                } else {
+                    Text(
+                        text = contextLine,
+                        color = SecondaryText,
+                        fontSize = smallFontSize,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
         }
     }
