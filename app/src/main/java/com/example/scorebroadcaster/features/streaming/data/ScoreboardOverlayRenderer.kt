@@ -241,23 +241,23 @@ class ScoreboardOverlayRenderer(
                 val centreX = leftW
                 val centreW = fw - leftW - rightW
                 drawBattersSection(model, pad, fh, leftW - pad * 2)
-                drawCentreSection(model, centreX, fh, centreW, pad)
+                drawCentreSection(model, centreX, fh, centreW, pad, isPortrait)
                 drawBowlerSection(model, centreX + centreW, fh, rightW, pad, ballLabelGap, bowlerNameWidthFraction)
             }
             showBatters -> {
                 val leftW = fw * 0.50f
                 val centreW = fw - leftW
                 drawBattersSection(model, pad, fh, leftW - pad * 2)
-                drawCentreSection(model, leftW, fh, centreW, pad)
+                drawCentreSection(model, leftW, fh, centreW, pad, isPortrait)
             }
             showBowler -> {
                 val rightW = fw * 0.50f
                 val centreW = fw - rightW
-                drawCentreSection(model, 0f, fh, centreW, pad)
+                drawCentreSection(model, 0f, fh, centreW, pad, isPortrait)
                 drawBowlerSection(model, centreW, fh, rightW, pad, ballLabelGap, bowlerNameWidthFraction)
             }
             else -> {
-                drawCentreSection(model, 0f, fh, fw, pad)
+                drawCentreSection(model, 0f, fh, fw, pad, isPortrait)
             }
         }
 
@@ -308,7 +308,8 @@ class ScoreboardOverlayRenderer(
         sectionLeft: Float,
         totalH: Float,
         sectionWidth: Float,
-        pad: Float
+        pad: Float,
+        isPortrait: Boolean
     ) {
         // Draw the distinct darker rounded capsule behind the center score area
         val panelLeft = sectionLeft + pad / 2f
@@ -325,45 +326,62 @@ class ScoreboardOverlayRenderer(
         val width = sectionWidth - pad * 2
         val cx = left + width / 2f
 
-        // ── Line 1: matchTitle  score  overs – all on one baseline ────────────
-        val titleText = model.matchTitle
-        val scoreText = "$INLINE_GAP${model.score}"
-        val oversText = "$INLINE_GAP${model.overs}"
+        if (isPortrait) {
+            // ── Portrait mode: two-line layout ────────────────────────────────
+            // Line 1: team names (matchTitle), centered, smaller text
+            titlePaint.textAlign = Paint.Align.CENTER
+            val titleText = truncateText(model.matchTitle, titlePaint, width)
+            val line1Y = totalH * 0.38f
+            canvas.drawText(titleText, cx, line1Y, titlePaint)
 
-        val titleW = titlePaint.measureText(titleText)
-        val scoreW = scorePaint.measureText(scoreText)
-        val oversW = oversPaint.measureText(oversText)
-        val line1TotalW = titleW + scoreW + oversW
-        var x = cx - line1TotalW / 2f
-        val line1Y = totalH * 0.42f
+            // Line 2: score • overs, centered, larger/bolder (primary info)
+            val oversShort = model.overs.removeSuffix(" overs")
+            val scoreLine = "${model.score} \u2022 $oversShort"
+            scorePaint.textAlign = Paint.Align.CENTER
+            val line2Y = totalH * 0.80f
+            canvas.drawText(scoreLine, cx, line2Y, scorePaint)
+        } else {
+            // ── Landscape mode: existing layout unchanged ──────────────────────
+            // Line 1: matchTitle  score  overs – all on one baseline
+            val titleText = model.matchTitle
+            val scoreText = "$INLINE_GAP${model.score}"
+            val oversText = "$INLINE_GAP${model.overs}"
 
-        titlePaint.textAlign = Paint.Align.LEFT
-        canvas.drawText(titleText, x, line1Y, titlePaint)
-        x += titleW
-        scorePaint.textAlign = Paint.Align.LEFT
-        canvas.drawText(scoreText, x, line1Y, scorePaint)
-        x += scoreW
-        oversPaint.textAlign = Paint.Align.LEFT
-        canvas.drawText(oversText, x, line1Y, oversPaint)
+            val titleW = titlePaint.measureText(titleText)
+            val scoreW = scorePaint.measureText(scoreText)
+            val oversW = oversPaint.measureText(oversText)
+            val line1TotalW = titleW + scoreW + oversW
+            var x = cx - line1TotalW / 2f
+            val line1Y = totalH * 0.42f
 
-        // ── Line 2: context line (run rate / chase info) ───────────────────────
-        if (model.contextLine != null) {
-            val line2Y = totalH * 0.78f
-            if (model.contextLine.startsWith("RUN RATE ")) {
-                val rrValue = model.contextLine.removePrefix("RUN RATE ")
-                val labelText = "RR"
-                val valueText = " $rrValue"
-                val labelW = contextPaint.measureText(labelText)
-                val valueW = contextValuePaint.measureText(valueText)
-                val totalW = labelW + valueW
-                contextPaint.textAlign = Paint.Align.LEFT
-                contextValuePaint.textAlign = Paint.Align.LEFT
-                val startX = cx - totalW / 2f
-                canvas.drawText(labelText, startX, line2Y, contextPaint)
-                canvas.drawText(valueText, startX + labelW, line2Y, contextValuePaint)
-            } else {
-                contextPaint.textAlign = Paint.Align.CENTER
-                canvas.drawText(model.contextLine, cx, line2Y, contextPaint)
+            titlePaint.textAlign = Paint.Align.LEFT
+            canvas.drawText(titleText, x, line1Y, titlePaint)
+            x += titleW
+            scorePaint.textAlign = Paint.Align.LEFT
+            canvas.drawText(scoreText, x, line1Y, scorePaint)
+            x += scoreW
+            oversPaint.textAlign = Paint.Align.LEFT
+            canvas.drawText(oversText, x, line1Y, oversPaint)
+
+            // Line 2: context line (run rate / chase info)
+            if (model.contextLine != null) {
+                val line2Y = totalH * 0.78f
+                if (model.contextLine.startsWith("RUN RATE ")) {
+                    val rrValue = model.contextLine.removePrefix("RUN RATE ")
+                    val labelText = "RR"
+                    val valueText = " $rrValue"
+                    val labelW = contextPaint.measureText(labelText)
+                    val valueW = contextValuePaint.measureText(valueText)
+                    val totalW = labelW + valueW
+                    contextPaint.textAlign = Paint.Align.LEFT
+                    contextValuePaint.textAlign = Paint.Align.LEFT
+                    val startX = cx - totalW / 2f
+                    canvas.drawText(labelText, startX, line2Y, contextPaint)
+                    canvas.drawText(valueText, startX + labelW, line2Y, contextValuePaint)
+                } else {
+                    contextPaint.textAlign = Paint.Align.CENTER
+                    canvas.drawText(model.contextLine, cx, line2Y, contextPaint)
+                }
             }
         }
     }
