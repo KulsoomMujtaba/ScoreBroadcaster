@@ -22,6 +22,11 @@ import kotlinx.coroutines.launch
  * - Only [PlayerProfile.playerSourceType] == PRIVATE profiles are stored here today.
  * - When a non-null [userId] is supplied to [addPlayer] or [syncWithRemote], the
  *   repository also mirrors changes to Supabase via [SupabasePlayerRepository].
+ *
+ * Sync strategy (see [syncWithRemote]):
+ * - CASE A: Local empty, remote has data  → hydrate local from remote.
+ * - CASE B: Local has data, remote empty  → push local to remote.
+ * - CASE C: Both have data               → remote wins; local DB updated from remote.
  */
 class SavedPlayerRepository(
     private val dao: PlayerProfileDao,
@@ -41,14 +46,14 @@ class SavedPlayerRepository(
         get() = _state.value
 
     /**
-     * Persist [player] locally and, when [userId] is provided, also insert it
+     * Persist [player] locally and, when [userId] is provided, also upsert it
      * into Supabase asynchronously so the UI is never blocked.
      */
     fun addPlayer(player: PlayerProfile, userId: String? = null) {
         scope.launch {
             dao.insert(player.toEntity())
             if (userId != null) {
-                SupabasePlayerRepository.insertRemotePlayer(player.toSupabasePlayer(userId))
+                SupabasePlayerRepository.upsertRemotePlayer(player.toSupabasePlayer(userId))
             }
         }
     }
@@ -67,19 +72,22 @@ class SavedPlayerRepository(
     fun findById(id: String): PlayerProfile? = _state.value.find { it.id == id }
 
     /**
-     * Run the one-way sync strategy for [userId]:
+     * Run the bidirectional sync strategy for [userId]:
      *
      * 1. Read the current local snapshot.
-     * 2. Delegate to [SupabasePlayerRepository.syncLocalPlayersToRemote].
-     * 3. If the result is non-empty (local was empty → remote had data), insert
-     *    each remote player into the local Room database to hydrate it.
+     * 2. Delegate to [SupabasePlayerRepository.syncPlayers] which determines the
+     *    correct sync case (A, B, or C) and returns the list of remote players that
+     *    should be written into local storage.
+     * 3. Insert / replace each returned remote player into the local Room database.
+     *    [PlayerProfileDao.insert] uses [OnConflictStrategy.REPLACE], so existing
+     *    rows are updated in place — this handles CASE C where remote wins.
      *
      * All work is done off the main thread; callers do not need to suspend.
      */
     fun syncWithRemote(userId: String) {
         scope.launch {
             val local = dao.getAll().map { it.toDomain() }
-            val toHydrate = SupabasePlayerRepository.syncLocalPlayersToRemote(local, userId)
+            val toHydrate = SupabasePlayerRepository.syncPlayers(local, userId)
             toHydrate.forEach { remote -> dao.insert(remote.toPlayerProfile().toEntity()) }
         }
     }

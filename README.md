@@ -491,6 +491,59 @@ Scoring is modelled as an append-only event log:
 
 ## Development Log
 
+### 2026-04-03 – Backend Setup: Players Sync (v2)
+
+**What changed**
+
+- Added `updatedAt` field (`updated_at`) to `SupabasePlayer` to complete the remote model (fields: `id`, `userId`, `name`, `createdAt`, `updatedAt`).
+- Renamed `insertRemotePlayer` → `upsertRemotePlayer` in `SupabasePlayerRepository` to better reflect the upsert semantics.
+- Renamed `syncLocalPlayersToRemote` → `syncPlayers` in `SupabasePlayerRepository` to describe the new bidirectional nature.
+- Implemented proper three-case bidirectional sync logic in `syncPlayers`:
+  - **CASE A** — Local empty, remote has data → hydrate local DB from remote (new device / fresh install).
+  - **CASE B** — Local has data, remote empty → push all local players to remote.
+  - **CASE C** — Both sides have data → remote wins; local DB is updated with authoritative remote data.
+- Added deduplication fallback in `upsertRemotePlayer`: if the upsert fails (e.g. a `(user_id, name)` conflict in Supabase), the repository tries to fetch the existing row by `(user_id, name)` to avoid silent failures.
+- Updated `SavedPlayerRepository` to use the new `upsertRemotePlayer` and `syncPlayers` method names, and updated the `syncWithRemote` KDoc to document all three sync cases.
+- Added all required log messages:
+  - `"Fetching remote players"` — at start of every remote fetch.
+  - `"Hydrating local DB"` — when CASE A triggers.
+  - `"Pushing local players"` — when CASE B triggers.
+  - `"Sync complete"` — at end of `syncPlayers`.
+
+**Bidirectional sync logic**
+
+Sync is triggered once per app start via `MatchSessionViewModel.syncPlayersForUser()` (called from `MainActivity` in a `LaunchedEffect` after the user's profile loads). The strategy is:
+1. Always fetch remote players first.
+2. Decide the case based on local/remote emptiness.
+3. Return the "winning" list so `SavedPlayerRepository.syncWithRemote` can write it into Room using `OnConflictStrategy.REPLACE`, which updates existing rows in place.
+
+**Remote vs local decision**
+
+Remote (Supabase) is the source of truth for persistence and cross-device sync. Local Room DB is the source of truth for the UI. When both sides have data (CASE C), remote wins. This ensures that data from another device always propagates to the current device without manual conflict resolution.
+
+**Why no conflict resolution yet**
+
+Full conflict resolution (e.g. comparing `updatedAt` timestamps per player, merging additions from both sides) introduces significant complexity. At this stage the user base is small and the risk of genuine two-device conflicts is low. The `updatedAt` field added in this release is intentional groundwork for timestamp-based resolution in a future release.
+
+**What did NOT change**
+
+- Scoring system, MatchViewModel, and BallEvent logic are completely untouched.
+- Match / Team / Event persistence is unmodified.
+- UI flows — no Composables were changed.
+- The sync trigger point in `MainActivity` and `MatchSessionViewModel.syncPlayersForUser()` are unmodified.
+- Room schema and `PlayerProfileDao` are unmodified.
+
+**Files modified**
+
+| File | Action |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/features/players/data/SupabasePlayer.kt` | Updated — added `updatedAt` field |
+| `app/src/main/java/com/example/scorebroadcaster/features/players/data/SupabasePlayerRepository.kt` | Updated — renamed methods, three-case sync, deduplication fallback, improved logging |
+| `app/src/main/java/com/example/scorebroadcaster/features/players/data/SavedPlayerRepository.kt` | Updated — use new method names, updated KDoc |
+| `README.md` | Updated |
+
+---
+
 ### 2026-04-03 – UI Improvement: Portrait Overlay Layout
 
 **What changed**
