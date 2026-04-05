@@ -491,6 +491,86 @@ Scoring is modelled as an append-only event log:
 
 ## Development Log
 
+### 2026-04-05 – Backend Setup: Teams Sync (v1)
+
+**What changed**
+
+- Created `SupabaseTeam` — remote model mapping to the Supabase `teams` table (`id`, `user_id`, `name`, `created_at`, `updated_at`). Includes extension functions `SavedTeam.toSupabaseTeam(userId)` and `SupabaseTeam.toSavedTeam()`.
+- Created `SupabaseTeamPlayer` — remote model mapping to the `team_players` join table (`id`, `team_id`, `player_id`). Stores the `sourceProfileId` of each player in a team so team–player relationships are preserved across devices.
+- Created `SupabaseTeamRepository` (object singleton) with:
+  - `fetchRemoteTeams(userId)` — retrieves all `teams` rows owned by the user.
+  - `fetchTeamPlayers(teamId)` — retrieves all `team_players` rows for a given team.
+  - `upsertTeam(team)` — inserts or updates a team row using `id` as the conflict target.
+  - `upsertTeamPlayers(teamId, players)` — replaces team–player associations using a delete + insert strategy.
+  - `syncTeams(localTeams, userId, localPlayerProfiles)` — implements the three-case bidirectional sync strategy.
+- Extended `SavedTeamRepository` with:
+  - `addTeamWithRemote(team, userId)` — saves locally and upserts to Supabase when signed in.
+  - `updateTeamWithRemote(team, userId)` — updates locally and replaces remote team + players when signed in.
+  - `syncWithRemote(userId, localPlayerProfiles)` — runs the full sync and hydrates Room from remote when needed.
+- Updated `MatchSessionViewModel`:
+  - `addSavedTeam` now calls `addTeamWithRemote` to mirror new teams to Supabase.
+  - Added `updateSavedTeam` which calls `updateTeamWithRemote`.
+  - Added `syncTeamsForUser(userId)` — triggers bidirectional teams sync using the current local player profiles snapshot.
+- Updated `MainActivity` — calls `syncTeamsForUser(profileId)` in the same `LaunchedEffect` as `syncPlayersForUser`, immediately after players sync is triggered.
+- Added required log messages:
+  - `"Fetching remote teams"` — at start of every remote fetch.
+  - `"Syncing team players"` — when team–player rows are fetched during hydration.
+  - `"Teams sync complete"` — at end of `syncTeams`.
+
+**Many-to-many relationship design**
+
+Teams and players have a many-to-many relationship: one team contains multiple players, and the same player profile can appear in multiple teams. This is modelled with a dedicated `team_players` join table in Supabase (columns: `id`, `team_id`, `player_id`).
+
+The join table approach was chosen over embedding players as a JSON column in the `teams` table because:
+1. **Queryability** — individual player–team associations can be fetched, filtered, and deleted by `team_id` without parsing JSON.
+2. **Referential clarity** — `player_id` explicitly references the `players` table, making the relationship visible in the schema.
+3. **Flexibility** — adding or removing a single player from a team requires only inserting or deleting one row rather than re-serialising the entire player list.
+4. **Consistency** — matches the `SavedTeamPlayerCrossRef` pattern already defined in the local Room schema.
+
+Only players with a non-null `sourceProfileId` (i.e. those created from a saved `PlayerProfile`) are stored in `team_players`. Ad-hoc name-only players have no stable profile ID and are therefore excluded from remote sync. This is a deliberate simplification for v1.
+
+**Sync strategy decisions**
+
+The same three-case strategy used for players is applied to teams:
+
+- **CASE A** — Local empty, remote has data → hydrate local Room DB from remote. Fetches `team_players` for each remote team and reconstructs `SavedTeam` objects by resolving player display names from local `PlayerProfile` records.
+- **CASE B** — Local has data, remote empty → push all local teams and their players to remote.
+- **CASE C** — Both have data → remote wins; remote teams replace local teams in Room.
+
+Remote (Supabase) is the authoritative source of truth for cross-device persistence. Local Room DB is the source of truth for the UI. When both sides have data (CASE C), remote wins unconditionally — this ensures data from another device always propagates to the current device without manual conflict resolution.
+
+Teams sync is triggered on app start from `MainActivity`, in the same `LaunchedEffect` as players sync and immediately after it. This sequencing ensures that local player profiles are available (loaded from Room) when team–player relationships are reconstructed from remote player IDs.
+
+The update strategy for `team_players` is a simple delete + insert: all existing rows for a given `team_id` are deleted before new rows are inserted. This avoids partial state and is safe for the current scale.
+
+**What did NOT change**
+
+- Scoring engine, `MatchViewModel`, and `BallEvent` logic are completely untouched.
+- Players sync logic (`SupabasePlayerRepository`, `SavedPlayerRepository`) is unmodified.
+- Match persistence and `MatchRepository` are unmodified.
+- All UI Composables — no screen-level files were changed.
+- Room schema (`ScoredDatabase`, `SavedTeamEntity`, `SavedTeamDao`) is unmodified; no migration required.
+- The `PlayerListTypeConverter` and JSON-serialised player list in `SavedTeamEntity` continue to be the local storage format.
+
+**Files added**
+
+| File | Action |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/features/teams/data/SupabaseTeam.kt` | New — remote team model + conversion functions |
+| `app/src/main/java/com/example/scorebroadcaster/features/teams/data/SupabaseTeamPlayer.kt` | New — remote team–player join model |
+| `app/src/main/java/com/example/scorebroadcaster/features/teams/data/SupabaseTeamRepository.kt` | New — sync logic for teams and team_players |
+
+**Files modified**
+
+| File | Action |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/features/teams/data/SavedTeamRepository.kt` | Updated — added `addTeamWithRemote`, `updateTeamWithRemote`, `syncWithRemote` |
+| `app/src/main/java/com/example/scorebroadcaster/features/match/viewmodel/MatchSessionViewModel.kt` | Updated — `addSavedTeam` uses remote, added `updateSavedTeam`, `syncTeamsForUser` |
+| `app/src/main/java/com/example/scorebroadcaster/MainActivity.kt` | Updated — calls `syncTeamsForUser` after `syncPlayersForUser` |
+| `README.md` | Updated |
+
+---
+
 ### 2026-04-03 – Backend Setup: Players Sync (v2)
 
 **What changed**
