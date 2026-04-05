@@ -71,7 +71,7 @@ object SupabaseTeamRepository {
      */
     suspend fun fetchTeamPlayers(teamId: String): List<SupabaseTeamPlayer> {
         val supabase = client ?: return emptyList()
-        Log.d(TAG, "Syncing team players for team $teamId")
+        Log.d(TAG, "Fetching team players for team $teamId")
         return runCatching {
             supabase.postgrest[TEAM_PLAYERS_TABLE]
                 .select(columns = Columns.ALL) {
