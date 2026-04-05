@@ -87,14 +87,19 @@ class MatchSessionViewModel(application: Application) : AndroidViewModel(applica
             initialValue = emptyList()
         )
 
-    /** Persist a new saved team. The StateFlow updates automatically via Room. */
+    /** Persist a new saved team locally and mirror it to Supabase when signed in. */
     fun addSavedTeam(team: SavedTeam) {
-        savedTeamRepository.addTeam(team)
+        savedTeamRepository.addTeamWithRemote(team, currentUserId)
     }
 
     /** Remove a saved team by id. The StateFlow updates automatically via Room. */
     fun removeSavedTeam(id: String) {
         savedTeamRepository.removeTeam(id)
+    }
+
+    /** Update an existing saved team locally and mirror the change to Supabase when signed in. */
+    fun updateSavedTeam(team: SavedTeam) {
+        savedTeamRepository.updateTeamWithRemote(team, currentUserId)
     }
 
     // ---------------------------------------------------------------------------
@@ -132,6 +137,18 @@ class MatchSessionViewModel(application: Application) : AndroidViewModel(applica
     fun syncPlayersForUser(userId: String) {
         currentUserId = userId
         savedPlayerRepository.syncWithRemote(userId)
+    }
+
+    /**
+     * Trigger the bidirectional teams sync for the signed-in [userId].
+     *
+     * Should be called after [syncPlayersForUser] so that local player profiles are
+     * available for reconstructing team–player relationships when hydrating from remote.
+     *
+     * Safe to call multiple times; the sync strategy is idempotent.
+     */
+    fun syncTeamsForUser(userId: String) {
+        savedTeamRepository.syncWithRemote(userId, savedPlayers.value)
     }
 
     // ---------------------------------------------------------------------------
