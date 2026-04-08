@@ -18,6 +18,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -52,6 +53,12 @@ fun MatchViewerScreen(
 ) {
     LaunchedEffect(shareCode) {
         viewerViewModel.loadMatchByShareCode(shareCode)
+    }
+
+    DisposableEffect(viewerViewModel) {
+        onDispose {
+            viewerViewModel.stopLiveUpdates()
+        }
     }
 
     val loadState by viewerViewModel.loadState.collectAsState()
