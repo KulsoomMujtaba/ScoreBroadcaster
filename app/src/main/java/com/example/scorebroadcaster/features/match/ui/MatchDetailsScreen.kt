@@ -536,7 +536,7 @@ private fun MatchPublishingSection(
                     ) {
                         Icon(
                             Icons.Default.Share,
-                            contentDescription = "Copy share code"
+                            contentDescription = "Share code"
                         )
                     }
                 }
