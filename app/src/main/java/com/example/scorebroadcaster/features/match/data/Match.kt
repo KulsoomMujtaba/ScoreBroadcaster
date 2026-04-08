@@ -84,8 +84,8 @@ data class Match(
      * - [MatchStatus.INNINGS_BREAK] — between innings; second innings has not yet started.
      *
      * [MatchStatus.COMPLETED] matches are excluded because they are final.
-     * [MatchStatus.NOT_STARTED] matches are excluded because they have not been confirmed yet
-     * and therefore have no meaningful state to restore.
+     * [MatchStatus.NOT_STARTED] matches are excluded because no ball events have been recorded
+     * yet and therefore there is no meaningful scoring state to restore.
      */
     val isResumable: Boolean
         get() = status == MatchStatus.IN_PROGRESS || status == MatchStatus.INNINGS_BREAK

@@ -122,6 +122,23 @@ object SupabaseMatchRepository {
     }
 
     /**
+     * Delete a match row from the `matches` table by [matchId].
+     *
+     * Supabase's cascade rules will remove all associated `match_events` rows automatically.
+     * Does nothing if the Supabase client is not configured.
+     */
+    suspend fun deleteMatch(matchId: String) {
+        val supabase = client ?: return
+        Log.d(TAG, "Deleting match $matchId from Supabase")
+        runCatching {
+            supabase.postgrest[TABLE].delete { filter { eq("id", matchId) } }
+            Log.d(TAG, "Match $matchId deleted from Supabase")
+        }.onFailure { e ->
+            Log.e(TAG, "Failed to delete match $matchId from Supabase: ${e.message}")
+        }
+    }
+
+    /**
      * Fetch a published match by its [shareCode].
      *
      * Only returns a match when `is_published = true` and `share_code = [shareCode]`.

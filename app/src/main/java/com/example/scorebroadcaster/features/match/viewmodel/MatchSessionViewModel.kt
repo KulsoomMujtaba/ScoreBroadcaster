@@ -180,7 +180,7 @@ class MatchSessionViewModel(application: Application) : AndroidViewModel(applica
      * The [matches] StateFlow updates automatically via the Room-backed flow.
      */
     fun confirmMatch(match: Match) {
-        val confirmed = match.copy(status = MatchStatus.IN_PROGRESS)
+        val confirmed = match.copy(status = MatchStatus.NOT_STARTED)
         matchRepository.addMatch(confirmed)
         matchRepository.setActiveMatch(confirmed)
         _activeMatch.value = confirmed
@@ -198,7 +198,7 @@ class MatchSessionViewModel(application: Application) : AndroidViewModel(applica
      *
      * Called by reset flows to ensure the Home screen no longer shows a stale active-match
      * banner after scoring state has been cleared.  The match itself remains in local storage
-     * and may still appear in [resumableMatch] if its status is still [MatchStatus.IN_PROGRESS]
+     * and may still appear in [resumableMatch] if its status is [MatchStatus.IN_PROGRESS]
      * or [MatchStatus.INNINGS_BREAK].
      */
     fun clearActiveMatch() {
@@ -210,6 +210,20 @@ class MatchSessionViewModel(application: Application) : AndroidViewModel(applica
      *  [matches] and saved teams/players are driven by Room Flows and update automatically. */
     fun refresh() {
         _activeMatch.value = matchRepository.activeMatch
+    }
+
+    /**
+     * Delete the match identified by [matchId] from local storage and Supabase.
+     *
+     * If the match being deleted is the current active match, the active session is cleared
+     * immediately so the Home screen does not display a stale banner.  The [matches]
+     * StateFlow updates automatically via Room.
+     */
+    fun deleteMatch(matchId: String) {
+        if (_activeMatch.value?.localId == matchId) {
+            clearActiveMatch()
+        }
+        matchRepository.deleteMatch(matchId)
     }
 
     /**

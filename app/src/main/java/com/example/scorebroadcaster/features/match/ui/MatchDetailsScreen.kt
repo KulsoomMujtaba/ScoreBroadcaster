@@ -155,6 +155,42 @@ fun MatchDetailsScreen(
                 onViewerMode = onViewerMode
             )
 
+            HorizontalDivider()
+
+            // --- Delete match ---
+            var showDeleteDialog by remember { mutableStateOf(false) }
+            OutlinedButton(
+                onClick = { showDeleteDialog = true },
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = MaterialTheme.colorScheme.error
+                )
+            ) {
+                Text("Delete Match", style = MaterialTheme.typography.titleSmall)
+            }
+
+            if (showDeleteDialog) {
+                AlertDialog(
+                    onDismissRequest = { showDeleteDialog = false },
+                    title = { Text("Delete Match") },
+                    text = { Text("Are you sure you want to delete \"${match.displayTitle}\"? This action cannot be undone.") },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            showDeleteDialog = false
+                            matchSessionViewModel.deleteMatch(match.localId)
+                            onBack()
+                        }) {
+                            Text("Delete", color = MaterialTheme.colorScheme.error)
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showDeleteDialog = false }) {
+                            Text("Cancel")
+                        }
+                    }
+                )
+            }
+
             Spacer(modifier = Modifier.height(24.dp))
         }
     }
