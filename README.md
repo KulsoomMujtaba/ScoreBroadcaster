@@ -688,6 +688,36 @@ Scoring is modelled as an append-only event log:
 
 ## Development Log
 
+### 2026-04-08 – UX Improvement: Player Selection Filtering
+
+**Problem**
+
+Users could see players that were ineligible for selection (already present in the opposing team) in all player-selection dialogs and bottom sheets. The validation that blocked invalid assignments only fired *after* the scorer made a selection, resulting in error messages and a poor user experience.
+
+**Solution**
+
+A new domain-layer function `getEligiblePlayersForTeam(teamId, match)` was added to `PlayerValidation.kt`. It:
+
+1. Resolves the current team and opposing team from the match by `teamId`.
+2. Filters out any player whose identity (profile-ID-based or name-based) already appears in the opposing team roster.
+3. Logs `"Eligible players count: X"` and `"Filtered out Y invalid players"` for observability.
+
+The filtering is applied at every player-selection entry point:
+- **Select Next Batter** dialog — `eligibleNextBatters()` in `MatchViewModel` now uses `getEligiblePlayersForTeam` before further filtering for dismissed/current batters.
+- **Select Bowler** bottom sheet — `availableBowlers()` now uses `getEligiblePlayersForTeam` before filtering out the last bowler.
+- **Setup Openers** bottom sheet — batter/bowler dropdown lists and the inline `PlayerPickerDialog` ("+Add Batter" / "+Add Bowler") both receive filtered lists and opposing-team exclusion sets respectively.
+- **Add Player** bottom sheet — `AddPlayerToMatchDialog` passes the opposing team's player list as exclusion sets into `PlayerPickerDialog`, hiding already-used players from the search and create flows.
+
+When a filtered list is empty, the UI displays **"No available players to select"** instead of showing no options without explanation.
+
+**Principle**
+
+Prevent invalid actions instead of reacting to them. Hiding invalid options removes the friction of encountering validation errors during normal scoring.
+
+**What did NOT change**
+
+Validation logic (`canAddPlayerToTeam`) remains fully intact in all assignment paths (`setOpeners`, `selectNextBatter`, `changeBowler`, `addPlayerToTeam`). Filtering is a UX improvement only; the validation acts as a safety fallback for race-condition edge cases.
+
 ### 2026-04-08 – Bug Fix: Cross-Team Player Validation
 
 **Root cause**

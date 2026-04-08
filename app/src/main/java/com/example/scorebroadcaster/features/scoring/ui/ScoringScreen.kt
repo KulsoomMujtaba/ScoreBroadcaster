@@ -95,6 +95,8 @@ import com.example.scorebroadcaster.core.theme.OnBoundarySixContainer
 import com.example.scorebroadcaster.core.theme.NormalRunContainer
 import com.example.scorebroadcaster.core.theme.OnNormalRunContainer
 import com.example.scorebroadcaster.features.players.ui.PlayerPickerDialog
+import com.example.scorebroadcaster.features.players.ui.normalizePlayerName
+import com.example.scorebroadcaster.features.players.ui.sameIdentityAs
 import com.example.scorebroadcaster.features.scoring.data.Innings
 import com.example.scorebroadcaster.features.scoring.data.Partnership
 
@@ -447,9 +449,15 @@ fun ScoringScreen(
                     )
                 }
                 if (showAddPlayerDialog) {
+                    val battingTeam = if (console.inningsNumber == 1) activeMatch.battingFirst
+                                      else activeMatch.bowlingFirst
+                    val bowlingTeam = if (console.inningsNumber == 1) activeMatch.bowlingFirst
+                                      else activeMatch.battingFirst
                     AddPlayerToMatchDialog(
                         battingTeamName = console.battingTeamName,
                         bowlingTeamName = console.bowlingTeamName,
+                        battingTeamPlayers = battingTeam.players,
+                        bowlingTeamPlayers = bowlingTeam.players,
                         savedPlayers = savedPlayers,
                         onDismiss = { showAddPlayerDialog = false },
                         onPickFromSaved = { profile, isNew, toBatting ->
@@ -500,12 +508,21 @@ fun ScoringScreen(
             is PendingAction.SelectNextBatter -> {
                 val title = if (action.replacingStriker) "Select Next Batter" else "Select Next Non-Striker"
                 Log.d("WicketFlow", "Next batter dialog shown (${action.teamPlayers.size} eligible team players, replacingStriker=${action.replacingStriker})")
+                val opposingPlayers = when {
+                    activeMatch == null -> emptyList()
+                    console.inningsNumber == 1 -> activeMatch.bowlingFirst.players
+                    else -> activeMatch.battingFirst.players
+                }
+                val excProfileIds = opposingPlayers.mapNotNull { it.sourceProfileId }.toSet()
+                val excNames = opposingPlayers.map { normalizePlayerName(it.name) }.toSet()
                 SelectPlayerDialog(
                     title = title,
                     players = action.teamPlayers,
                     teamSectionLabel = "Select from team",
                     emptyTeamMessage = "No unused players left in the batting team",
                     savedPlayers = savedPlayers,
+                    excludedProfileIds = excProfileIds,
+                    excludedNames = excNames,
                     onPickFromSaved = { profile, isNew ->
                         if (isNew) onSavePrivatePlayer(profile)
                         val player = profile.toMatchPlayer()
@@ -521,9 +538,18 @@ fun ScoringScreen(
                 // Scoring remains disabled (pendingAction != null) until a bowler is chosen.
                 // An inline banner on the Score tab explains the blocked state.
                 if (showSelectBowlerSheet) {
+                    val opposingPlayers = when {
+                        activeMatch == null -> emptyList()
+                        console.inningsNumber == 1 -> activeMatch.battingFirst.players
+                        else -> activeMatch.bowlingFirst.players
+                    }
+                    val excProfileIds = opposingPlayers.mapNotNull { it.sourceProfileId }.toSet()
+                    val excNames = opposingPlayers.map { normalizePlayerName(it.name) }.toSet()
                     SelectBowlerBottomSheet(
                         availablePlayers = action.availablePlayers,
                         savedPlayers = savedPlayers,
+                        excludedProfileIds = excProfileIds,
+                        excludedNames = excNames,
                         onPlayerSelected = { matchViewModel.changeBowler(it) },
                         onPickFromSaved = { profile, isNew ->
                             if (isNew) onSavePrivatePlayer(profile)
@@ -1458,6 +1484,8 @@ private fun SelectPlayerDialog(
     teamSectionLabel: String? = null,
     emptyTeamMessage: String? = null,
     savedPlayers: List<PlayerProfile> = emptyList(),
+    excludedProfileIds: Set<String> = emptySet(),
+    excludedNames: Set<String> = emptySet(),
     onPickFromSaved: ((profile: PlayerProfile, isNew: Boolean) -> Unit)? = null,
     onAllOut: (() -> Unit)? = null
 ) {
@@ -1484,7 +1512,7 @@ private fun SelectPlayerDialog(
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                         )
                     } else {
-                        Text("No players available.")
+                        Text("No available players to select")
                     }
                 }
                 players.forEach { player ->
@@ -1535,6 +1563,8 @@ private fun SelectPlayerDialog(
     if (showSavedPicker && onPickFromSaved != null) {
         PlayerPickerDialog(
             savedPlayers = savedPlayers,
+            excludedProfileIds = excludedProfileIds,
+            excludedNames = excludedNames,
             onDismiss = { showSavedPicker = false },
             onSelect = { profile ->
                 showSavedPicker = false
@@ -2329,6 +2359,8 @@ internal fun OverthrowRunDialog(
 private fun AddPlayerToMatchDialog(
     battingTeamName: String,
     bowlingTeamName: String,
+    battingTeamPlayers: List<Player> = emptyList(),
+    bowlingTeamPlayers: List<Player> = emptyList(),
     savedPlayers: List<PlayerProfile> = emptyList(),
     onDismiss: () -> Unit,
     onPickFromSaved: (profile: PlayerProfile, isNew: Boolean, addToBattingTeam: Boolean) -> Unit
@@ -2365,8 +2397,14 @@ private fun AddPlayerToMatchDialog(
     )
 
     if (showPicker) {
+        // Exclude players already in the opposing team so invalid options are hidden.
+        val opposingPlayers = if (addToBatting) bowlingTeamPlayers else battingTeamPlayers
+        val excProfileIds = opposingPlayers.mapNotNull { it.sourceProfileId }.toSet()
+        val excNames = opposingPlayers.map { normalizePlayerName(it.name) }.toSet()
         PlayerPickerDialog(
             savedPlayers = savedPlayers,
+            excludedProfileIds = excProfileIds,
+            excludedNames = excNames,
             onDismiss = { showPicker = false },
             onSelect = { profile ->
                 onPickFromSaved(profile, false, addToBatting)
@@ -2400,25 +2438,34 @@ private fun SetupOpenersBottomSheet(
      */
     onPickFromSaved: ((profile: PlayerProfile, isNew: Boolean, forBatting: Boolean) -> Unit)? = null
 ) {
+    // Eligible player lists: filter out players whose identity already appears in the
+    // opposing team, so the dropdowns only show valid options.
+    val eligibleBatters = remember(battingTeam.players, bowlingTeam.players) {
+        battingTeam.players.filter { p -> bowlingTeam.players.none { it.sameIdentityAs(p) } }
+    }
+    val eligibleBowlers = remember(bowlingTeam.players, battingTeam.players) {
+        bowlingTeam.players.filter { p -> battingTeam.players.none { it.sameIdentityAs(p) } }
+    }
+
     // Auto-select defaults on first composition; when the roster changes later,
     // keep the current selection if it is still valid rather than resetting.
-    var striker by remember { mutableStateOf(battingTeam.players.getOrNull(0)) }
-    var nonStriker by remember { mutableStateOf(battingTeam.players.getOrNull(1)) }
-    var bowler by remember { mutableStateOf(bowlingTeam.players.getOrNull(0)) }
+    var striker by remember { mutableStateOf(eligibleBatters.getOrNull(0)) }
+    var nonStriker by remember { mutableStateOf(eligibleBatters.getOrNull(1)) }
+    var bowler by remember { mutableStateOf(eligibleBowlers.getOrNull(0)) }
 
     // When batting team roster changes (e.g. a new player was added mid-setup),
     // refresh the selection only if the previously chosen player is no longer present.
-    LaunchedEffect(battingTeam.players) {
-        if (striker == null || battingTeam.players.none { it.id == striker?.id }) {
-            striker = battingTeam.players.firstOrNull { it.id != nonStriker?.id }
+    LaunchedEffect(eligibleBatters) {
+        if (striker == null || eligibleBatters.none { it.id == striker?.id }) {
+            striker = eligibleBatters.firstOrNull { it.id != nonStriker?.id }
         }
-        if (nonStriker == null || battingTeam.players.none { it.id == nonStriker?.id }) {
-            nonStriker = battingTeam.players.firstOrNull { it.id != striker?.id }
+        if (nonStriker == null || eligibleBatters.none { it.id == nonStriker?.id }) {
+            nonStriker = eligibleBatters.firstOrNull { it.id != striker?.id }
         }
     }
-    LaunchedEffect(bowlingTeam.players) {
-        if (bowler == null || bowlingTeam.players.none { it.id == bowler?.id }) {
-            bowler = bowlingTeam.players.firstOrNull()
+    LaunchedEffect(eligibleBowlers) {
+        if (bowler == null || eligibleBowlers.none { it.id == bowler?.id }) {
+            bowler = eligibleBowlers.firstOrNull()
         }
     }
     // pickerForBatting: true = show player picker for batting team, false = bowling team
@@ -2429,8 +2476,8 @@ private fun SetupOpenersBottomSheet(
         2 -> "Start 2nd Innings"
         else -> "Start Innings"
     }
-    val needsMoreBatters = battingTeam.players.size < 2
-    val needsMoreBowlers = bowlingTeam.players.isEmpty()
+    val needsMoreBatters = eligibleBatters.size < 2
+    val needsMoreBowlers = eligibleBowlers.isEmpty()
     val canStart = striker != null && nonStriker != null && bowler != null
 
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -2485,7 +2532,7 @@ private fun SetupOpenersBottomSheet(
             }
             PlayerDropdown(
                 label = "Striker",
-                players = battingTeam.players,
+                players = eligibleBatters,
                 selected = striker,
                 onSelected = { newStriker ->
                     if (newStriker?.id == nonStriker?.id) {
@@ -2512,7 +2559,7 @@ private fun SetupOpenersBottomSheet(
             Spacer(modifier = Modifier.height(8.dp))
             PlayerDropdown(
                 label = "Non-striker",
-                players = battingTeam.players,
+                players = eligibleBatters,
                 selected = nonStriker,
                 onSelected = { newNonStriker ->
                     if (newNonStriker?.id == striker?.id) {
@@ -2565,7 +2612,7 @@ private fun SetupOpenersBottomSheet(
             }
             PlayerDropdown(
                 label = "Opening bowler",
-                players = bowlingTeam.players,
+                players = eligibleBowlers,
                 selected = bowler,
                 onSelected = { bowler = it }
             )
@@ -2601,8 +2648,14 @@ private fun SetupOpenersBottomSheet(
     // ── Add-player dialog (opened when + Add Batter / + Add Bowler is tapped) ──
     val pickerTarget = pickerForBatting
     if (pickerTarget != null) {
+        // Exclude players already in the opposing team from the picker.
+        val opposingPlayers = if (pickerTarget) bowlingTeam.players else battingTeam.players
+        val excProfileIds = opposingPlayers.mapNotNull { it.sourceProfileId }.toSet()
+        val excNames = opposingPlayers.map { normalizePlayerName(it.name) }.toSet()
         PlayerPickerDialog(
             savedPlayers = savedPlayers,
+            excludedProfileIds = excProfileIds,
+            excludedNames = excNames,
             onDismiss = { pickerForBatting = null },
             onSelect = { profile ->
                 pickerForBatting = null
@@ -2735,6 +2788,8 @@ private fun InningsBreakSection(
 private fun SelectBowlerBottomSheet(
     availablePlayers: List<Player>,
     savedPlayers: List<PlayerProfile>,
+    excludedProfileIds: Set<String> = emptySet(),
+    excludedNames: Set<String> = emptySet(),
     onPlayerSelected: (Player) -> Unit,
     onPickFromSaved: (profile: PlayerProfile, isNew: Boolean) -> Unit,
     onDismiss: () -> Unit
@@ -2769,7 +2824,7 @@ private fun SelectBowlerBottomSheet(
 
             if (availablePlayers.isEmpty()) {
                 Text(
-                    text = "No bowlers available.",
+                    text = "No available players to select",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
                     modifier = Modifier.padding(bottom = 8.dp)
@@ -2805,6 +2860,8 @@ private fun SelectBowlerBottomSheet(
     if (showSavedPicker) {
         PlayerPickerDialog(
             savedPlayers = savedPlayers,
+            excludedProfileIds = excludedProfileIds,
+            excludedNames = excludedNames,
             onDismiss = { showSavedPicker = false },
             onSelect = { profile ->
                 showSavedPicker = false

@@ -1,5 +1,6 @@
 package com.example.scorebroadcaster.features.scoring.domain
 
+import android.util.Log
 import com.example.scorebroadcaster.features.match.data.Match
 import com.example.scorebroadcaster.features.players.data.Player
 import com.example.scorebroadcaster.features.players.ui.sameIdentityAs
@@ -34,4 +35,42 @@ fun canAddPlayerToTeam(player: Player, targetTeam: Team, match: Match): Boolean 
         else -> return true  // Unknown team — allow to avoid crash on legacy/inconsistent data
     }
     return opponentTeam.players.none { it.sameIdentityAs(player) }
+}
+
+/**
+ * Returns the subset of [teamId]'s roster that is eligible for selection — i.e. players that
+ * do not already appear in the opposing team.  Identity is resolved via [Player.sameIdentityAs].
+ *
+ * This is a **UX filtering** function used to hide invalid options before they are shown to
+ * the scorer.  The defensive validation check ([canAddPlayerToTeam]) is still enforced at
+ * assignment time and must not be removed.
+ *
+ * Logic:
+ * 1. Resolve the current team and opposing team from [match] using [teamId].
+ * 2. Filter out any player whose identity is already present in the opposing team.
+ *
+ * Unrecognised team IDs are handled gracefully by returning an empty list.
+ *
+ * @param teamId The ID of the team for which eligible players are requested.
+ * @param match  The match containing both team rosters.
+ * @return Filtered list of players eligible for selection.
+ */
+fun getEligiblePlayersForTeam(teamId: String, match: Match): List<Player> {
+    val (currentTeam, opponentTeam) = when (teamId) {
+        match.teamA.id -> Pair(match.teamA, match.teamB)
+        match.teamB.id -> Pair(match.teamB, match.teamA)
+        else -> {
+            Log.w("PlayerValidation", "getEligiblePlayersForTeam: unrecognised teamId=$teamId")
+            return emptyList()
+        }
+    }
+    val eligible = currentTeam.players.filter { player ->
+        opponentTeam.players.none { it.sameIdentityAs(player) }
+    }
+    val filteredOut = currentTeam.players.size - eligible.size
+    Log.d("PlayerValidation", "Eligible players count: ${eligible.size}")
+    if (filteredOut > 0) {
+        Log.d("PlayerValidation", "Filtered out $filteredOut invalid players")
+    }
+    return eligible
 }

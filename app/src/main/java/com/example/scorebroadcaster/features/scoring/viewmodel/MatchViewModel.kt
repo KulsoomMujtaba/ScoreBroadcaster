@@ -20,6 +20,7 @@ import com.example.scorebroadcaster.features.scoring.domain.BallEvent
 import com.example.scorebroadcaster.features.scoring.domain.MaidenOverCalculator
 import com.example.scorebroadcaster.features.scoring.domain.OverSummaryCalculator
 import com.example.scorebroadcaster.features.scoring.domain.canAddPlayerToTeam
+import com.example.scorebroadcaster.features.scoring.domain.getEligiblePlayersForTeam
 import com.example.scorebroadcaster.features.scoring.domain.reduce
 import com.example.scorebroadcaster.features.scoring.data.MatchRepository
 import kotlinx.coroutines.Job
@@ -1527,7 +1528,8 @@ class MatchViewModel : ViewModel() {
         val dismissedIds = console.allBattingEntries
             .filter { it.isOut }.map { it.player.id }.toSet()
         val currentIds = setOfNotNull(console.striker?.id, console.nonStriker?.id)
-        return battingTeam.players.filter { it.id !in dismissedIds && it.id !in currentIds }
+        return getEligiblePlayersForTeam(battingTeam.id, match)
+            .filter { it.id !in dismissedIds && it.id !in currentIds }
     }
 
     private fun availableBowlers(): List<Player> {
@@ -1536,7 +1538,8 @@ class MatchViewModel : ViewModel() {
         val bowlingTeam = if (console.inningsNumber == 1) match.bowlingFirst else match.battingFirst
         val lastBowlerId = console.currentBowler?.id
         // The same bowler cannot bowl consecutive overs
-        return bowlingTeam.players.filter { it.id != lastBowlerId }
+        return getEligiblePlayersForTeam(bowlingTeam.id, match)
+            .filter { it.id != lastBowlerId }
     }
 
     /**
