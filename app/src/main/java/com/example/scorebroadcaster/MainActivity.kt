@@ -120,6 +120,7 @@ class MainActivity : ComponentActivity() {
                             val profileId = currentProfile?.id ?: return@LaunchedEffect
                             matchSessionViewModel.syncPlayersForUser(profileId)
                             matchSessionViewModel.syncTeamsForUser(profileId)
+                            matchSessionViewModel.syncMatchesForUser(profileId)
                         }
 
                         val activeMatch by matchSessionViewModel.activeMatch.collectAsState()
