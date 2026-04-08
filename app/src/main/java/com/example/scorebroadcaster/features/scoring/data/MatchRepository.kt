@@ -96,6 +96,10 @@ class MatchRepository(
      */
     fun deleteMatch(matchId: String) {
         Log.d("MatchRepository", "Deleting match $matchId")
+        // Clear active match synchronously for immediate UI response (optimistic update).
+        if (_activeMatch.value?.localId == matchId) {
+            _activeMatch.value = null
+        }
         scope.launch {
             dao.deleteById(matchId)
             ballEventDao.deleteForMatch(matchId)
@@ -103,9 +107,6 @@ class MatchRepository(
             if (userId != null) {
                 SupabaseMatchRepository.deleteMatch(matchId)
             }
-        }
-        if (_activeMatch.value?.id == matchId) {
-            _activeMatch.value = null
         }
     }
 

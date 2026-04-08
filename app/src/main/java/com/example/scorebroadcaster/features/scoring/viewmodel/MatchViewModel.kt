@@ -157,8 +157,9 @@ class MatchViewModel : ViewModel() {
         persistCurrentInningsEvents()
 
         // Transition match status from NOT_STARTED → IN_PROGRESS on the first recorded ball.
+        // The NOT_STARTED guard ensures this transition fires exactly once.
         val currentMatch = _activeMatch.value
-        if (currentMatch != null && currentMatch.status == MatchStatus.NOT_STARTED && _events.value.size == 1) {
+        if (currentMatch != null && currentMatch.status == MatchStatus.NOT_STARTED) {
             Log.d("MatchViewModel", "First ball recorded — transitioning match ${currentMatch.localId} to IN_PROGRESS")
             val updated = currentMatch.copy(status = MatchStatus.IN_PROGRESS)
             _activeMatch.value = updated

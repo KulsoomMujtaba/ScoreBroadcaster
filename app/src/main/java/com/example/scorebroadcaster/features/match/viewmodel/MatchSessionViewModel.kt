@@ -220,7 +220,7 @@ class MatchSessionViewModel(application: Application) : AndroidViewModel(applica
      * StateFlow updates automatically via Room.
      */
     fun deleteMatch(matchId: String) {
-        if (_activeMatch.value?.id == matchId) {
+        if (_activeMatch.value?.localId == matchId) {
             clearActiveMatch()
         }
         matchRepository.deleteMatch(matchId)
