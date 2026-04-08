@@ -63,6 +63,52 @@ The core promise is simple: open the app, start a match, score every ball, and s
 | Publish-ready match model (MatchVisibility, ownerUserId, remoteId, shareCode) | ✅ Done | `data/entity/Match`, `data/entity/MatchVisibility` |
 | Local in-memory repository | ✅ Done | `repository/MatchRepository` |
 | Match session management | ✅ Done | `MatchSessionViewModel` |
+| Matches sync to Supabase (metadata only) | ✅ Done | `SupabaseMatchRepository`, `MatchRepository`, `MatchSessionViewModel` |
+
+---
+
+## Backend Setup: Matches Sync (v1)
+
+### Why only metadata (not events)
+
+Ball-by-ball events (the `BallEvent` / `ball_events` table) are intentionally excluded from this sync phase. Syncing events would require a conflict-resolution strategy at the delivery level, ordering guarantees, and significantly more bandwidth. Match metadata (teams, format, overs, toss, status) is small and stable enough to sync safely as a single row. Event persistence is deferred to a future phase (ball-by-ball event persistence / match replay system).
+
+### Ownership model
+
+Every match row in Supabase is owned by exactly one user (`user_id` references `auth.users`). Row-level security policies ensure a user can only read, insert, update, or delete their own matches. The local `localId` UUID is reused as the remote `id` so no ID translation layer is needed.
+
+### Sync strategy
+
+On app start, after teams sync completes:
+
+- **CASE A — Local empty, remote has data**: hydrate local Room DB from remote. Matches are restored on the new device.
+- **CASE B — Local has data, remote empty**: push all local matches to Supabase. First-time sign-in from a device with existing local data is covered.
+- **CASE C — Both have data**: remote wins. The remote list overwrites local storage to resolve divergence across devices.
+
+Additionally:
+- When a new match is confirmed (`confirmMatch`), it is inserted into Supabase asynchronously.
+- When a match status changes (starts, innings break, completes), the updated row is upserted to Supabase asynchronously.
+- If any remote call fails, local scoring continues uninterrupted. The next app launch retries via the sync strategy.
+
+### What did NOT change
+
+- Scoring engine (`ScoreReducer`, `BallEvent`, all domain logic) — untouched.
+- BallEvent system and local `ball_events` table — untouched.
+- Players and Teams sync — untouched.
+- All UI flows and screens — untouched.
+- `MatchViewModel` — untouched.
+
+### Files changed
+
+| File | Change |
+|------|--------|
+| `features/match/data/SupabaseMatch.kt` | New — remote model + `toSupabaseMatch()` / `toMatch()` converters |
+| `features/match/data/SupabaseMatchRepository.kt` | New — `fetchRemoteMatches`, `upsertMatch`, `syncMatches` |
+| `features/scoring/data/MatchRepository.kt` | Extended — `setCurrentUser`, `syncWithRemote`; `addMatch`/`updateMatch` now mirror to Supabase |
+| `features/match/viewmodel/MatchSessionViewModel.kt` | Extended — `syncMatchesForUser` |
+| `MainActivity.kt` | Extended — `syncMatchesForUser` called in `LaunchedEffect` after sign-in |
+| `supabase/migrations/20260408_create_matches.sql` | New — `matches` table DDL with RLS policies |
+| `README.md` | Updated — Development Log entry added |
 
 ---
 

@@ -2,8 +2,10 @@ package com.example.scorebroadcaster.features.scoring.data
 import android.util.Log
 import com.example.scorebroadcaster.features.match.data.Match
 import com.example.scorebroadcaster.features.match.data.MatchDao
+import com.example.scorebroadcaster.features.match.data.SupabaseMatchRepository
 import com.example.scorebroadcaster.features.match.data.toDomain
 import com.example.scorebroadcaster.features.match.data.toEntity
+import com.example.scorebroadcaster.features.match.data.toSupabaseMatch
 import com.example.scorebroadcaster.features.scoring.domain.BallEvent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
@@ -32,12 +34,27 @@ import kotlinx.coroutines.launch
  * as a static call on the companion object.  The companion delegates to the active
  * instance set by [MatchSessionViewModel] via [setInstance].  This lets
  * [MatchViewModel] remain unchanged while the repository gains Room persistence.
+ *
+ * **Remote sync**: When a [currentUserId] is set via [setCurrentUser], [addMatch]
+ * and [updateMatch] also mirror changes to Supabase asynchronously so the UI is
+ * never blocked. Local scoring continues uninterrupted if any remote call fails.
  */
 class MatchRepository(
     private val dao: MatchDao,
     private val ballEventDao: BallEventDao,
     private val scope: CoroutineScope
 ) {
+
+    /** Id of the currently authenticated user; set via [setCurrentUser]. */
+    private var currentUserId: String? = null
+
+    /**
+     * Register the authenticated user so that subsequent [addMatch] and [updateMatch]
+     * calls also mirror changes to Supabase.
+     */
+    fun setCurrentUser(userId: String) {
+        currentUserId = userId
+    }
 
     /** Reactive list of all matches, ordered by creation date (newest first). */
     val matchFlow: Flow<List<Match>> = dao.observeAll()
@@ -58,11 +75,25 @@ class MatchRepository(
         get() = _activeMatch.value
 
     fun addMatch(match: Match) {
-        scope.launch { dao.insert(match.toEntity()) }
+        scope.launch {
+            dao.insert(match.toEntity())
+            val userId = currentUserId
+            if (userId != null) {
+                Log.d("MatchRepository", "Match inserted: ${match.displayTitle}")
+                SupabaseMatchRepository.upsertMatch(match.toSupabaseMatch(userId))
+            }
+        }
     }
 
     fun updateMatch(match: Match) {
-        scope.launch { dao.update(match.toEntity()) }
+        scope.launch {
+            dao.update(match.toEntity())
+            val userId = currentUserId
+            if (userId != null) {
+                Log.d("MatchRepository", "Match updated: ${match.displayTitle}")
+                SupabaseMatchRepository.upsertMatch(match.toSupabaseMatch(userId))
+            }
+        }
         if (_activeMatch.value?.id == match.id) {
             _activeMatch.value = match
         }
@@ -74,6 +105,27 @@ class MatchRepository(
 
     fun clearActiveMatch() {
         _activeMatch.value = null
+    }
+
+    /**
+     * Run the bidirectional sync strategy for [userId]:
+     *
+     * 1. Stores [userId] for use in subsequent [addMatch] / [updateMatch] calls.
+     * 2. Reads the current local snapshot.
+     * 3. Delegates to [SupabaseMatchRepository.syncMatches] which determines the correct
+     *    sync case (A, B, or C) and returns the list of [Match] objects that should
+     *    be written into local storage.
+     * 4. Inserts / replaces each returned match into the local Room database.
+     *
+     * All work is done off the main thread; callers do not need to suspend.
+     */
+    fun syncWithRemote(userId: String) {
+        currentUserId = userId
+        scope.launch {
+            val local = dao.getAll().map { it.toDomain() }
+            val toHydrate = SupabaseMatchRepository.syncMatches(local, userId)
+            toHydrate.forEach { match -> dao.insert(match.toEntity()) }
+        }
     }
 
     // ---------------------------------------------------------------------------

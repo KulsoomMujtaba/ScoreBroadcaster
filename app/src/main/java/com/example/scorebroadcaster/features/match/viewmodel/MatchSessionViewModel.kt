@@ -151,6 +151,20 @@ class MatchSessionViewModel(application: Application) : AndroidViewModel(applica
         savedTeamRepository.syncWithRemote(userId, savedPlayers.value)
     }
 
+    /**
+     * Trigger the bidirectional matches sync for the signed-in [userId].
+     *
+     * Should be called after [syncTeamsForUser] so teams are available when
+     * matches are restored from remote.
+     *
+     * Safe to call multiple times; the sync strategy is idempotent.
+     * Also registers [userId] so that subsequent [confirmMatch] calls automatically
+     * mirror new matches to Supabase.
+     */
+    fun syncMatchesForUser(userId: String) {
+        matchRepository.syncWithRemote(userId)
+    }
+
     // ---------------------------------------------------------------------------
     // Match creation / session management
     // ---------------------------------------------------------------------------
