@@ -101,7 +101,6 @@ fun BallEvent.toSupabaseEvent(
     sequenceNumber: Int,
     globalIndex: Int
 ): SupabaseEvent {
-    android.util.Log.d("SupabaseEvent", "Inserting event index=$globalIndex for match $matchId")
     val payload = BallEventPayload(
         inningsNumber = inningsNumber,
         runsOffBat = runsOffBat,

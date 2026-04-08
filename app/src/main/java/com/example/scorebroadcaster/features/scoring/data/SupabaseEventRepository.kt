@@ -55,7 +55,7 @@ object SupabaseEventRepository {
         runCatching {
             Log.d(TAG, "Inserting event index=${event.eventIndex} for match ${event.matchId}")
             supabase.postgrest[TABLE].insert(event)
-            Log.d(TAG, "Inserted event index ${event.eventIndex} for match ${event.matchId}")
+            Log.d(TAG, "Successfully inserted event index=${event.eventIndex} for match ${event.matchId}")
         }.onFailure { e ->
             Log.e(TAG, "Failed to insert event index ${event.eventIndex}: ${e.message}")
         }
