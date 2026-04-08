@@ -42,6 +42,15 @@ interface BallEventDao {
     @Query("DELETE FROM ball_events WHERE matchLocalId = :matchId")
     suspend fun deleteForMatch(matchId: String)
 
-    @Query("DELETE FROM ball_events WHERE matchLocalId = :matchId AND inningsNumber = :inningsNumber")
+    @Query("""
+        DELETE FROM ball_events WHERE matchLocalId = :matchId AND inningsNumber = :inningsNumber
+    """)
     suspend fun deleteForInnings(matchId: String, inningsNumber: Int)
+
+    /**
+     * Returns `true` if at least one [BallEventEntity] exists for the given match, `false`
+     * otherwise. Uses `LIMIT 1` so the query short-circuits after finding the first row.
+     */
+    @Query("SELECT EXISTS(SELECT 1 FROM ball_events WHERE matchLocalId = :matchId LIMIT 1)")
+    suspend fun hasEvents(matchId: String): Boolean
 }

@@ -1190,11 +1190,11 @@ class MatchViewModel : ViewModel() {
                 // when the match is opened on a new device.  Local Room DB is updated in place;
                 // if the remote fetch fails, the existing local data is used as fallback.
                 MatchRepository.syncMatchEvents(match.localId)
-                val (firstEvents, secondEvents) = MatchRepository.loadAllBallEvents(match.localId)
-                val matchStarted = firstEvents.isNotEmpty() || secondEvents.isNotEmpty()
-                Log.d("ResumeFlow", "hasMatchStarted=${matchStarted} " +
-                        "(firstEvents=${firstEvents.size}, secondEvents=${secondEvents.size})")
-                if (!matchStarted) {
+                // Check whether the match has started before loading all events so the
+                // innings-setup decision uses a single source of truth (hasMatchStarted).
+                val hasMatchStarted = MatchRepository.hasMatchStarted(match.localId)
+                Log.d("ResumeFlow", "hasMatchStarted=$hasMatchStarted for match ${match.localId}")
+                if (!hasMatchStarted) {
                     Log.d("ResumeFlow", "No persisted events — fresh match, awaiting setup")
                     // Fix existing data: a match with no events should always be NOT_STARTED.
                     val currentMatch = _activeMatch.value
@@ -1209,6 +1209,7 @@ class MatchViewModel : ViewModel() {
                     }
                     return@launch
                 }
+                val (firstEvents, secondEvents) = MatchRepository.loadAllBallEvents(match.localId)
                 Log.d("ResumeFlow", "Rebuilding match state from ${firstEvents.size + secondEvents.size} events")
                 // Fix existing data: a match with events should not be NOT_STARTED.
                 val currentMatch = _activeMatch.value
@@ -1327,6 +1328,8 @@ class MatchViewModel : ViewModel() {
                 val bowlerEntry = currentBowler?.let { BowlingEntry(player = it) }
                 // Mark setup as completed when players can be derived from the event log so
                 // that ScoringScreen does not show the innings-setup popup on resume.
+                // When striker is null, the events pre-date batter-stamping; setup was never
+                // recorded and the popup is legitimately needed to gather player information.
                 val setupCompleted = striker != null
                 _consoleState.value = ScoringConsoleState(
                     inningsNumber = 2,

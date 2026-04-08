@@ -294,7 +294,7 @@ class MatchRepository(
      * Used by the resume flow to decide whether the innings-setup popup should be shown.
      */
     suspend fun hasMatchStarted(matchLocalId: String): Boolean =
-        ballEventDao.getAllEventsForMatch(matchLocalId).isNotEmpty()
+        ballEventDao.hasEvents(matchLocalId)
 
     /**
      * Load all persisted [BallEvent]s for a match, split by innings.
