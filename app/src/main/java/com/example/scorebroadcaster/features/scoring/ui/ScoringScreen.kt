@@ -176,12 +176,20 @@ fun ScoringScreen(
 
     // Undo message snackbar
     val undoMessage by matchViewModel.undoMessage.collectAsState()
+    val validationError by matchViewModel.validationError.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     LaunchedEffect(undoMessage) {
         val msg = undoMessage
         if (!msg.isNullOrEmpty()) {
             snackbarHostState.showSnackbar(message = msg, duration = SnackbarDuration.Short)
             matchViewModel.clearUndoMessage()
+        }
+    }
+    LaunchedEffect(validationError) {
+        val err = validationError
+        if (!err.isNullOrEmpty()) {
+            snackbarHostState.showSnackbar(message = err, duration = SnackbarDuration.Short)
+            matchViewModel.clearValidationError()
         }
     }
 

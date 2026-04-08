@@ -19,6 +19,7 @@ import com.example.scorebroadcaster.features.scoring.data.toBallEvent
 import com.example.scorebroadcaster.features.scoring.domain.BallEvent
 import com.example.scorebroadcaster.features.scoring.domain.MaidenOverCalculator
 import com.example.scorebroadcaster.features.scoring.domain.OverSummaryCalculator
+import com.example.scorebroadcaster.features.scoring.domain.canAddPlayerToTeam
 import com.example.scorebroadcaster.features.scoring.domain.reduce
 import com.example.scorebroadcaster.features.scoring.data.MatchRepository
 import kotlinx.coroutines.Job
@@ -86,6 +87,17 @@ class MatchViewModel : ViewModel() {
     val undoMessage: StateFlow<String?> = _undoMessage.asStateFlow()
 
     fun clearUndoMessage() { _undoMessage.value = null }
+
+    /**
+     * One-shot validation error emitted when a player cannot be added because they already
+     * belong to the opposing team. Cleared by [clearValidationError].
+     *
+     * The UI should observe this flow and display the message via a Snackbar or Toast.
+     */
+    private val _validationError = MutableStateFlow<String?>(null)
+    val validationError: StateFlow<String?> = _validationError.asStateFlow()
+
+    fun clearValidationError() { _validationError.value = null }
 
     /**
      * Completed partnerships from the first innings.
@@ -802,6 +814,20 @@ class MatchViewModel : ViewModel() {
 
     /** Called once when opening batters and the first bowler are confirmed. */
     fun setOpeners(striker: Player, nonStriker: Player, bowler: Player) {
+        val match = _activeMatch.value
+        if (match != null) {
+            val inningsNum = _consoleState.value.inningsNumber
+            val battingTeam = if (inningsNum == 1) match.battingFirst else match.bowlingFirst
+            val bowlingTeam = if (inningsNum == 1) match.bowlingFirst else match.battingFirst
+            listOf(striker to battingTeam, nonStriker to battingTeam, bowler to bowlingTeam)
+                .forEach { (player, targetTeam) ->
+                    if (!canAddPlayerToTeam(player, targetTeam, match)) {
+                        Log.w("PlayerValidation", "Player ${player.name} blocked: already in opposing team")
+                        _validationError.value = "This player is already part of the opposing team"
+                        return
+                    }
+                }
+        }
         val strikerEntry = BattingEntry(player = striker)
         val nonStrikerEntry = BattingEntry(player = nonStriker)
         val bowlerEntry = BowlingEntry(player = bowler)
@@ -843,6 +869,16 @@ class MatchViewModel : ViewModel() {
     /** Called after a wicket when the scorer picks the incoming batter. */
     fun selectNextBatter(player: Player) {
         Log.d("WicketFlow", "Next batter selected: ${player.name}")
+        val match = _activeMatch.value
+        if (match != null) {
+            val console = _consoleState.value
+            val battingTeam = if (console.inningsNumber == 1) match.battingFirst else match.bowlingFirst
+            if (!canAddPlayerToTeam(player, battingTeam, match)) {
+                Log.w("PlayerValidation", "Player ${player.name} blocked: already in opposing team")
+                _validationError.value = "This player is already part of the opposing team"
+                return
+            }
+        }
         val console = _consoleState.value
         val pendingSelect = console.pendingAction as? PendingAction.SelectNextBatter
         val replacingStriker = pendingSelect?.replacingStriker ?: true
@@ -883,6 +919,16 @@ class MatchViewModel : ViewModel() {
 
     /** Called at the end of each over when the scorer picks the new bowler. */
     fun changeBowler(player: Player) {
+        val match = _activeMatch.value
+        if (match != null) {
+            val console = _consoleState.value
+            val bowlingTeam = if (console.inningsNumber == 1) match.bowlingFirst else match.battingFirst
+            if (!canAddPlayerToTeam(player, bowlingTeam, match)) {
+                Log.w("PlayerValidation", "Player ${player.name} blocked: already in opposing team")
+                _validationError.value = "This player is already part of the opposing team"
+                return
+            }
+        }
         val console = _consoleState.value
         val existingEntry = console.allBowlingEntries.find { it.player.id == player.id }
         val entry = existingEntry ?: BowlingEntry(player = player)
@@ -933,10 +979,19 @@ class MatchViewModel : ViewModel() {
         val battingTeam = if (console.inningsNumber == 1) match.battingFirst else match.bowlingFirst
         val bowlingTeam = if (console.inningsNumber == 1) match.bowlingFirst else match.battingFirst
         val targetTeam = if (addToBattingTeam) battingTeam else bowlingTeam
+
+        // Defensive re-check to guard against race conditions.
+        if (!canAddPlayerToTeam(player, targetTeam, match)) {
+            Log.w("PlayerValidation", "Player ${player.name} blocked: already in opposing team")
+            _validationError.value = "This player is already part of the opposing team"
+            return
+        }
+
         val updatedTeam = targetTeam.copy(players = targetTeam.players + player)
         val updatedMatch = match.updateTeamRef(targetTeam, updatedTeam)
         _activeMatch.value = updatedMatch
         MatchRepository.updateMatch(updatedMatch)
+        Log.d("PlayerValidation", "Player ${player.name} added to ${targetTeam.name}")
     }
 
     // ---------------------------------------------------------------------------

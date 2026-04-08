@@ -688,6 +688,57 @@ Scoring is modelled as an append-only event log:
 
 ## Development Log
 
+### 2026-04-08 – Bug Fix: Cross-Team Player Validation
+
+**Root cause**
+
+Validation preventing a player from appearing in both Team A and Team B existed only in the pre-match team selection screen (`PlayerSetupScreen`). The scoring flows — adding a batsman after a wicket, changing the bowler at the end of an over, and adding a player mid-match from the bottom sheet — had no equivalent check. A scorer could therefore assign the same player to both teams once a match was in progress.
+
+**Fix**
+
+A centralized, match-scoped validation function `canAddPlayerToTeam(player, targetTeam, match)` was created in the scoring domain layer (`features/scoring/domain/PlayerValidation.kt`). The function:
+
+1. Resolves the opponent team from the match's `teamA`/`teamB` fields by comparing the target team's ID.
+2. Checks whether the player's identity (profile ID when available, normalised name otherwise) already exists in the opponent team.
+3. Returns `false` if a conflict is found, `true` otherwise.
+4. Handles unrecognised or legacy team IDs gracefully by returning `true` (allow) to avoid crashes.
+
+**Rule enforced:** A player cannot belong to both teams in the same match.
+
+**Applied in all entry points inside `MatchViewModel`:**
+
+| Method | Validation added |
+|--------|-----------------|
+| `addPlayerToTeam(player, addToBattingTeam)` | Primary guard + defensive re-check |
+| `selectNextBatter(player)` | Defensive check before batter is confirmed |
+| `changeBowler(player)` | Defensive check before bowler is confirmed |
+| `setOpeners(striker, nonStriker, bowler)` | Defensive check for all three players |
+
+**User feedback**
+
+A `validationError: StateFlow<String?>` is now exposed from `MatchViewModel`. When validation fails the flow emits `"This player is already part of the opposing team"`. `ScoringScreen` observes this flow and surfaces the message via the existing `SnackbarHost`.
+
+**Logging added:**
+- `"Player X blocked: already in opposing team"` — emitted at `Log.w` level when blocked.
+- `"Player X added to Team Y"` — emitted at `Log.d` level on successful `addPlayerToTeam`.
+
+**What did NOT change:**
+- Database schema (players, teams, matches tables are unchanged).
+- Team structure and relationships.
+- Supabase sync logic.
+- Pre-match team selection screen (validation already present there via `hasCrossTeamDuplicate`).
+
+**Files modified:**
+
+| File | Change |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/features/scoring/domain/PlayerValidation.kt` | **New file** — `canAddPlayerToTeam` domain function |
+| `app/src/main/java/com/example/scorebroadcaster/features/scoring/viewmodel/MatchViewModel.kt` | Added `validationError` StateFlow; added validation in `addPlayerToTeam`, `selectNextBatter`, `changeBowler`, `setOpeners` |
+| `app/src/main/java/com/example/scorebroadcaster/features/scoring/ui/ScoringScreen.kt` | Observes `validationError` and shows Snackbar |
+| `README.md` | Added this Development Log entry |
+
+---
+
 ### 2026-04-05 – Backend Setup: Teams Sync (v1)
 
 **What changed**
