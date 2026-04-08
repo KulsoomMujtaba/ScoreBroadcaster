@@ -1,9 +1,21 @@
 package com.example.scorebroadcaster.features.match.data
 
+import android.util.Log
 import kotlinx.serialization.EncodeDefault
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+
+private const val TAG = "SupabaseMatch"
+
+/** UUID v4 regex used for defensive validation before Supabase insert. */
+private val UUID_REGEX = Regex(
+    "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
+    RegexOption.IGNORE_CASE
+)
+
+/** Returns `true` if this string is a well-formed UUID. */
+private fun String.isValidUuid(): Boolean = UUID_REGEX.matches(this)
 
 /**
  * Remote representation of a match stored in Supabase.
@@ -38,32 +50,68 @@ data class SupabaseMatch(
 /**
  * Convert a local [Match] to its remote [SupabaseMatch] representation.
  *
- * [teamAId] and [teamBId] use the team names as stable identifiers because
- * ad-hoc teams created during match setup do not have persisted Room UUIDs.
- * When saved teams are linked to a match in a future phase, these fields
- * should be replaced with the actual [SavedTeam.id] values.
+ * [teamAId] and [teamBId] use the team's UUID ([Team.id]) so that the Supabase
+ * `team_a_id` / `team_b_id` UUID columns receive a valid UUID value.  Display
+ * names must not be sent to UUID columns — they are available via [Match.displayTitle].
  *
- * [tossWinnerTeamId] is stored as the winning team's name for the same reason.
+ * [tossWinnerTeamId] is likewise stored as the winning team's UUID.
+ *
+ * Logs a warning if any UUID field fails basic format validation before the insert.
  */
-fun Match.toSupabaseMatch(userId: String): SupabaseMatch = SupabaseMatch(
-    id = localId,
-    userId = userId,
-    teamAId = teamA.name,
-    teamBId = teamB.name,
-    matchName = displayTitle,
-    format = format.name,
-    totalOvers = overs,
-    tossWinnerTeamId = tossWinner.name,
-    tossDecision = tossDecision.name,
-    status = status.name,
-    isPublished = visibility == MatchVisibility.PUBLISHED,
-    shareCode = shareCode
-)
+fun Match.toSupabaseMatch(userId: String): SupabaseMatch {
+    Log.d(TAG, "Inserting match with teamAId=${teamA.id} teamBId=${teamB.id} tossWinnerId=${tossWinner.id}")
+    if (!teamA.id.isValidUuid()) Log.w(TAG, "teamA.id is not a valid UUID: ${teamA.id}")
+    if (!teamB.id.isValidUuid()) Log.w(TAG, "teamB.id is not a valid UUID: ${teamB.id}")
+    if (!tossWinner.id.isValidUuid()) Log.w(TAG, "tossWinner.id is not a valid UUID: ${tossWinner.id}")
+    return SupabaseMatch(
+        id = localId,
+        userId = userId,
+        teamAId = teamA.id,
+        teamBId = teamB.id,
+        matchName = displayTitle,
+        format = format.name,
+        totalOvers = overs,
+        tossWinnerTeamId = tossWinner.id,
+        tossDecision = tossDecision.name,
+        status = status.name,
+        isPublished = visibility == MatchVisibility.PUBLISHED,
+        shareCode = shareCode
+    )
+}
 
-/** Convert a remote [SupabaseMatch] back to a local [Match] domain model. */
+/** Convert a remote [SupabaseMatch] back to a local [Match] domain model.
+ *
+ * Supports two formats stored in [teamAId] / [teamBId]:
+ * - **New format** (UUID): The field is a proper UUID.  Team names are recovered from
+ *   [matchName] when it follows the "TeamA vs TeamB" convention, otherwise the UUID is
+ *   used as a placeholder name.
+ * - **Old format** (name-as-ID): The field contains a plain team name (written by
+ *   earlier app versions).  In this case the name is used directly and a fresh UUID is
+ *   generated for the local [Team.id].
+ */
 fun SupabaseMatch.toMatch(): Match {
-    val teamA = com.example.scorebroadcaster.features.teams.data.Team(name = teamAId)
-    val teamB = com.example.scorebroadcaster.features.teams.data.Team(name = teamBId)
+    // Attempt to recover team names from matchName ("TeamA vs TeamB").
+    val parts = matchName.split(" vs ", limit = 2)
+    val derivedNameA = parts.getOrNull(0)?.takeIf { it.isNotBlank() }
+    val derivedNameB = parts.getOrNull(1)?.takeIf { it.isNotBlank() }
+
+    val teamA: com.example.scorebroadcaster.features.teams.data.Team
+    val teamB: com.example.scorebroadcaster.features.teams.data.Team
+    if (teamAId.isValidUuid() && teamBId.isValidUuid()) {
+        // New format: teamAId/teamBId are proper UUIDs — use them as Team.id.
+        teamA = com.example.scorebroadcaster.features.teams.data.Team(
+            id = teamAId,
+            name = derivedNameA ?: teamAId
+        )
+        teamB = com.example.scorebroadcaster.features.teams.data.Team(
+            id = teamBId,
+            name = derivedNameB ?: teamBId
+        )
+    } else {
+        // Old format: teamAId/teamBId contain team names — use them as display names.
+        teamA = com.example.scorebroadcaster.features.teams.data.Team(name = teamAId)
+        teamB = com.example.scorebroadcaster.features.teams.data.Team(name = teamBId)
+    }
     val tossWinnerTeam = if (tossWinnerTeamId == teamAId) teamA else teamB
     val tossDecisionEnum = runCatching { TossDecision.valueOf(tossDecision) }
         // BAT is the safe fallback: a batsman-first assumption is less disruptive than BOWL

@@ -34,6 +34,8 @@ import com.example.scorebroadcaster.features.teams.data.SavedTeamPlayerCrossRef
  *       restored after an app restart without re-opening the innings-setup dialog.
  * - v7: Added `fielder2Name` column to `ball_events` to support run-out dismissals
  *       involving two fielders.
+ * - v8: Added `teamAId` and `teamBId` columns to `matches` so team UUIDs are persisted
+ *       locally and reused for Supabase sync instead of being regenerated on each load.
  *
  * Use [getInstance] to obtain the singleton database instance.
  */
@@ -45,7 +47,7 @@ import com.example.scorebroadcaster.features.teams.data.SavedTeamPlayerCrossRef
         MatchEntity::class,
         BallEventEntity::class
     ],
-    version = 7,
+    version = 8,
     exportSchema = false
 )
 @TypeConverters(PlayerListTypeConverter::class)

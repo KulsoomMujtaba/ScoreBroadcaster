@@ -42,21 +42,20 @@ object SupabaseEventRepository {
     // -------------------------------------------------------------------------
 
     /**
-     * Append [event] to the `match_events` table.
+     * Insert [event] into the `match_events` table.
      *
-     * Uses upsert on the [SupabaseEvent.id] primary key (which is deterministic:
-     * `"<matchId>_<eventIndex>"`).  If a row with the same `id` already exists, Supabase
-     * performs an UPDATE with the same data — harmless because events are immutable.
-     * This makes the insert idempotent and safe to retry after a transient failure.
+     * The [SupabaseEvent.id] field is null and not serialized; Supabase auto-generates
+     * the UUID primary key.  A simple insert is used instead of upsert because there is
+     * no client-side primary key to conflict on.
      *
      * Does nothing if the Supabase client is not configured.
      */
     suspend fun insertEvent(event: SupabaseEvent) {
         val supabase = client ?: return
         runCatching {
-            supabase.postgrest[TABLE]
-                .upsert(event) { onConflict = "id" }
-            Log.d(TAG, "Inserted event index ${event.eventIndex} for match ${event.matchId}")
+            Log.d(TAG, "Inserting event index=${event.eventIndex} for match ${event.matchId}")
+            supabase.postgrest[TABLE].insert(event)
+            Log.d(TAG, "Successfully inserted event index=${event.eventIndex} for match ${event.matchId}")
         }.onFailure { e ->
             Log.e(TAG, "Failed to insert event index ${event.eventIndex}: ${e.message}")
         }

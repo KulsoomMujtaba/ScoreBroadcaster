@@ -26,6 +26,8 @@ data class MatchEntity(
 
     val teamAName: String,
     val teamBName: String,
+    val teamAId: String,
+    val teamBId: String,
 
     val tossWinner: String,
     val tossDecision: String,
@@ -45,8 +47,8 @@ data class MatchEntity(
  * from the persisted [tossDecision].
  */
 fun MatchEntity.toDomain(): Match {
-    val teamA = Team(name = teamAName)
-    val teamB = Team(name = teamBName)
+    val teamA = Team(id = teamAId, name = teamAName)
+    val teamB = Team(id = teamBId, name = teamBName)
     // Default to teamB when the stored name matches neither — handles corrupt data gracefully.
     val tossWinnerTeam = if (tossWinner == teamAName) teamA else teamB
     val tossDecisionEnum = runCatching { TossDecision.valueOf(tossDecision) }.getOrDefault(TossDecision.BAT)
@@ -85,6 +87,8 @@ fun Match.toEntity(): MatchEntity = MatchEntity(
     oversLimit = overs,
     teamAName = teamA.name,
     teamBName = teamB.name,
+    teamAId = teamA.id,
+    teamBId = teamB.id,
     tossWinner = tossWinner.name,
     tossDecision = tossDecision.name,
     status = status.name,

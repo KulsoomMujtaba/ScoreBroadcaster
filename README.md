@@ -688,6 +688,59 @@ Scoring is modelled as an append-only event log:
 
 ## Development Log
 
+### 2026-04-08 – Bug Fix: UUID Mapping for Matches and Events
+
+**Root cause**
+
+Two separate UUID type-mismatch errors were causing all Supabase inserts to fail:
+
+1. **Matches** — `toSupabaseMatch()` sent `team.name` (a plain string) to the `team_a_id`,
+   `team_b_id`, and `toss_winner_team_id` UUID columns.  Supabase rejected these with a
+   column type error.
+2. **Match events** — `toSupabaseEvent()` constructed a composite string ID of the form
+   `"<matchId>_<eventIndex>"` and sent it to the `match_events.id` UUID column.  Supabase
+   rejected this non-UUID value.
+
+Additionally, team UUIDs were not persisted in the local Room database, so a fresh UUID was
+generated every time a match was loaded from Room, making it impossible to reuse the same
+team ID across local storage and remote sync.
+
+**Fix**
+
+- `MatchEntity` — added `teamAId` and `teamBId` columns so team UUIDs are persisted locally
+  and reused for every subsequent Supabase sync.  Room DB bumped to v8 (destructive migration
+  is in effect during this development phase).
+- `MatchEntity.toDomain()` — reconstructs `Team` objects with the persisted UUID as `Team.id`.
+- `Match.toSupabaseMatch()` — now sends `team.id` (UUID) for `teamAId`, `teamBId`, and
+  `tossWinnerTeamId`.  Logs the UUID values before insert.  Warns if any UUID field fails
+  basic format validation.
+- `SupabaseMatch.toMatch()` — detects old Supabase rows that stored team names instead of
+  UUIDs and handles them gracefully (backward compatibility).  For new-format rows, team
+  names are recovered from `matchName` ("TeamA vs TeamB" convention).
+- `SupabaseEvent.id` — changed from a required `String` to an optional `String?` with
+  `@EncodeDefault(EncodeDefault.Mode.NEVER)`.  The field is now omitted on insert so
+  Supabase auto-generates the UUID.  It is still populated when reading rows back.
+- `SupabaseEventRepository.insertEvent()` — replaced `upsert` (with `onConflict = "id"`) with
+  a plain `insert`, consistent with letting Supabase own the primary key.  Logs the event
+  index before and after insert.
+
+**Key principle**
+
+Separate display data from relational IDs.  Team names are for human display; team UUIDs are
+for relational integrity.  Never send a non-UUID value to a UUID column.
+
+**Files modified**
+| File | Change |
+|------|--------|
+| `app/.../match/data/MatchEntity.kt` | Added `teamAId`, `teamBId`; updated `toDomain()` and `toEntity()` |
+| `app/.../match/data/ScoredDatabase.kt` | Bumped version to 8; added v8 changelog entry |
+| `app/.../match/data/SupabaseMatch.kt` | Fixed `toSupabaseMatch()` to use `team.id`; fixed `toMatch()` for backward compat; added UUID validation and logging |
+| `app/.../scoring/data/SupabaseEvent.kt` | Made `id` optional (`String?`); removed manual composite ID; added pre-insert log |
+| `app/.../scoring/data/SupabaseEventRepository.kt` | Changed `upsert` to `insert`; added pre-insert log |
+| `README.md` | Added this Development Log entry |
+
+---
+
 ### 2026-04-08 – UX Improvement: Player Selection Filtering
 
 **Problem**
