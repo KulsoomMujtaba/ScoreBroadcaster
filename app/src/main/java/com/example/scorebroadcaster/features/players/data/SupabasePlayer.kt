@@ -1,5 +1,7 @@
 package com.example.scorebroadcaster.features.players.data
 
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -10,13 +12,16 @@ import kotlinx.serialization.Serializable
  * The [id] matches the local [PlayerProfile.id] so duplicate-checking can be
  * done by comparing ids.
  */
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class SupabasePlayer(
     val id: String,
     @SerialName("user_id") val userId: String,
     val name: String,
-    @SerialName("created_at") val createdAt: String = "",
-    @SerialName("updated_at") val updatedAt: String = ""
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    @SerialName("created_at") val createdAt: String? = null,
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    @SerialName("updated_at") val updatedAt: String? = null
 )
 
 /** Convert a [PlayerProfile] to its remote [SupabasePlayer] representation. */

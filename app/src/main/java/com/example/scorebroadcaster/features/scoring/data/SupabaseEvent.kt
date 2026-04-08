@@ -2,6 +2,8 @@ package com.example.scorebroadcaster.features.scoring.data
 
 import com.example.scorebroadcaster.features.players.data.Player
 import com.example.scorebroadcaster.features.scoring.domain.BallEvent
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -24,6 +26,7 @@ import kotlinx.serialization.Serializable
  * Using a JSON payload instead of many nullable columns keeps the schema stable as the
  * [BallEvent] model evolves without requiring new migrations.
  */
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class SupabaseEvent(
     val id: String,
@@ -32,7 +35,8 @@ data class SupabaseEvent(
     @SerialName("event_index") val eventIndex: Int,
     @SerialName("event_type") val eventType: String,
     val payload: BallEventPayload,
-    @SerialName("created_at") val createdAt: String = ""
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    @SerialName("created_at") val createdAt: String? = null
 )
 
 /**

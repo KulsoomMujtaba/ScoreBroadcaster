@@ -1,5 +1,7 @@
 package com.example.scorebroadcaster.features.match.data
 
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -12,6 +14,7 @@ import kotlinx.serialization.Serializable
  *
  * Only metadata is stored here — ball-by-ball events are not synced (see FUTURE CONTEXT).
  */
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class SupabaseMatch(
     val id: String,
@@ -26,8 +29,10 @@ data class SupabaseMatch(
     val status: String,
     @SerialName("is_published") val isPublished: Boolean = false,
     @SerialName("share_code") val shareCode: String? = null,
-    @SerialName("created_at") val createdAt: String = "",
-    @SerialName("updated_at") val updatedAt: String = ""
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    @SerialName("created_at") val createdAt: String? = null,
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    @SerialName("updated_at") val updatedAt: String? = null
 )
 
 /**

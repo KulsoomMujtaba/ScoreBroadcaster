@@ -4,6 +4,7 @@ import android.util.Log
 import com.example.scorebroadcaster.core.supabase.SupabaseClientProvider
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
+import io.github.jan.supabase.postgrest.query.Order
 
 /**
  * Handles all Supabase `match_events` table operations.
@@ -66,7 +67,7 @@ object SupabaseEventRepository {
             val result = supabase.postgrest[TABLE]
                 .select(columns = Columns.ALL) {
                     filter { eq("match_id", matchId) }
-                    order("event_index")
+                    order("event_index", Order.ASCENDING)
                 }
                 .decodeList<SupabaseEvent>()
             Log.d(TAG, "Fetched ${result.size} events for match $matchId")
