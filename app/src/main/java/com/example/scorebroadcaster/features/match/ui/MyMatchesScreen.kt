@@ -10,14 +10,23 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -41,6 +50,8 @@ fun MyMatchesScreen(
     val scoringMatch by matchViewModel.activeMatch.collectAsState()
     val scoringState by matchViewModel.state.collectAsState()
     val scoringConsole by matchViewModel.consoleState.collectAsState()
+
+    var matchPendingDelete by remember { mutableStateOf<Match?>(null) }
 
     Column(
         modifier = modifier
@@ -89,12 +100,47 @@ fun MyMatchesScreen(
                         match = match,
                         isActive = isActive,
                         liveScore = liveScore,
-                        onClick = { onMatchClick(match) }
+                        onClick = { onMatchClick(match) },
+                        onDeleteClick = { matchPendingDelete = match }
                     )
                 }
             }
         }
     }
+
+    matchPendingDelete?.let { match ->
+        DeleteMatchConfirmationDialog(
+            matchTitle = match.displayTitle,
+            onConfirm = {
+                matchSessionViewModel.deleteMatch(match.localId)
+                matchPendingDelete = null
+            },
+            onDismiss = { matchPendingDelete = null }
+        )
+    }
+}
+
+@Composable
+private fun DeleteMatchConfirmationDialog(
+    matchTitle: String,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Delete Match") },
+        text = { Text("Are you sure you want to delete \"$matchTitle\"? This action cannot be undone.") },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text("Delete", color = MaterialTheme.colorScheme.error)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
 }
 
 @Composable
@@ -102,7 +148,8 @@ private fun MatchListItem(
     match: Match,
     isActive: Boolean,
     liveScore: String?,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onDeleteClick: () -> Unit
 ) {
     Surface(
         tonalElevation = if (isActive) 6.dp else 2.dp,
@@ -123,7 +170,19 @@ private fun MatchListItem(
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.weight(1f)
                 )
-                StatusChip(status = match.status, isActive = isActive)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    StatusChip(status = match.status, isActive = isActive)
+                    IconButton(onClick = onDeleteClick) {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = "Delete match",
+                            tint = MaterialTheme.colorScheme.error.copy(alpha = 0.7f)
+                        )
+                    }
+                }
             }
             Spacer(modifier = Modifier.height(4.dp))
             HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))

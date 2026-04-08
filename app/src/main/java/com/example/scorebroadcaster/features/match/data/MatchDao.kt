@@ -25,6 +25,9 @@ interface MatchDao {
     @Query("SELECT * FROM matches WHERE localId = :localId")
     suspend fun getById(localId: String): MatchEntity?
 
+    @Query("DELETE FROM matches WHERE localId = :localId")
+    suspend fun deleteById(localId: String)
+
     @Query("SELECT * FROM matches ORDER BY createdAt DESC")
     fun observeAll(): Flow<List<MatchEntity>>
 }

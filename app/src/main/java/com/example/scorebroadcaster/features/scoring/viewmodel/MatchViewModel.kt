@@ -156,6 +156,15 @@ class MatchViewModel : ViewModel() {
         refreshCurrentInningsOverSummaries()
         persistCurrentInningsEvents()
 
+        // Transition match status from NOT_STARTED → IN_PROGRESS on the first recorded ball.
+        val currentMatch = _activeMatch.value
+        if (currentMatch != null && currentMatch.status == MatchStatus.NOT_STARTED && _events.value.size == 1) {
+            Log.d("MatchViewModel", "First ball recorded — transitioning match ${currentMatch.localId} to IN_PROGRESS")
+            val updated = currentMatch.copy(status = MatchStatus.IN_PROGRESS)
+            _activeMatch.value = updated
+            MatchRepository.updateMatch(updated)
+        }
+
         // Async remote insert — must come after local append so sequenceNumber is accurate.
         // Does not block scoring; failures are logged and retried on next sync.
         _activeMatch.value?.localId?.let { matchId ->
@@ -1116,10 +1125,31 @@ class MatchViewModel : ViewModel() {
             val (firstEvents, secondEvents) = MatchRepository.loadAllBallEvents(match.localId)
             if (firstEvents.isEmpty() && secondEvents.isEmpty()) {
                 Log.d("ResumeFlow", "No persisted events — fresh match, awaiting setup")
+                // Fix existing data: a match with no events should always be NOT_STARTED.
+                val currentMatch = _activeMatch.value
+                if (currentMatch != null &&
+                    currentMatch.status != MatchStatus.NOT_STARTED &&
+                    currentMatch.status != MatchStatus.COMPLETED
+                ) {
+                    Log.d("ResumeFlow", "Correcting match ${currentMatch.localId} status from ${currentMatch.status} → NOT_STARTED (no events)")
+                    val fixed = currentMatch.copy(status = MatchStatus.NOT_STARTED)
+                    _activeMatch.value = fixed
+                    MatchRepository.updateMatch(fixed)
+                }
                 return@launch
             }
             Log.d("ResumeFlow", "Rebuilding match state from ${firstEvents.size + secondEvents.size} events")
-            resumePersistedState(match, firstEvents, secondEvents)
+            // Fix existing data: a match with events should not be NOT_STARTED.
+            val currentMatch = _activeMatch.value
+            if (currentMatch != null && currentMatch.status == MatchStatus.NOT_STARTED) {
+                Log.d("ResumeFlow", "Correcting match ${currentMatch.localId} status from NOT_STARTED → IN_PROGRESS (events exist)")
+                val fixed = currentMatch.copy(status = MatchStatus.IN_PROGRESS)
+                _activeMatch.value = fixed
+                MatchRepository.updateMatch(fixed)
+                resumePersistedState(fixed, firstEvents, secondEvents)
+            } else {
+                resumePersistedState(match, firstEvents, secondEvents)
+            }
         }
     }
 

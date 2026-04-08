@@ -86,6 +86,29 @@ class MatchRepository(
         }
     }
 
+    /**
+     * Delete the match with [matchId] from the local Room database and asynchronously remove
+     * it from Supabase.
+     *
+     * Supabase will cascade-delete all associated `match_events` rows automatically.
+     * The local Room deletion is immediate so the UI updates optimistically; the remote
+     * delete is best-effort and does not block scoring or navigation.
+     */
+    fun deleteMatch(matchId: String) {
+        Log.d("MatchRepository", "Deleting match $matchId")
+        scope.launch {
+            dao.deleteById(matchId)
+            ballEventDao.deleteForMatch(matchId)
+            val userId = currentUserId
+            if (userId != null) {
+                SupabaseMatchRepository.deleteMatch(matchId)
+            }
+        }
+        if (_activeMatch.value?.id == matchId) {
+            _activeMatch.value = null
+        }
+    }
+
     fun updateMatch(match: Match) {
         scope.launch {
             dao.update(match.toEntity())
@@ -291,6 +314,16 @@ class MatchRepository(
         @Synchronized
         internal fun setInstance(instance: MatchRepository) {
             _instance = instance
+        }
+
+        /**
+         * Delete the match with [matchId] from local Room and Supabase.
+         *
+         * Delegates to the active instance. No-ops if the repository is not yet initialised.
+         */
+        fun deleteMatch(matchId: String) {
+            val repo = _instance ?: return
+            repo.deleteMatch(matchId)
         }
 
         /**
