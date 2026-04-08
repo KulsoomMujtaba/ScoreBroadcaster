@@ -136,6 +136,7 @@ fun ScoringScreen(
     val console by matchViewModel.consoleState.collectAsState()
     val match by matchViewModel.activeMatch.collectAsState()
     val events by matchViewModel.events.collectAsState()
+    val isResuming by matchViewModel.isResuming.collectAsState()
     // Capture a non-nullable snapshot so inner lambdas and blocks can smart-cast.
     val activeMatch: Match? = match
 
@@ -147,7 +148,11 @@ fun ScoringScreen(
     // IMPORTANT: do NOT treat "zero deliveries after undo" as missing setup.
     // inningsSetupCompleted is set to true by setOpeners() and is never cleared by undo,
     // so it correctly distinguishes "setup never done" from "setup done, first ball undone".
-    val needsInningsSetup = when (console.phase) {
+    //
+    // Also suppressed while isResuming is true: the ViewModel's async resume coroutine may
+    // transiently expose a FIRST_INNINGS / setupCompleted=false state before the persisted
+    // events are loaded and state is fully reconstructed.
+    val needsInningsSetup = !isResuming && when (console.phase) {
         InningsPhase.SETUP -> true
         InningsPhase.FIRST_INNINGS,
         InningsPhase.SECOND_INNINGS ->
