@@ -43,6 +43,9 @@ import com.example.scorebroadcaster.features.auth.viewmodel.AuthViewModel
 import com.example.scorebroadcaster.features.streaming.viewmodel.LiveStreamViewModel
 import com.example.scorebroadcaster.features.match.viewmodel.MatchSessionViewModel
 import com.example.scorebroadcaster.features.scoring.viewmodel.MatchViewModel
+import com.example.scorebroadcaster.features.viewer.ui.EnterShareCodeScreen
+import com.example.scorebroadcaster.features.viewer.ui.MatchViewerScreen
+import com.example.scorebroadcaster.features.viewer.viewmodel.MatchViewerViewModel
 import com.example.scorebroadcaster.navigation.ScoreEmptyState
 
 class MainActivity : ComponentActivity() {
@@ -112,6 +115,7 @@ class MainActivity : ComponentActivity() {
                         val matchViewModel: MatchViewModel = viewModel()
                         val liveStreamViewModel: LiveStreamViewModel = viewModel()
                         val matchSessionViewModel: MatchSessionViewModel = viewModel()
+                        val matchViewerViewModel: MatchViewerViewModel = viewModel()
                         val navController = rememberNavController()
 
                         // Trigger player sync once the profile is available after sign-in.
@@ -301,7 +305,13 @@ class MainActivity : ComponentActivity() {
                                         onGoLive = { navController.navigate("stream_setup") },
                                         onViewScorecard = { navController.navigate("scorecard") },
                                         onViewTimeline = { navController.navigate("ball_timeline") },
-                                        onBack = { navController.popBackStack() }
+                                        onBack = { navController.popBackStack() },
+                                        onViewerMode = {
+                                            val code = matchSessionViewModel.activeMatch.value?.shareCode
+                                            if (code != null) {
+                                                navController.navigate("match_viewer/$code")
+                                            }
+                                        }
                                     )
                                 }
                                 composable("scorecard") {
@@ -374,6 +384,25 @@ class MainActivity : ComponentActivity() {
                                     StreamPreviewScreen(
                                         onBack = { navController.popBackStack() },
                                         liveStreamViewModel = liveStreamViewModel
+                                    )
+                                }
+
+                                // ---- Viewer ----
+
+                                composable("enter_share_code") {
+                                    EnterShareCodeScreen(
+                                        onWatchMatch = { shareCode ->
+                                            matchViewerViewModel.reset()
+                                            navController.navigate("match_viewer/$shareCode")
+                                        }
+                                    )
+                                }
+                                composable("match_viewer/{shareCode}") { backStackEntry ->
+                                    val shareCode = backStackEntry.arguments?.getString("shareCode") ?: ""
+                                    MatchViewerScreen(
+                                        shareCode = shareCode,
+                                        viewerViewModel = matchViewerViewModel,
+                                        onBack = { navController.popBackStack() }
                                     )
                                 }
                             }

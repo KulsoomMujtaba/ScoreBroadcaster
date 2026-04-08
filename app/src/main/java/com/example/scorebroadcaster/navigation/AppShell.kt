@@ -72,32 +72,36 @@ enum class BottomNavTab(
     LIVE("live_hub", "Live", Icons.Default.PlayArrow)
 }
 
-private fun selectedTab(route: String?): BottomNavTab? = when (route) {
-    BottomNavTab.HOME.route -> BottomNavTab.HOME
-    BottomNavTab.MATCHES.route, "create_match", "player_setup", "match_summary", "match_details"
-        -> BottomNavTab.MATCHES
-    BottomNavTab.SCORE.route, "scoring_only", "scorecard", "ball_timeline", "match_preview" -> BottomNavTab.SCORE
-    BottomNavTab.LIVE.route, "live_preview", "stream_setup", "stream_preview" -> BottomNavTab.LIVE
+private fun selectedTab(route: String?): BottomNavTab? = when {
+    route == BottomNavTab.HOME.route -> BottomNavTab.HOME
+    route == BottomNavTab.MATCHES.route || route == "create_match" || route == "player_setup" ||
+        route == "match_summary" || route == "match_details" -> BottomNavTab.MATCHES
+    route == BottomNavTab.SCORE.route || route == "scoring_only" || route == "scorecard" ||
+        route == "ball_timeline" || route == "match_preview" -> BottomNavTab.SCORE
+    route == BottomNavTab.LIVE.route || route == "live_preview" || route == "stream_setup" ||
+        route == "stream_preview" -> BottomNavTab.LIVE
     else -> null
 }
 
-private fun topBarTitle(route: String?): String = when (route) {
-    "home" -> "Scored"
-    "my_matches" -> "My Matches"
-    "score_tab", "scoring_only" -> "Score"
-    "live_hub" -> "Live"
-    "create_match" -> "Create Match"
-    "player_setup" -> "Player Setup"
-    "match_summary" -> "Match Summary"
-    "match_details" -> "Match Details"
-    "scorecard" -> "Scorecard"
-    "ball_timeline" -> "Over History"
-    "match_preview" -> "Match Preview"
-    "live_preview" -> "Camera Preview"
-    "stream_setup" -> "Stream Setup"
-    "stream_preview" -> "Go Live"
-    "saved_teams" -> "Saved Teams"
-    "saved_players" -> "My Players"
+private fun topBarTitle(route: String?): String = when {
+    route == "home" -> "Scored"
+    route == "my_matches" -> "My Matches"
+    route == "score_tab" || route == "scoring_only" -> "Score"
+    route == "live_hub" -> "Live"
+    route == "create_match" -> "Create Match"
+    route == "player_setup" -> "Player Setup"
+    route == "match_summary" -> "Match Summary"
+    route == "match_details" -> "Match Details"
+    route == "scorecard" -> "Scorecard"
+    route == "ball_timeline" -> "Over History"
+    route == "match_preview" -> "Match Preview"
+    route == "live_preview" -> "Camera Preview"
+    route == "stream_setup" -> "Stream Setup"
+    route == "stream_preview" -> "Go Live"
+    route == "saved_teams" -> "Saved Teams"
+    route == "saved_players" -> "My Players"
+    route == "enter_share_code" -> "Watch a Match"
+    route?.startsWith("match_viewer") == true -> "Match Viewer"
     else -> "Scored"
 }
 
@@ -300,6 +304,16 @@ fun AppDrawer(
             label = "Stream Setup",
             selected = currentRoute == "stream_setup",
             onClick = { onNavigate("stream_setup") }
+        )
+
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
+        // Viewer — enter share code to watch a published match
+        DrawerNavItem(
+            icon = Icons.Default.Info,
+            label = "Watch a Match",
+            selected = currentRoute == "enter_share_code" || currentRoute == "match_viewer",
+            onClick = { onNavigate("enter_share_code") }
         )
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))

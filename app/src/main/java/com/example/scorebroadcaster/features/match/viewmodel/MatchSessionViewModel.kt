@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 
 /**
  * Manages the higher-level match lifecycle: creation, player setup, active session, and match list.
@@ -209,5 +210,26 @@ class MatchSessionViewModel(application: Application) : AndroidViewModel(applica
      *  [matches] and saved teams/players are driven by Room Flows and update automatically. */
     fun refresh() {
         _activeMatch.value = matchRepository.activeMatch
+    }
+
+    /**
+     * Publish the match identified by [matchId].
+     *
+     * Generates a unique share code and updates both local Room storage and Supabase.
+     * The [onResult] callback is invoked on the calling coroutine with the generated
+     * share code on success, or `null` on failure.
+     */
+    fun publishMatch(matchId: String, onResult: (shareCode: String?) -> Unit) {
+        viewModelScope.launch {
+            val code = matchRepository.publishMatch(matchId)
+            if (code != null && _activeMatch.value?.id == matchId) {
+                _activeMatch.value = _activeMatch.value?.copy(
+                    visibility = com.example.scorebroadcaster.features.match.data.MatchVisibility.PUBLISHED,
+                    shareCode = code,
+                    publishedAt = System.currentTimeMillis()
+                )
+            }
+            onResult(code)
+        }
     }
 }

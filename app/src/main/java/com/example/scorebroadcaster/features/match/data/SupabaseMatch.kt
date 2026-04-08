@@ -24,6 +24,8 @@ data class SupabaseMatch(
     @SerialName("toss_winner_team_id") val tossWinnerTeamId: String,
     @SerialName("toss_decision") val tossDecision: String,
     val status: String,
+    @SerialName("is_published") val isPublished: Boolean = false,
+    @SerialName("share_code") val shareCode: String? = null,
     @SerialName("created_at") val createdAt: String = "",
     @SerialName("updated_at") val updatedAt: String = ""
 )
@@ -48,7 +50,9 @@ fun Match.toSupabaseMatch(userId: String): SupabaseMatch = SupabaseMatch(
     totalOvers = overs,
     tossWinnerTeamId = tossWinner.name,
     tossDecision = tossDecision.name,
-    status = status.name
+    status = status.name,
+    isPublished = visibility == MatchVisibility.PUBLISHED,
+    shareCode = shareCode
 )
 
 /** Convert a remote [SupabaseMatch] back to a local [Match] domain model. */
@@ -63,6 +67,11 @@ fun SupabaseMatch.toMatch(): Match {
     val battingFirst = if (tossDecisionEnum == TossDecision.BAT) tossWinnerTeam
                        else if (tossWinnerTeam == teamA) teamB else teamA
     val bowlingFirst = if (battingFirst == teamA) teamB else teamA
+    val resolvedVisibility = when {
+        isPublished -> MatchVisibility.PUBLISHED
+        shareCode != null -> MatchVisibility.UNLISTED
+        else -> MatchVisibility.PRIVATE
+    }
     return Match(
         id = id,
         localId = id,
@@ -82,6 +91,8 @@ fun SupabaseMatch.toMatch(): Match {
             // NOT_STARTED is the safest fallback — it prevents the match from appearing
             // as resumable or completed if the stored status value is unrecognised.
             .getOrDefault(MatchStatus.NOT_STARTED),
-        ownerUserId = userId
+        ownerUserId = userId,
+        visibility = resolvedVisibility,
+        shareCode = shareCode
     )
 }

@@ -65,10 +65,83 @@ The core promise is simple: open the app, start a match, score every ball, and s
 | Match session management | ✅ Done | `MatchSessionViewModel` |
 | Matches sync to Supabase (metadata only) | ✅ Done | `SupabaseMatchRepository`, `MatchRepository`, `MatchSessionViewModel` |
 | Match events persistence to Supabase (append-only event log) | ✅ Done | `SupabaseEventRepository`, `SupabaseEvent`, `MatchRepository`, `MatchViewModel` |
+| Match publishing + share code generation | ✅ Done | `MatchDetailsScreen`, `MatchSessionViewModel`, `MatchRepository`, `SupabaseMatchRepository` |
+| Read-only viewer mode (enter share code → view match) | ✅ Done | `EnterShareCodeScreen`, `MatchViewerScreen`, `MatchViewerViewModel` |
 
 ---
 
-## Backend Setup: Match Events Persistence (v1)
+## Feature: Match Publishing + Viewer Mode (v1)
+
+### Private → Public model
+
+All matches are private by default (`MatchVisibility.PRIVATE`).  The scorer can publish a match
+from the **Match Details** screen by tapping "Publish Match".  Publishing sets
+`is_published = true` and assigns a unique share code in Supabase, then updates local Room
+storage with `MatchVisibility.PUBLISHED`, the share code, and a `publishedAt` timestamp.
+
+Once published, the share code (7-char uppercase alphanumeric) is displayed in Match Details with
+a one-tap copy button.
+
+### Share code mechanism
+
+1. `SupabaseMatchRepository.publishMatch(matchId)` generates a random 7-character code from
+   `[A-Z0-9]`.
+2. It checks for collisions by querying the `matches` table for any row with that `share_code`.
+3. On collision it retries up to 5 times before returning `null`.
+4. On success it performs a partial `UPDATE` on the match row: `is_published = true`,
+   `share_code = <code>`.
+5. `MatchRepository.publishMatch(matchId)` coordinates the operation: delegates to Supabase,
+   then updates local Room and the in-memory active-match state.
+6. `MatchSessionViewModel.publishMatch(matchId, onResult)` exposes this to the UI.
+
+### Read-only architecture
+
+The viewer flow is completely separate from the scoring flow:
+
+- **`MatchViewerViewModel`** — loads a published match by share code using
+  `SupabaseMatchRepository.getMatchByShareCode(code)`, fetches its events via
+  `SupabaseEventRepository.fetchMatchEvents(matchId)`, and rebuilds the current state by
+  replaying events through the unmodified `ScoreReducer.reduce()` function.
+- **`EnterShareCodeScreen`** — simple input screen; no Supabase calls.
+- **`MatchViewerScreen`** — read-only display: team names, innings scores, overs,
+  target/required runs, recent-ball strip, extras.  No scoring buttons, no undo, no edit.
+
+The viewer accesses Supabase directly through the existing repository layer — no new Supabase
+client instances, no direct calls from Composables.
+
+### Database changes
+
+A new migration (`20260408_publish_match.sql`) adds:
+- `is_published BOOLEAN NOT NULL DEFAULT false` to `matches`
+- `share_code TEXT UNIQUE` to `matches`
+- RLS policy `matches_select_published` — any authenticated user can read a published match
+- RLS policy `match_events_select_published` — any authenticated user can read events for a
+  published match (via sub-select on `matches.is_published`)
+
+### What did NOT change
+
+- `ScoreReducer` — untouched; the viewer reuses it as-is.
+- All scoring UI screens (`ScoringScreen`, `MatchViewModel`, etc.) — untouched.
+- Match editing flows (`CreateMatchScreen`, `PlayerSetupScreen`, etc.) — untouched.
+- Event insert logic (`SupabaseEventRepository.insertEvent`) — untouched.
+- Local `ball_events` Room table — untouched.
+
+### Files changed
+
+| File | Change |
+|------|--------|
+| `features/match/data/SupabaseMatch.kt` | Extended — added `isPublished`, `shareCode` fields; updated converters |
+| `features/match/data/SupabaseMatchRepository.kt` | Extended — added `publishMatch`, `getMatchByShareCode`, `generateShareCode` |
+| `features/scoring/data/MatchRepository.kt` | Extended — added `publishMatch` instance method + companion delegate |
+| `features/match/viewmodel/MatchSessionViewModel.kt` | Extended — added `publishMatch` |
+| `features/match/ui/MatchDetailsScreen.kt` | Extended — `MatchPublishingSection` now active; publish button, share code display, copy, viewer link |
+| `features/viewer/viewmodel/MatchViewerViewModel.kt` | New — loads match + events by share code, rebuilds state via ScoreReducer |
+| `features/viewer/ui/EnterShareCodeScreen.kt` | New — share code input screen |
+| `features/viewer/ui/MatchViewerScreen.kt` | New — read-only viewer screen |
+| `navigation/AppShell.kt` | Extended — added `enter_share_code`, `match_viewer` to route mappings + drawer entry |
+| `MainActivity.kt` | Extended — added `MatchViewerViewModel`, viewer routes |
+| `supabase/migrations/20260408_publish_match.sql` | New — `is_published`, `share_code` columns + viewer RLS policies |
+| `README.md` | Updated — feature table + Development Log entry |
 
 ### Append-only event design
 

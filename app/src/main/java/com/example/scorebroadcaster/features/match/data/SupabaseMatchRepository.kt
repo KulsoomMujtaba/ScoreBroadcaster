@@ -30,6 +30,9 @@ object SupabaseMatchRepository {
     private const val TAG = "SupabaseMatchRepo"
     private const val TABLE = "matches"
     private const val CONFLICT_COLUMN = "id"
+    private const val SHARE_CODE_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+    private const val SHARE_CODE_LENGTH = 7
+    private const val SHARE_CODE_MAX_RETRIES = 5
 
     private val client get() = SupabaseClientProvider.clientOrNull
 
@@ -75,6 +78,96 @@ object SupabaseMatchRepository {
             Log.e(TAG, "Failed to upsert match ${match.matchName}: ${e.message}")
         }
     }
+
+    /**
+     * Publish a match: set `is_published = true` and assign a unique [shareCode].
+     *
+     * Generates a [SHARE_CODE_LENGTH]-character alphanumeric code, checks for uniqueness,
+     * and retries up to [SHARE_CODE_MAX_RETRIES] times on collision.
+     *
+     * @return the generated share code on success, or `null` if the client is unavailable
+     *         or all retries are exhausted.
+     */
+    suspend fun publishMatch(matchId: String): String? {
+        val supabase = client ?: return null
+        Log.d(TAG, "Publishing match $matchId")
+        repeat(SHARE_CODE_MAX_RETRIES) { attempt ->
+            val code = generateShareCode()
+            Log.d(TAG, "Generated share code: $code (attempt ${attempt + 1})")
+            val collision = runCatching {
+                supabase.postgrest[TABLE]
+                    .select(columns = io.github.jan.supabase.postgrest.query.Columns.list("id")) {
+                        filter { eq("share_code", code) }
+                    }
+                    .decodeList<ShareCodeCheck>()
+                    .isNotEmpty()
+            }.getOrElse { false }
+            if (!collision) {
+                val updated = runCatching {
+                    supabase.postgrest[TABLE]
+                        .update(PublishPatch(isPublished = true, shareCode = code)) {
+                            filter { eq("id", matchId) }
+                        }
+                    Log.d(TAG, "Match $matchId published with share code $code")
+                    code
+                }.getOrElse { e ->
+                    Log.e(TAG, "Failed to publish match $matchId: ${e.message}")
+                    null
+                }
+                if (updated != null) return updated
+            }
+        }
+        Log.e(TAG, "Failed to generate a unique share code after $SHARE_CODE_MAX_RETRIES attempts")
+        return null
+    }
+
+    /**
+     * Fetch a published match by its [shareCode].
+     *
+     * Only returns a match when `is_published = true` and `share_code = [shareCode]`.
+     * Returns `null` for invalid codes, unpublished matches, or network failures.
+     */
+    suspend fun getMatchByShareCode(shareCode: String): SupabaseMatch? {
+        val supabase = client ?: return null
+        Log.d(TAG, "Fetching match by share code: $shareCode")
+        return runCatching {
+            val results = supabase.postgrest[TABLE]
+                .select(columns = io.github.jan.supabase.postgrest.query.Columns.ALL) {
+                    filter {
+                        eq("share_code", shareCode)
+                        eq("is_published", true)
+                    }
+                }
+                .decodeList<SupabaseMatch>()
+            results.firstOrNull().also { match ->
+                if (match != null) Log.d(TAG, "Found match ${match.id} for share code $shareCode")
+                else Log.d(TAG, "No published match found for share code $shareCode")
+            }
+        }.getOrElse { e ->
+            Log.e(TAG, "Failed to fetch match by share code $shareCode: ${e.message}")
+            null
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Private helpers
+    // -------------------------------------------------------------------------
+
+    private fun generateShareCode(): String =
+        (1..SHARE_CODE_LENGTH)
+            .map { SHARE_CODE_CHARS.random() }
+            .joinToString("")
+
+    /** Minimal projection used only for share-code collision checks. */
+    @kotlinx.serialization.Serializable
+    private data class ShareCodeCheck(val id: String)
+
+    /** Partial patch object used to update only the publishing fields. */
+    @kotlinx.serialization.Serializable
+    private data class PublishPatch(
+        @kotlinx.serialization.SerialName("is_published") val isPublished: Boolean,
+        @kotlinx.serialization.SerialName("share_code") val shareCode: String
+    )
 
     /**
      * Bidirectional sync strategy between local and remote matches.
