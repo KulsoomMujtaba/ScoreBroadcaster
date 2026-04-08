@@ -56,7 +56,10 @@ fun SupabaseMatch.toMatch(): Match {
     val teamA = com.example.scorebroadcaster.features.teams.data.Team(name = teamAId)
     val teamB = com.example.scorebroadcaster.features.teams.data.Team(name = teamBId)
     val tossWinnerTeam = if (tossWinnerTeamId == teamAId) teamA else teamB
-    val tossDecisionEnum = runCatching { TossDecision.valueOf(tossDecision) }.getOrDefault(TossDecision.BAT)
+    val tossDecisionEnum = runCatching { TossDecision.valueOf(tossDecision) }
+        // BAT is the safe fallback: a batsman-first assumption is less disruptive than BOWL
+        // if the stored value is somehow invalid (e.g. schema mismatch).
+        .getOrDefault(TossDecision.BAT)
     val battingFirst = if (tossDecisionEnum == TossDecision.BAT) tossWinnerTeam
                        else if (tossWinnerTeam == teamA) teamB else teamA
     val bowlingFirst = if (battingFirst == teamA) teamB else teamA
@@ -66,13 +69,19 @@ fun SupabaseMatch.toMatch(): Match {
         title = matchName,
         teamA = teamA,
         teamB = teamB,
-        format = runCatching { MatchFormat.valueOf(format) }.getOrDefault(MatchFormat.CUSTOM),
+        format = runCatching { MatchFormat.valueOf(format) }
+            // CUSTOM is the safest fallback — it imposes no overs constraint and allows
+            // the match to be resumed without incorrect limits if the format name is unrecognised.
+            .getOrDefault(MatchFormat.CUSTOM),
         overs = totalOvers,
         tossWinner = tossWinnerTeam,
         tossDecision = tossDecisionEnum,
         battingFirst = battingFirst,
         bowlingFirst = bowlingFirst,
-        status = runCatching { MatchStatus.valueOf(status) }.getOrDefault(MatchStatus.NOT_STARTED),
+        status = runCatching { MatchStatus.valueOf(status) }
+            // NOT_STARTED is the safest fallback — it prevents the match from appearing
+            // as resumable or completed if the stored status value is unrecognised.
+            .getOrDefault(MatchStatus.NOT_STARTED),
         ownerUserId = userId
     )
 }

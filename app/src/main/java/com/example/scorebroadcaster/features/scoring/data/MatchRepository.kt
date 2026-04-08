@@ -79,6 +79,7 @@ class MatchRepository(
             dao.insert(match.toEntity())
             val userId = currentUserId
             if (userId != null) {
+                Log.d("MatchRepository", "Match inserted: ${match.displayTitle}")
                 SupabaseMatchRepository.upsertMatch(match.toSupabaseMatch(userId))
             }
         }
