@@ -5,6 +5,12 @@ import com.example.scorebroadcaster.core.supabase.SupabaseClientProvider
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
 import io.github.jan.supabase.postgrest.query.Order
+import io.github.jan.supabase.realtime.PostgresAction
+import io.github.jan.supabase.realtime.RealtimeChannel
+import io.github.jan.supabase.realtime.channel
+import io.github.jan.supabase.realtime.postgresChangeFlow
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.mapNotNull
 
 /**
  * Handles all Supabase `match_events` table operations.
@@ -27,6 +33,7 @@ object SupabaseEventRepository {
 
     private const val TAG = "SupabaseEventRepo"
     private const val TABLE = "match_events"
+    private const val SCHEMA = "public"
 
     private val client get() = SupabaseClientProvider.clientOrNull
 
@@ -75,6 +82,38 @@ object SupabaseEventRepository {
         }.getOrElse { e ->
             Log.e(TAG, "Failed to fetch events for match $matchId: ${e.message}")
             emptyList()
+        }
+    }
+
+    /**
+     * Subscribe to INSERT events on `match_events` for [matchId] using Supabase Realtime.
+     *
+     * Returns a [RealtimeChannel] (needed for cleanup) and a [Flow] of incoming [SupabaseEvent]s.
+     * The caller is responsible for calling [RealtimeChannel.unsubscribe] when done — typically
+     * when the viewer screen closes or the ViewModel is cleared.
+     *
+     * Returns `null` if the Supabase client is not configured or subscription setup fails.
+     */
+    suspend fun subscribeToMatchEvents(matchId: String): Pair<RealtimeChannel, Flow<SupabaseEvent>>? {
+        val supabase = client ?: return null
+        return runCatching {
+            val channel = supabase.channel("viewer-match-$matchId")
+            val insertFlow = channel.postgresChangeFlow<PostgresAction.Insert>(schema = SCHEMA) {
+                table = TABLE
+                filter = "match_id=eq.$matchId"
+            }
+            channel.subscribe()
+            Log.d(TAG, "Subscribed to match $matchId")
+            val eventFlow: Flow<SupabaseEvent> = insertFlow.mapNotNull { action ->
+                runCatching { action.decodeRecord<SupabaseEvent>() }.getOrElse { e ->
+                    Log.e(TAG, "Failed to decode realtime event for match $matchId: ${e.message}")
+                    null
+                }
+            }
+            Pair(channel, eventFlow)
+        }.getOrElse { e ->
+            Log.e(TAG, "Failed to subscribe to match $matchId: ${e.message}")
+            null
         }
     }
 }
