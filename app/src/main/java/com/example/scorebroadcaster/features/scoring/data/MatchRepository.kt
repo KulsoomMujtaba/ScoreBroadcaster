@@ -288,6 +288,15 @@ class MatchRepository(
     }
 
     /**
+     * Returns `true` if the match identified by [matchLocalId] has at least one persisted
+     * [BallEvent] (i.e. scoring has started), `false` if the event log is empty.
+     *
+     * Used by the resume flow to decide whether the innings-setup popup should be shown.
+     */
+    suspend fun hasMatchStarted(matchLocalId: String): Boolean =
+        ballEventDao.hasEvents(matchLocalId)
+
+    /**
      * Load all persisted [BallEvent]s for a match, split by innings.
      *
      * @return A [Pair] where [Pair.first] is the first-innings event list and
@@ -384,6 +393,18 @@ class MatchRepository(
         suspend fun deleteAllBallEvents(matchId: String) {
             val repo = _instance ?: return
             repo.deleteAllBallEvents(matchId)
+        }
+
+        /**
+         * Returns `true` if the match identified by [matchId] has at least one persisted
+         * [BallEvent] (i.e. scoring has started), `false` otherwise.
+         *
+         * Delegates to the active instance.  Returns `false` if called before the repository
+         * is initialised (treated as no events).
+         */
+        suspend fun hasMatchStarted(matchId: String): Boolean {
+            val repo = _instance ?: return false
+            return repo.hasMatchStarted(matchId)
         }
 
         /**

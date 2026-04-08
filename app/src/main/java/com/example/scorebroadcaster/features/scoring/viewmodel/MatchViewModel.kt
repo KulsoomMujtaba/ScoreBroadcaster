@@ -113,6 +113,15 @@ class MatchViewModel : ViewModel() {
     // Job reference for in-flight state-resumption coroutine; cancelled on re-init.
     private var resumeJob: Job? = null
 
+    /**
+     * True while [initFromMatch] is asynchronously loading and rebuilding persisted match
+     * state from the database/remote.  The scoring UI observes this to suppress the
+     * innings-setup popup during the transient loading window so it is never shown
+     * incorrectly for an already-started match.
+     */
+    private val _isResuming = MutableStateFlow(false)
+    val isResuming: StateFlow<Boolean> = _isResuming.asStateFlow()
+
     // Mutex serialises ball-event persistence writes so rapid mutations (add/undo)
     // never produce a stale database row order.
     private val persistMutex = Mutex()
@@ -1173,38 +1182,48 @@ class MatchViewModel : ViewModel() {
         // Load persisted events and rebuild state so the match can be resumed after restart.
         // Cancel any in-flight resumption from a previous initFromMatch call.
         resumeJob?.cancel()
+        _isResuming.value = true
         resumeJob = viewModelScope.launch {
-            // Fetch remote events first so the most up-to-date log is available, including
-            // when the match is opened on a new device.  Local Room DB is updated in place;
-            // if the remote fetch fails, the existing local data is used as fallback.
-            MatchRepository.syncMatchEvents(match.localId)
-            val (firstEvents, secondEvents) = MatchRepository.loadAllBallEvents(match.localId)
-            if (firstEvents.isEmpty() && secondEvents.isEmpty()) {
-                Log.d("ResumeFlow", "No persisted events — fresh match, awaiting setup")
-                // Fix existing data: a match with no events should always be NOT_STARTED.
+            try {
+                Log.d("ResumeFlow", "Resuming match ${match.localId} (${match.displayTitle})")
+                // Fetch remote events first so the most up-to-date log is available, including
+                // when the match is opened on a new device.  Local Room DB is updated in place;
+                // if the remote fetch fails, the existing local data is used as fallback.
+                MatchRepository.syncMatchEvents(match.localId)
+                // Check whether the match has started before loading all events so the
+                // innings-setup decision uses a single source of truth (hasMatchStarted).
+                val hasMatchStarted = MatchRepository.hasMatchStarted(match.localId)
+                Log.d("ResumeFlow", "hasMatchStarted=$hasMatchStarted for match ${match.localId}")
+                if (!hasMatchStarted) {
+                    Log.d("ResumeFlow", "No persisted events — fresh match, awaiting setup")
+                    // Fix existing data: a match with no events should always be NOT_STARTED.
+                    val currentMatch = _activeMatch.value
+                    if (currentMatch != null &&
+                        currentMatch.status != MatchStatus.NOT_STARTED &&
+                        currentMatch.status != MatchStatus.COMPLETED
+                    ) {
+                        Log.d("ResumeFlow", "Correcting match ${currentMatch.localId} status from ${currentMatch.status} → NOT_STARTED (no events)")
+                        val fixed = currentMatch.copy(status = MatchStatus.NOT_STARTED)
+                        _activeMatch.value = fixed
+                        MatchRepository.updateMatch(fixed)
+                    }
+                    return@launch
+                }
+                val (firstEvents, secondEvents) = MatchRepository.loadAllBallEvents(match.localId)
+                Log.d("ResumeFlow", "Rebuilding match state from ${firstEvents.size + secondEvents.size} events")
+                // Fix existing data: a match with events should not be NOT_STARTED.
                 val currentMatch = _activeMatch.value
-                if (currentMatch != null &&
-                    currentMatch.status != MatchStatus.NOT_STARTED &&
-                    currentMatch.status != MatchStatus.COMPLETED
-                ) {
-                    Log.d("ResumeFlow", "Correcting match ${currentMatch.localId} status from ${currentMatch.status} → NOT_STARTED (no events)")
-                    val fixed = currentMatch.copy(status = MatchStatus.NOT_STARTED)
+                if (currentMatch != null && currentMatch.status == MatchStatus.NOT_STARTED) {
+                    Log.d("ResumeFlow", "Correcting match ${currentMatch.localId} status from NOT_STARTED → IN_PROGRESS (events exist)")
+                    val fixed = currentMatch.copy(status = MatchStatus.IN_PROGRESS)
                     _activeMatch.value = fixed
                     MatchRepository.updateMatch(fixed)
+                    resumePersistedState(fixed, firstEvents, secondEvents)
+                } else {
+                    resumePersistedState(match, firstEvents, secondEvents)
                 }
-                return@launch
-            }
-            Log.d("ResumeFlow", "Rebuilding match state from ${firstEvents.size + secondEvents.size} events")
-            // Fix existing data: a match with events should not be NOT_STARTED.
-            val currentMatch = _activeMatch.value
-            if (currentMatch != null && currentMatch.status == MatchStatus.NOT_STARTED) {
-                Log.d("ResumeFlow", "Correcting match ${currentMatch.localId} status from NOT_STARTED → IN_PROGRESS (events exist)")
-                val fixed = currentMatch.copy(status = MatchStatus.IN_PROGRESS)
-                _activeMatch.value = fixed
-                MatchRepository.updateMatch(fixed)
-                resumePersistedState(fixed, firstEvents, secondEvents)
-            } else {
-                resumePersistedState(match, firstEvents, secondEvents)
+            } finally {
+                _isResuming.value = false
             }
         }
     }
@@ -1307,6 +1326,11 @@ class MatchViewModel : ViewModel() {
                 val strikerEntry = striker?.let { BattingEntry(player = it) }
                 val nonStrikerEntry = nonStriker?.let { BattingEntry(player = it) }
                 val bowlerEntry = currentBowler?.let { BowlingEntry(player = it) }
+                // Mark setup as completed when players can be derived from the event log so
+                // that ScoringScreen does not show the innings-setup popup on resume.
+                // When striker is null, the events pre-date batter-stamping; setup was never
+                // recorded and the popup is legitimately needed to gather player information.
+                val setupCompleted = striker != null
                 _consoleState.value = ScoringConsoleState(
                     inningsNumber = 2,
                     phase = InningsPhase.SECOND_INNINGS,
@@ -1333,11 +1357,13 @@ class MatchViewModel : ViewModel() {
                     firstInningsFallOfWickets = computeFallOfWickets(firstEvents),
                     firstInningsOverSummaries = OverSummaryCalculator.deriveOverSummaries(firstEvents),
                     secondInningsOverSummaries = OverSummaryCalculator.deriveOverSummaries(secondEvents),
-                    currentInningsFallOfWickets = _fallOfWickets.value
+                    currentInningsFallOfWickets = _fallOfWickets.value,
+                    inningsSetupCompleted = setupCompleted
                 )
                 Log.d("ResumeFlow", "Restored: 2nd innings in progress " +
                         "(${secondEvents.size} balls), bowler=${currentBowler?.name}, " +
-                        "striker=${striker?.name}, nonStriker=${nonStriker?.name}")
+                        "striker=${striker?.name}, nonStriker=${nonStriker?.name}, " +
+                        "setupCompleted=$setupCompleted")
             }
 
             // ── 3. Innings break ──────────────────────────────────────────────────────
@@ -1380,6 +1406,11 @@ class MatchViewModel : ViewModel() {
                 val strikerEntry = striker?.let { BattingEntry(player = it) }
                 val nonStrikerEntry = nonStriker?.let { BattingEntry(player = it) }
                 val bowlerEntry = currentBowler?.let { BowlingEntry(player = it) }
+                // Mark setup as completed when players can be derived from the event log so
+                // that ScoringScreen does not show the innings-setup popup on resume.
+                // When striker is null (events pre-date batter-stamping) setup was never
+                // recorded and the popup is legitimately needed.
+                val setupCompleted = striker != null
                 _consoleState.value = ScoringConsoleState(
                     inningsNumber = 1,
                     phase = InningsPhase.FIRST_INNINGS,
@@ -1394,11 +1425,13 @@ class MatchViewModel : ViewModel() {
                     allBattingEntries = listOfNotNull(strikerEntry, nonStrikerEntry),
                     allBowlingEntries = listOfNotNull(bowlerEntry),
                     firstInningsOverSummaries = OverSummaryCalculator.deriveOverSummaries(firstEvents),
-                    currentInningsFallOfWickets = _fallOfWickets.value
+                    currentInningsFallOfWickets = _fallOfWickets.value,
+                    inningsSetupCompleted = setupCompleted
                 )
                 Log.d("ResumeFlow", "Restored: 1st innings in progress " +
                         "(${firstEvents.size} balls), bowler=${currentBowler?.name}, " +
-                        "striker=${striker?.name}, nonStriker=${nonStriker?.name}")
+                        "striker=${striker?.name}, nonStriker=${nonStriker?.name}, " +
+                        "setupCompleted=$setupCompleted")
             }
         }
     }
