@@ -257,7 +257,7 @@ private fun ViewerInningsCard(
                 val runsNeeded = (target - state.runs).coerceAtLeast(0)
                 val result = when {
                     state.runs >= target -> "${teamName} win by ${10 - state.wickets} wickets"
-                    state.wickets >= 10 -> "All out — ${(runsNeeded - 1).coerceAtLeast(0)} runs short"
+                    state.wickets >= 10 -> "All out — $runsNeeded runs short"
                     else -> "Need $runsNeeded more to win · Target $target"
                 }
                 Text(

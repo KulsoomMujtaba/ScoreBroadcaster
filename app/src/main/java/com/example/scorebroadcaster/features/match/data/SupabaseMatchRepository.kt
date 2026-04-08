@@ -153,9 +153,11 @@ object SupabaseMatchRepository {
     // Private helpers
     // -------------------------------------------------------------------------
 
+    private val secureRandom = java.security.SecureRandom()
+
     private fun generateShareCode(): String =
         (1..SHARE_CODE_LENGTH)
-            .map { SHARE_CODE_CHARS.random() }
+            .map { SHARE_CODE_CHARS[secureRandom.nextInt(SHARE_CODE_CHARS.length)] }
             .joinToString("")
 
     /** Minimal projection used only for share-code collision checks. */

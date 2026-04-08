@@ -140,9 +140,18 @@ fun MatchDetailsScreen(
             HorizontalDivider()
 
             // --- Publishing controls ---
+            var isPublishingMatch by remember { mutableStateOf(false) }
             MatchPublishingSection(
                 match = match,
-                onPublish = { matchSessionViewModel.publishMatch(match.localId) {} },
+                isPublishing = isPublishingMatch,
+                onPublish = {
+                    isPublishingMatch = true
+                    matchSessionViewModel.publishMatch(match.localId) { code ->
+                        // Reset flag regardless of outcome; the match state update
+                        // (or lack thereof on failure) will drive the UI via collectAsState.
+                        isPublishingMatch = false
+                    }
+                },
                 onViewerMode = onViewerMode
             )
 
@@ -445,12 +454,12 @@ private fun MatchActionButtons(
 @Composable
 private fun MatchPublishingSection(
     match: Match,
+    isPublishing: Boolean,
     onPublish: () -> Unit,
     onViewerMode: (() -> Unit)? = null
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
-    var isPublishing by remember { mutableStateOf(false) }
 
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(
@@ -543,12 +552,7 @@ private fun MatchPublishingSection(
             }
         } else {
             Button(
-                onClick = {
-                    if (!isPublishing) {
-                        isPublishing = true
-                        onPublish()
-                    }
-                },
+                onClick = onPublish,
                 enabled = !isPublishing,
                 modifier = Modifier.fillMaxWidth()
             ) {
