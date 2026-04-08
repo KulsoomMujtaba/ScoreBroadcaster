@@ -33,6 +33,7 @@ object SupabaseEventRepository {
 
     private const val TAG = "SupabaseEventRepo"
     private const val TABLE = "match_events"
+    private const val SCHEMA = "public"
 
     private val client get() = SupabaseClientProvider.clientOrNull
 
@@ -97,7 +98,7 @@ object SupabaseEventRepository {
         val supabase = client ?: return null
         return runCatching {
             val channel = supabase.channel("viewer-match-$matchId")
-            val insertFlow = channel.postgresChangeFlow<PostgresAction.Insert>(schema = "public") {
+            val insertFlow = channel.postgresChangeFlow<PostgresAction.Insert>(schema = SCHEMA) {
                 table = TABLE
                 filter = "match_id=eq.$matchId"
             }

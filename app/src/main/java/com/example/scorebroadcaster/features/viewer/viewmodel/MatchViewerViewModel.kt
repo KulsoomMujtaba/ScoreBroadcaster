@@ -210,15 +210,15 @@ class MatchViewerViewModel : ViewModel() {
      *   and emits a new [ViewerLoadState.Success] so the UI updates instantly.
      */
     private fun handleRealtimeEvent(event: SupabaseEvent) {
-        if (!processedEventIndices.add(event.eventIndex)) {
+        if (processedEventIndices.contains(event.eventIndex)) {
             Log.d(TAG, "Ignoring duplicate event index ${event.eventIndex}")
             return
         }
         if (event.eventIndex != nextExpectedEventIndex) {
-            Log.d(TAG, "Out-of-order event index ${event.eventIndex}, expected $nextExpectedEventIndex — ignoring")
-            processedEventIndices.remove(event.eventIndex)
+            Log.w(TAG, "Out-of-order event index ${event.eventIndex}, expected $nextExpectedEventIndex — ignoring")
             return
         }
+        processedEventIndices.add(event.eventIndex)
         nextExpectedEventIndex++
 
         val currentState = _loadState.value as? ViewerLoadState.Success ?: return
@@ -265,8 +265,8 @@ class MatchViewerViewModel : ViewModel() {
         if (channel != null) {
             viewModelScope.launch {
                 runCatching { channel.unsubscribe() }
+                    .onSuccess { Log.d(TAG, "Unsubscribed from realtime channel") }
                     .onFailure { e -> Log.e(TAG, "Error unsubscribing from realtime: ${e.message}") }
-                Log.d(TAG, "Unsubscribed from realtime channel")
             }
         }
     }
