@@ -64,6 +64,84 @@ The core promise is simple: open the app, start a match, score every ball, and s
 | Local in-memory repository | ✅ Done | `repository/MatchRepository` |
 | Match session management | ✅ Done | `MatchSessionViewModel` |
 | Matches sync to Supabase (metadata only) | ✅ Done | `SupabaseMatchRepository`, `MatchRepository`, `MatchSessionViewModel` |
+| Match events persistence to Supabase (append-only event log) | ✅ Done | `SupabaseEventRepository`, `SupabaseEvent`, `MatchRepository`, `MatchViewModel` |
+
+---
+
+## Backend Setup: Match Events Persistence (v1)
+
+### Append-only event design
+
+Every ball delivery (`BallEvent`) is written to Supabase as an immutable row in `match_events`.
+Events are never updated or deleted — the log is append-only.  The full match state for any
+innings can be rebuilt at any time by fetching all rows for a match, sorting by `event_index`,
+and replaying them through the existing `ScoreReducer`.
+
+`event_index` is a 0-based global counter within a match.  First-innings events start at 0;
+second-innings events are offset by the total number of first-innings events so the entire
+match can be sorted with a single column.  A `UNIQUE(match_id, event_index)` constraint on
+the table prevents duplicates even if a retry re-inserts the same event.
+
+Row IDs are deterministic strings of the form `"<matchId>_<eventIndex>"`.  This means a
+duplicate insert (e.g. from a network retry) produces a primary-key conflict that is silently
+ignored (`ON CONFLICT DO NOTHING`) rather than creating a stale row.
+
+### Why payload is JSON
+
+Each event carries a `payload JSONB` column that stores all delivery details (runs, extras,
+dismissal fields, bowler/batter stamps, innings number).  Using a typed JSON blob instead of
+many nullable columns keeps the schema stable:
+
+- New optional fields can be added to the payload without a new SQL migration.
+- The `BallEvent` domain model can evolve independently of the remote schema.
+- Backward compatibility is preserved — old events without a new field simply
+  deserialise with the field's default value.
+
+`inningsNumber` is stored inside the payload (rather than as a top-level column) because the
+spec defines the `SupabaseEvent` fields as `id, matchId, userId, eventIndex, eventType, payload,
+createdAt`.  When loading, events are grouped by `payload.inningsNumber` before being fed to
+the reducer.
+
+### Why no delete/update yet
+
+The append-only constraint is a deliberate design choice for this phase:
+
+- **Undo** operates on the local event log only; no remote rows are removed.  The remote log
+  is the full delivery history.  Local state diverges from remote during a session but is
+  reconciled on next open via `syncMatchEvents`.
+- Implementing remote undo (soft-delete markers or event versioning) requires ordering
+  guarantees, conflict resolution across devices, and a more complex replay strategy.
+  These are deferred to the next phase (Undo Sync).
+- Keeping the remote log immutable makes it easier to reason about correctness:
+  the remote `match_events` table is always a superset of what has ever been scored.
+
+### Match load flow
+
+When `initFromMatch` is called (opening a match on any device):
+
+1. `MatchRepository.syncMatchEvents(matchId)` fetches all remote events from Supabase.
+2. Remote events are grouped by `inningsNumber` and saved to local Room (replacing any local copy).
+3. If the remote fetch fails (no network, etc.) the existing local data is used as fallback.
+4. `loadAllBallEvents` loads from Room; `resumePersistedState` rebuilds all scoring state.
+
+### What did NOT change
+
+- Scoring engine (`ScoreReducer`, `BallEvent`, `MatchState` logic) — untouched.
+- Undo logic — untouched; remote events are unaffected by local undo.
+- Local `ball_events` Room table — untouched; still used as the local cache.
+- Players / Teams / Matches sync — untouched.
+- All UI flows and screens — untouched.
+
+### Files changed
+
+| File | Change |
+|------|--------|
+| `features/scoring/data/SupabaseEvent.kt` | New — `SupabaseEvent`, `BallEventPayload`, `toSupabaseEvent()`, `toBallEvent()` |
+| `features/scoring/data/SupabaseEventRepository.kt` | New — `insertEvent`, `fetchMatchEvents` |
+| `features/scoring/data/MatchRepository.kt` | Extended — `insertRemoteEvent`, `syncMatchEvents` + companion delegates |
+| `features/scoring/viewmodel/MatchViewModel.kt` | Extended — `addBallEvent` now fires async remote insert; `initFromMatch` syncs from Supabase before rebuilding state |
+| `supabase/migrations/20260408_create_match_events.sql` | New — `match_events` table DDL with RLS policies |
+| `README.md` | Updated — Development Log entry added |
 
 ---
 

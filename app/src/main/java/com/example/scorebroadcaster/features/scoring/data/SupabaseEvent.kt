@@ -1,0 +1,175 @@
+package com.example.scorebroadcaster.features.scoring.data
+
+import com.example.scorebroadcaster.features.players.data.Player
+import com.example.scorebroadcaster.features.scoring.domain.BallEvent
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+
+/**
+ * Remote representation of a single ball-delivery event stored in Supabase.
+ *
+ * Maps to the `match_events` table.  The table is append-only — rows are never
+ * updated or deleted.  The full match state is rebuilt at any point by fetching
+ * all rows for a match and replaying them through [com.example.scorebroadcaster.features.scoring.domain.ScoreReducer].
+ *
+ * [id] is a deterministic string of the form `"<matchId>_<eventIndex>"` so that a
+ * duplicate insert (e.g. from a retry) silently conflicts on the primary key and is
+ * ignored rather than creating a duplicate row.
+ *
+ * [eventIndex] is a 0-based global index within a match.  First-innings events start
+ * at 0; second-innings events are offset by the total number of first-innings events
+ * so the full match can be sorted by this single column.
+ *
+ * [payload] contains all delivery details as a typed JSON object (see [BallEventPayload]).
+ * Using a JSON payload instead of many nullable columns keeps the schema stable as the
+ * [BallEvent] model evolves without requiring new migrations.
+ */
+@Serializable
+data class SupabaseEvent(
+    val id: String,
+    @SerialName("match_id") val matchId: String,
+    @SerialName("user_id") val userId: String,
+    @SerialName("event_index") val eventIndex: Int,
+    @SerialName("event_type") val eventType: String,
+    val payload: BallEventPayload,
+    @SerialName("created_at") val createdAt: String = ""
+)
+
+/**
+ * Typed JSON payload for a single delivery.
+ *
+ * Fields mirror the columns of [BallEventEntity] so the same flattening logic can
+ * be reused for both local Room storage and remote Supabase storage.  All nullable
+ * fields are only populated when the corresponding data is present (e.g. dismissal
+ * fields are null when [wicket] is false).
+ *
+ * [inningsNumber] (1 or 2) is included here rather than as a top-level column on
+ * [SupabaseEvent] so that the schema stays minimal while still allowing the event
+ * log to be split back into first-innings and second-innings lists on load.
+ */
+@Serializable
+data class BallEventPayload(
+    val inningsNumber: Int,
+    val runsOffBat: Int,
+    val wides: Int,
+    val noBalls: Int,
+    val byes: Int,
+    val legByes: Int,
+    val wicket: Boolean,
+    val countsAsBall: Boolean,
+    val dismissedBatterName: String? = null,
+    val dismissalType: String? = null,
+    val fielderName: String? = null,
+    val fielder2Name: String? = null,
+    val dismissalBowlerName: String? = null,
+    val bowlerName: String? = null,
+    val bowlerSourceProfileId: String? = null,
+    val strikerName: String? = null,
+    val strikerSourceProfileId: String? = null,
+    val nonStrikerName: String? = null,
+    val nonStrikerSourceProfileId: String? = null
+)
+
+// ---------------------------------------------------------------------------
+// Mapping helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Convert a local [BallEvent] to a [SupabaseEvent] ready for remote insertion.
+ *
+ * @param matchId        The local match UUID (shared with the remote `matches.id`).
+ * @param userId         The authenticated user's UUID.
+ * @param inningsNumber  1 for first innings, 2 for second innings.
+ * @param sequenceNumber 0-based position of this event within the innings.
+ * @param globalIndex    Globally ordered index within the match (first innings events
+ *                       come before second innings events).
+ */
+fun BallEvent.toSupabaseEvent(
+    matchId: String,
+    userId: String,
+    inningsNumber: Int,
+    sequenceNumber: Int,
+    globalIndex: Int
+): SupabaseEvent {
+    val payload = BallEventPayload(
+        inningsNumber = inningsNumber,
+        runsOffBat = runsOffBat,
+        wides = extras.wides,
+        noBalls = extras.noBalls,
+        byes = extras.byes,
+        legByes = extras.legByes,
+        wicket = wicket,
+        countsAsBall = countsAsBall,
+        dismissedBatterName = dismissalDetail?.batter?.name,
+        dismissalType = dismissalDetail?.dismissalType?.name,
+        fielderName = dismissalDetail?.fielders?.getOrNull(0)?.name,
+        fielder2Name = dismissalDetail?.fielders?.getOrNull(1)?.name,
+        dismissalBowlerName = dismissalDetail?.bowler?.name,
+        bowlerName = bowler?.name,
+        bowlerSourceProfileId = bowler?.sourceProfileId,
+        strikerName = striker?.name,
+        strikerSourceProfileId = striker?.sourceProfileId,
+        nonStrikerName = nonStriker?.name,
+        nonStrikerSourceProfileId = nonStriker?.sourceProfileId
+    )
+    return SupabaseEvent(
+        id = "${matchId}_${globalIndex}",
+        matchId = matchId,
+        userId = userId,
+        eventIndex = globalIndex,
+        eventType = "BALL",
+        payload = payload
+    )
+}
+
+/**
+ * Convert a remote [SupabaseEvent] back to the domain [BallEvent].
+ *
+ * Reconstructs all nested objects ([Player], [DismissalDetail], [ExtrasBreakdown])
+ * from the flattened [BallEventPayload] fields using the same logic as
+ * [BallEventEntity.toDomain].
+ */
+fun SupabaseEvent.toBallEvent(): BallEvent {
+    val p = payload
+    val extras = ExtrasBreakdown(
+        wides = p.wides,
+        noBalls = p.noBalls,
+        byes = p.byes,
+        legByes = p.legByes
+    )
+    val dismissal: DismissalDetail? = if (p.wicket && p.dismissalType != null && p.dismissedBatterName != null) {
+        val type = runCatching { DismissalType.valueOf(p.dismissalType) }.getOrNull()
+        if (type != null) {
+            val fieldersList = listOfNotNull(
+                p.fielderName?.let { Player(name = it) },
+                p.fielder2Name?.let { Player(name = it) }
+            )
+            DismissalDetail(
+                batter = Player(name = p.dismissedBatterName),
+                dismissalType = type,
+                fielders = fieldersList,
+                bowler = p.dismissalBowlerName?.let { Player(name = it) }
+            )
+        } else null
+    } else null
+
+    val bowler: Player? = p.bowlerName?.let {
+        Player(name = it, sourceProfileId = p.bowlerSourceProfileId)
+    }
+    val striker: Player? = p.strikerName?.let {
+        Player(name = it, sourceProfileId = p.strikerSourceProfileId)
+    }
+    val nonStriker: Player? = p.nonStrikerName?.let {
+        Player(name = it, sourceProfileId = p.nonStrikerSourceProfileId)
+    }
+    return BallEvent(
+        runsOffBat = p.runsOffBat,
+        extras = extras,
+        wicket = p.wicket,
+        dismissalDetail = dismissal,
+        countsAsBall = p.countsAsBall,
+        bowler = bowler,
+        striker = striker,
+        nonStriker = nonStriker
+    )
+}

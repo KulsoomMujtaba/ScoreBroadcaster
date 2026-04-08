@@ -1,0 +1,79 @@
+package com.example.scorebroadcaster.features.scoring.data
+
+import android.util.Log
+import com.example.scorebroadcaster.core.supabase.SupabaseClientProvider
+import io.github.jan.supabase.postgrest.postgrest
+import io.github.jan.supabase.postgrest.query.Columns
+
+/**
+ * Handles all Supabase `match_events` table operations.
+ *
+ * The `match_events` table is append-only — rows are never updated or deleted.
+ * The full match state is rebuilt by fetching all rows for a match and replaying
+ * them through the scoring reducer.
+ *
+ * Responsibilities:
+ * - [insertEvent]        — append a single delivery event to the remote log.
+ * - [fetchMatchEvents]   — retrieve the full ordered event log for one match.
+ *
+ * All functions are `suspend` and must be called from a coroutine context.
+ * No calls are made directly from Composables.
+ *
+ * If the Supabase client is not configured, or if any remote call fails, the
+ * function logs the error and returns a safe default; local scoring is never blocked.
+ */
+object SupabaseEventRepository {
+
+    private const val TAG = "SupabaseEventRepo"
+    private const val TABLE = "match_events"
+
+    private val client get() = SupabaseClientProvider.clientOrNull
+
+    // -------------------------------------------------------------------------
+    // Public API
+    // -------------------------------------------------------------------------
+
+    /**
+     * Append [event] to the `match_events` table.
+     *
+     * Uses upsert on the [SupabaseEvent.id] primary key (which is deterministic:
+     * `"<matchId>_<eventIndex>"`).  If a row with the same `id` already exists, Supabase
+     * performs an UPDATE with the same data — harmless because events are immutable.
+     * This makes the insert idempotent and safe to retry after a transient failure.
+     *
+     * Does nothing if the Supabase client is not configured.
+     */
+    suspend fun insertEvent(event: SupabaseEvent) {
+        val supabase = client ?: return
+        runCatching {
+            supabase.postgrest[TABLE]
+                .upsert(event) { onConflict = "id" }
+            Log.d(TAG, "Inserted event index ${event.eventIndex} for match ${event.matchId}")
+        }.onFailure { e ->
+            Log.e(TAG, "Failed to insert event index ${event.eventIndex}: ${e.message}")
+        }
+    }
+
+    /**
+     * Fetch all remote delivery events for [matchId], ordered by [SupabaseEvent.eventIndex].
+     *
+     * @return ordered list of [SupabaseEvent], or an empty list if the client is not
+     *         configured or the request fails.
+     */
+    suspend fun fetchMatchEvents(matchId: String): List<SupabaseEvent> {
+        val supabase = client ?: return emptyList()
+        return runCatching {
+            val result = supabase.postgrest[TABLE]
+                .select(columns = Columns.ALL) {
+                    filter { eq("match_id", matchId) }
+                    order("event_index")
+                }
+                .decodeList<SupabaseEvent>()
+            Log.d(TAG, "Fetched ${result.size} events for match $matchId")
+            result
+        }.getOrElse { e ->
+            Log.e(TAG, "Failed to fetch events for match $matchId: ${e.message}")
+            emptyList()
+        }
+    }
+}

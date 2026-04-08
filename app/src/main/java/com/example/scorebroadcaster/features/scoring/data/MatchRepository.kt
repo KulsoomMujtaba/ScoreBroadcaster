@@ -129,6 +129,63 @@ class MatchRepository(
     }
 
     // ---------------------------------------------------------------------------
+    // Remote event persistence (Supabase)
+    // ---------------------------------------------------------------------------
+
+    /**
+     * Asynchronously insert a single [BallEvent] into the remote `match_events` table.
+     *
+     * Called after every ball is appended locally so the remote log stays up to date.
+     * If the Supabase client is unavailable or the insert fails, the error is logged
+     * and local scoring continues uninterrupted.
+     *
+     * @param matchId        The local match UUID (shared with `matches.id` in Supabase).
+     * @param inningsNumber  1 for first innings, 2 for second innings.
+     * @param sequenceNumber 0-based position of this event within the innings.
+     * @param globalIndex    Globally ordered index within the match.
+     * @param event          The stamped [BallEvent] to persist.
+     */
+    fun insertRemoteEvent(
+        matchId: String,
+        inningsNumber: Int,
+        sequenceNumber: Int,
+        globalIndex: Int,
+        event: BallEvent
+    ) {
+        val userId = currentUserId ?: return
+        scope.launch {
+            val supabaseEvent = event.toSupabaseEvent(matchId, userId, inningsNumber, sequenceNumber, globalIndex)
+            SupabaseEventRepository.insertEvent(supabaseEvent)
+        }
+    }
+
+    /**
+     * Fetch all remote events for [matchId] from Supabase and save them to the local Room
+     * database, replacing any previously stored events for each innings.
+     *
+     * This is the "load from remote" step used by [initFromMatch] to ensure the most
+     * up-to-date event log is available before rebuilding match state, including when
+     * the match is opened on a new device.
+     *
+     * If the remote fetch returns no events (e.g. network unavailable or fresh match),
+     * the local Room data is left unchanged.
+     */
+    suspend fun syncMatchEvents(matchId: String) {
+        Log.d("MatchRepository", "Syncing match events for $matchId")
+        val remoteEvents = SupabaseEventRepository.fetchMatchEvents(matchId)
+        Log.d("MatchRepository", "Fetched ${remoteEvents.size} events for match $matchId")
+        if (remoteEvents.isEmpty()) return
+
+        val grouped = remoteEvents.groupBy { it.payload.inningsNumber }
+        Log.d("MatchRepository", "Rebuilding match state from ${remoteEvents.size} remote events")
+        for ((inningsNumber, events) in grouped) {
+            val sorted = events.sortedBy { it.eventIndex }
+            val ballEvents = sorted.map { it.toBallEvent() }
+            saveBallEvents(matchId, inningsNumber, ballEvents)
+        }
+    }
+
+    // ---------------------------------------------------------------------------
     // BallEvent persistence
     // ---------------------------------------------------------------------------
 
@@ -260,6 +317,33 @@ class MatchRepository(
         suspend fun deleteAllBallEvents(matchId: String) {
             val repo = _instance ?: return
             repo.deleteAllBallEvents(matchId)
+        }
+
+        /**
+         * Asynchronously insert a single [BallEvent] into the remote `match_events` table.
+         *
+         * Delegates to the active instance.  No-ops if the repository is not yet initialised
+         * or if no user is signed in.
+         */
+        fun insertRemoteEvent(
+            matchId: String,
+            inningsNumber: Int,
+            sequenceNumber: Int,
+            globalIndex: Int,
+            event: BallEvent
+        ) {
+            val repo = _instance ?: return
+            repo.insertRemoteEvent(matchId, inningsNumber, sequenceNumber, globalIndex, event)
+        }
+
+        /**
+         * Fetch all remote events for [matchId] from Supabase and update the local Room DB.
+         *
+         * Delegates to the active instance.  No-ops if the repository is not yet initialised.
+         */
+        suspend fun syncMatchEvents(matchId: String) {
+            val repo = _instance ?: return
+            repo.syncMatchEvents(matchId)
         }
     }
 }

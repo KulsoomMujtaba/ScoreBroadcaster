@@ -155,6 +155,17 @@ class MatchViewModel : ViewModel() {
         }
         refreshCurrentInningsOverSummaries()
         persistCurrentInningsEvents()
+
+        // Async remote insert — must come after local append so sequenceNumber is accurate.
+        // Does not block scoring; failures are logged and retried on next sync.
+        _activeMatch.value?.localId?.let { matchId ->
+            val inningsNumber = _consoleState.value.inningsNumber
+            val sequenceNumber = _events.value.size - 1
+            val globalIndex = if (inningsNumber == 1) sequenceNumber
+                              else _firstInningsEvents.value.size + sequenceNumber
+            Log.d("MatchViewModel", "Inserting event index $globalIndex (innings=$inningsNumber, seq=$sequenceNumber)")
+            MatchRepository.insertRemoteEvent(matchId, inningsNumber, sequenceNumber, globalIndex, stamped)
+        }
     }
 
     private fun updateConsoleAfterEvent(
@@ -1098,11 +1109,16 @@ class MatchViewModel : ViewModel() {
         // Cancel any in-flight resumption from a previous initFromMatch call.
         resumeJob?.cancel()
         resumeJob = viewModelScope.launch {
+            // Fetch remote events first so the most up-to-date log is available, including
+            // when the match is opened on a new device.  Local Room DB is updated in place;
+            // if the remote fetch fails, the existing local data is used as fallback.
+            MatchRepository.syncMatchEvents(match.localId)
             val (firstEvents, secondEvents) = MatchRepository.loadAllBallEvents(match.localId)
             if (firstEvents.isEmpty() && secondEvents.isEmpty()) {
                 Log.d("ResumeFlow", "No persisted events — fresh match, awaiting setup")
                 return@launch
             }
+            Log.d("ResumeFlow", "Rebuilding match state from ${firstEvents.size + secondEvents.size} events")
             resumePersistedState(match, firstEvents, secondEvents)
         }
     }
