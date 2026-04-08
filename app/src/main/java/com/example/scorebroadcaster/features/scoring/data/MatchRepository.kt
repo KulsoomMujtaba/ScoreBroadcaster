@@ -2,6 +2,7 @@ package com.example.scorebroadcaster.features.scoring.data
 import android.util.Log
 import com.example.scorebroadcaster.features.match.data.Match
 import com.example.scorebroadcaster.features.match.data.MatchDao
+import com.example.scorebroadcaster.features.match.data.MatchVisibility
 import com.example.scorebroadcaster.features.match.data.SupabaseMatchRepository
 import com.example.scorebroadcaster.features.match.data.toDomain
 import com.example.scorebroadcaster.features.match.data.toEntity
@@ -97,6 +98,38 @@ class MatchRepository(
         if (_activeMatch.value?.id == match.id) {
             _activeMatch.value = match
         }
+    }
+
+    /**
+     * Publish a match: generate a unique share code, update the local match, and
+     * mirror the change to Supabase.
+     *
+     * On success the match is updated locally with:
+     * - [MatchVisibility.PUBLISHED] visibility
+     * - a generated [Match.shareCode]
+     * - the current time as [Match.publishedAt]
+     *
+     * @return the share code on success, or `null` if the remote call fails or the
+     *         Supabase client is not configured.
+     */
+    suspend fun publishMatch(matchId: String): String? {
+        Log.d("MatchRepository", "Publishing match $matchId")
+        val match = dao.getById(matchId)?.toDomain() ?: return null
+        if (match.shareCode != null && match.visibility == MatchVisibility.PUBLISHED) {
+            Log.d("MatchRepository", "Match already published with code ${match.shareCode}")
+            return match.shareCode
+        }
+        val shareCode = SupabaseMatchRepository.publishMatch(matchId) ?: return null
+        val published = match.copy(
+            visibility = MatchVisibility.PUBLISHED,
+            shareCode = shareCode,
+            publishedAt = System.currentTimeMillis()
+        )
+        dao.update(published.toEntity())
+        if (_activeMatch.value?.id == matchId) {
+            _activeMatch.value = published
+        }
+        return shareCode
     }
 
     fun setActiveMatch(match: Match) {
@@ -344,6 +377,17 @@ class MatchRepository(
         suspend fun syncMatchEvents(matchId: String) {
             val repo = _instance ?: return
             repo.syncMatchEvents(matchId)
+        }
+
+        /**
+         * Publish a match and return the generated share code.
+         *
+         * Delegates to the active instance.  Returns `null` if the repository is not yet
+         * initialised or the publish operation fails.
+         */
+        suspend fun publishMatch(matchId: String): String? {
+            val repo = _instance ?: return null
+            return repo.publishMatch(matchId)
         }
     }
 }

@@ -9,11 +9,14 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -52,6 +55,7 @@ fun MatchDetailsScreen(
     onViewScorecard: () -> Unit,
     onViewTimeline: () -> Unit,
     onBack: () -> Unit,
+    onViewerMode: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val activeMatch by matchSessionViewModel.activeMatch.collectAsState()
@@ -135,8 +139,21 @@ fun MatchDetailsScreen(
 
             HorizontalDivider()
 
-            // --- Publishing controls (placeholder — backend not yet implemented) ---
-            MatchPublishingSection(match = match)
+            // --- Publishing controls ---
+            var isPublishingMatch by remember { mutableStateOf(false) }
+            MatchPublishingSection(
+                match = match,
+                isPublishing = isPublishingMatch,
+                onPublish = {
+                    isPublishingMatch = true
+                    matchSessionViewModel.publishMatch(match.localId) { code ->
+                        // Reset flag regardless of outcome; the match state update
+                        // (or lack thereof on failure) will drive the UI via collectAsState.
+                        isPublishingMatch = false
+                    }
+                },
+                onViewerMode = onViewerMode
+            )
 
             Spacer(modifier = Modifier.height(24.dp))
         }
@@ -424,24 +441,26 @@ private fun MatchActionButtons(
 }
 
 // =============================================================================
-// Publishing controls (placeholder — backend not yet implemented)
+// Publishing controls
 // =============================================================================
 
 /**
- * Placeholder section for match publishing controls.
+ * Publishing controls for a match.
  *
- * All actions here are disabled today.  They are present to make the future
- * one-scorer / many-viewers product direction visible in the UI and to reserve
- * the correct layout slot for when backend publishing is added.
- *
- * Future implementation notes:
- * - "Publish Match" will set [Match.visibility] to [MatchVisibility.PUBLISHED],
- *   write [Match.publishedAt], and sync the match to the remote backend.
- * - "Share Match" will generate or display [Match.shareCode] for viewers.
- * - Visibility chip will allow toggling between PRIVATE / UNLISTED / PUBLISHED.
+ * - When the match is private, shows a "Publish Match" button.
+ * - When the match is published, shows the share code with a copy button and
+ *   a "View as Viewer" button that opens the read-only viewer.
  */
 @Composable
-private fun MatchPublishingSection(match: Match) {
+private fun MatchPublishingSection(
+    match: Match,
+    isPublishing: Boolean,
+    onPublish: () -> Unit,
+    onViewerMode: (() -> Unit)? = null
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
+
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(
             text = "Publishing",
@@ -460,40 +479,88 @@ private fun MatchPublishingSection(match: Match) {
                 style = MaterialTheme.typography.bodyMedium
             )
             Surface(
-                color = MaterialTheme.colorScheme.secondaryContainer,
+                color = if (match.visibility == MatchVisibility.PUBLISHED)
+                    MaterialTheme.colorScheme.primaryContainer
+                else
+                    MaterialTheme.colorScheme.secondaryContainer,
                 shape = MaterialTheme.shapes.extraSmall
             ) {
                 Text(
                     text = match.visibility.label,
                     style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    color = if (match.visibility == MatchVisibility.PUBLISHED)
+                        MaterialTheme.colorScheme.onPrimaryContainer
+                    else
+                        MaterialTheme.colorScheme.onSecondaryContainer,
                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
                 )
             }
         }
 
-        // Publish Match button (disabled — backend not yet implemented)
-        OutlinedButton(
-            onClick = { /* TODO: implement backend publish */ },
-            enabled = false,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text(
-                "Publish Match  ·  coming soon",
-                style = MaterialTheme.typography.titleSmall
-            )
-        }
+        if (match.visibility == MatchVisibility.PUBLISHED && match.shareCode != null) {
+            // Show share code with copy button
+            Surface(
+                tonalElevation = 2.dp,
+                shape = MaterialTheme.shapes.medium,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            text = "Share Code",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        )
+                        Text(
+                            text = match.shareCode,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    androidx.compose.material3.IconButton(
+                        onClick = {
+                            clipboardManager.setText(
+                                androidx.compose.ui.text.AnnotatedString(match.shareCode)
+                            )
+                            android.widget.Toast.makeText(
+                                context, "Share code copied", android.widget.Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                    ) {
+                        Icon(
+                            Icons.Default.Share,
+                            contentDescription = "Share code"
+                        )
+                    }
+                }
+            }
 
-        // Share Match button (disabled — requires published match + backend)
-        OutlinedButton(
-            onClick = { /* TODO: implement share after publish */ },
-            enabled = false,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text(
-                "Share Match  ·  coming soon",
-                style = MaterialTheme.typography.titleSmall
-            )
+            if (onViewerMode != null) {
+                OutlinedButton(
+                    onClick = onViewerMode,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("View as Viewer", style = MaterialTheme.typography.titleSmall)
+                }
+            }
+        } else {
+            Button(
+                onClick = onPublish,
+                enabled = !isPublishing,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    if (isPublishing) "Publishing…" else "Publish Match",
+                    style = MaterialTheme.typography.titleSmall
+                )
+            }
         }
     }
 }
