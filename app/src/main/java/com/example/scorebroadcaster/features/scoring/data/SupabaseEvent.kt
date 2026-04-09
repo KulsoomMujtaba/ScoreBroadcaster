@@ -2,6 +2,8 @@ package com.example.scorebroadcaster.features.scoring.data
 
 import com.example.scorebroadcaster.features.players.data.Player
 import com.example.scorebroadcaster.features.scoring.domain.BallEvent
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -26,7 +28,7 @@ import kotlinx.serialization.Serializable
  * [BallEvent] model evolves without requiring new migrations.
  */
 @Serializable
-data class SupabaseEvent(
+data class SupabaseEvent @OptIn(ExperimentalSerializationApi::class) constructor(
     @EncodeDefault(EncodeDefault.Mode.NEVER)
     val id: String? = null,
     @SerialName("match_id") val matchId: String,

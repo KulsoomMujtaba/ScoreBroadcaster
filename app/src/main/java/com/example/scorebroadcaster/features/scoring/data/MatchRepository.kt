@@ -204,6 +204,13 @@ class MatchRepository(
      * If the Supabase client is unavailable or the insert fails, the error is logged
      * and local scoring continues uninterrupted.
      *
+     * **Race-condition guard**: When [globalIndex] is 0 (the very first ball of the match),
+     * the parent `matches` row is upserted before the event is inserted. This prevents a
+     * foreign-key violation caused by [addMatch]'s async [SupabaseMatchRepository.upsertMatch]
+     * network call not yet completing by the time the first `match_events` insert fires.
+     * [SupabaseMatchRepository.upsertMatch] is idempotent (uses ON CONFLICT DO UPDATE), so
+     * calling it here is always safe and has no effect when the row already exists.
+     *
      * @param matchId        The local match UUID (shared with `matches.id` in Supabase).
      * @param inningsNumber  1 for first innings, 2 for second innings.
      * @param sequenceNumber 0-based position of this event within the innings.
