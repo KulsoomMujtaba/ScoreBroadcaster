@@ -438,18 +438,34 @@ class MatchViewModel : ViewModel() {
     }
 
     fun undo() {
-        if (_events.value.isNotEmpty()) {
-            _events.value = _events.value.dropLast(1)
-            _state.value = reduce(_events.value)
-                .copy(teamAName = currentTeamAName, teamBName = currentTeamBName)
-            _fallOfWickets.value = computeFallOfWickets(_events.value)
-            // Fully rebuild all per-player stats and batter positions from the remaining
-            // events so that batting entries, bowling entries, and striker/non-striker
-            // assignments are all consistent with the updated event log.
-            rebuildConsoleFromEvents(_events.value)
-            refreshCurrentInningsOverSummaries()
-            persistCurrentInningsEvents()
-            _undoMessage.value = "Last ball undone"
+        val currentEvents = _events.value
+        if (currentEvents.isEmpty()) return
+
+        val inningsNumber = _consoleState.value.inningsNumber
+        val targetIndex = currentEvents.size - 1
+        Log.d("MatchViewModel", "Undo triggered → target index $targetIndex")
+
+        // Compute the global index that the UNDO event itself will occupy.
+        // It is the next position in the match-level event log (one past the last BALL event).
+        val undoGlobalIndex = if (inningsNumber == 1) currentEvents.size
+                              else _firstInningsEvents.value.size + currentEvents.size
+
+        _events.value = currentEvents.dropLast(1)
+        _state.value = reduce(_events.value)
+            .copy(teamAName = currentTeamAName, teamBName = currentTeamBName)
+        _fallOfWickets.value = computeFallOfWickets(_events.value)
+        // Fully rebuild all per-player stats and batter positions from the remaining
+        // events so that batting entries, bowling entries, and striker/non-striker
+        // assignments are all consistent with the updated event log.
+        rebuildConsoleFromEvents(_events.value)
+        refreshCurrentInningsOverSummaries()
+        persistCurrentInningsEvents()
+        _undoMessage.value = "Last ball undone"
+
+        // Append an UNDO_TO_INDEX event to the remote log so the undo is reflected on
+        // all connected devices (viewers, other scorers) without deleting any rows.
+        _activeMatch.value?.localId?.let { matchId ->
+            MatchRepository.insertRemoteUndoEvent(matchId, inningsNumber, targetIndex, undoGlobalIndex)
         }
     }
 

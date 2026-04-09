@@ -237,12 +237,42 @@ class MatchRepository(
     }
 
     /**
+     * Asynchronously insert an `UNDO_TO_INDEX` event into the remote `match_events` table.
+     *
+     * Appends an undo marker to the remote log without deleting or modifying any existing rows.
+     * When the event log is replayed on any device, deliveries beyond [targetIndex] are
+     * discarded so all clients reach the same state.
+     *
+     * @param matchId        The local match UUID.
+     * @param inningsNumber  The innings whose delivery list is being truncated (1 or 2).
+     * @param targetIndex    Desired length of the active delivery list after this undo.
+     * @param globalIndex    Globally ordered index for this undo event within the match.
+     */
+    fun insertRemoteUndoEvent(
+        matchId: String,
+        inningsNumber: Int,
+        targetIndex: Int,
+        globalIndex: Int
+    ) {
+        val userId = currentUserId
+        if (userId == null) {
+            Log.w("MatchRepository", "insertRemoteUndoEvent: currentUserId is null — skipping undo insert for matchId=$matchId globalIndex=$globalIndex")
+            return
+        }
+        scope.launch {
+            val undoEvent = buildUndoSupabaseEvent(matchId, userId, inningsNumber, globalIndex, targetIndex)
+            Log.d("MatchRepository", "Undo event inserted: globalIndex=$globalIndex targetIndex=$targetIndex innings=$inningsNumber matchId=$matchId")
+            SupabaseEventRepository.insertEvent(undoEvent)
+        }
+    }
+
+    /**
      * Fetch all remote events for [matchId] from Supabase and save them to the local Room
      * database, replacing any previously stored events for each innings.
      *
-     * This is the "load from remote" step used by [initFromMatch] to ensure the most
-     * up-to-date event log is available before rebuilding match state, including when
-     * the match is opened on a new device.
+     * Events are replayed through [replayInningsEvents] so that any `UNDO_TO_INDEX` events
+     * in the remote log are honoured: only the final active delivery list (after all undos
+     * have been applied) is written into Room.  No remote rows are deleted.
      *
      * If the remote fetch returns no events (e.g. network unavailable or fresh match),
      * the local Room data is left unchanged.
@@ -256,8 +286,7 @@ class MatchRepository(
         val grouped = remoteEvents.groupBy { it.payload.inningsNumber }
         Log.d("MatchRepository", "Rebuilding match state from ${remoteEvents.size} remote events")
         for ((inningsNumber, events) in grouped) {
-            val sorted = events.sortedBy { it.eventIndex }
-            val ballEvents = sorted.map { it.toBallEvent() }
+            val ballEvents = replayInningsEvents(events)
             saveBallEvents(matchId, inningsNumber, ballEvents)
         }
     }
@@ -446,6 +475,26 @@ class MatchRepository(
                 return
             }
             repo.insertRemoteEvent(matchId, inningsNumber, sequenceNumber, globalIndex, event)
+        }
+
+        /**
+         * Asynchronously insert an `UNDO_TO_INDEX` event into the remote `match_events` table.
+         *
+         * Delegates to the active instance.  No-ops if the repository is not yet initialised
+         * or if no user is signed in.
+         */
+        fun insertRemoteUndoEvent(
+            matchId: String,
+            inningsNumber: Int,
+            targetIndex: Int,
+            globalIndex: Int
+        ) {
+            val repo = _instance
+            if (repo == null) {
+                Log.w("MatchRepository", "insertRemoteUndoEvent (companion): repository not yet initialised — dropping undo event globalIndex=$globalIndex matchId=$matchId")
+                return
+            }
+            repo.insertRemoteUndoEvent(matchId, inningsNumber, targetIndex, globalIndex)
         }
 
         /**

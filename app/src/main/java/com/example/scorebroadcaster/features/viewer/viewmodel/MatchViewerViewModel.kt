@@ -9,6 +9,7 @@ import com.example.scorebroadcaster.features.match.data.toMatch
 import com.example.scorebroadcaster.features.scoring.data.MatchState
 import com.example.scorebroadcaster.features.scoring.data.SupabaseEvent
 import com.example.scorebroadcaster.features.scoring.data.SupabaseEventRepository
+import com.example.scorebroadcaster.features.scoring.data.replayInningsEvents
 import com.example.scorebroadcaster.features.scoring.data.toBallEvent
 import com.example.scorebroadcaster.features.scoring.domain.BallEvent
 import com.example.scorebroadcaster.features.scoring.domain.reduce
@@ -134,11 +135,11 @@ class MatchViewerViewModel : ViewModel() {
             val grouped = remoteEvents.groupBy { it.payload.inningsNumber }
             val firstEvents = grouped[1]
                 ?.sortedBy { it.eventIndex }
-                ?.map { it.toBallEvent() }
+                ?.let { replayInningsEvents(it) }
                 ?: emptyList()
             val secondEvents = grouped[2]
                 ?.sortedBy { it.eventIndex }
-                ?.map { it.toBallEvent() }
+                ?.let { replayInningsEvents(it) }
                 ?: emptyList()
 
             val firstState = reduce(firstEvents)
@@ -206,8 +207,11 @@ class MatchViewerViewModel : ViewModel() {
      *
      * - Skips duplicates (already seen [SupabaseEvent.eventIndex]).
      * - Skips out-of-order events (index ≠ [nextExpectedEventIndex]).
-     * - Appends valid events to the in-memory list, re-reduces the innings state,
+     * - For `BALL` events: appends the delivery to the relevant innings list, re-reduces,
      *   and emits a new [ViewerLoadState.Success] so the UI updates instantly.
+     * - For `UNDO_TO_INDEX` events: truncates the relevant innings list to the event's
+     *   [com.example.scorebroadcaster.features.scoring.data.BallEventPayload.targetIndex]
+     *   and re-reduces so the viewer reflects the undo immediately.
      */
     private fun handleRealtimeEvent(event: SupabaseEvent) {
         if (processedEventIndices.contains(event.eventIndex)) {
@@ -222,32 +226,67 @@ class MatchViewerViewModel : ViewModel() {
         nextExpectedEventIndex++
 
         val currentState = _loadState.value as? ViewerLoadState.Success ?: return
-        val ballEvent = event.toBallEvent()
         val inningsNumber = event.payload.inningsNumber
 
-        val newFirstEvents: List<BallEvent>
-        val newSecondEvents: List<BallEvent>
-        if (inningsNumber == 1) {
-            newFirstEvents = currentState.firstInningsEvents + ballEvent
-            newSecondEvents = currentState.secondInningsEvents
-        } else {
-            newFirstEvents = currentState.firstInningsEvents
-            newSecondEvents = currentState.secondInningsEvents + ballEvent
+        when (event.eventType) {
+            "BALL" -> {
+                val ballEvent = event.toBallEvent()
+                val newFirstEvents: List<BallEvent>
+                val newSecondEvents: List<BallEvent>
+                if (inningsNumber == 1) {
+                    newFirstEvents = currentState.firstInningsEvents + ballEvent
+                    newSecondEvents = currentState.secondInningsEvents
+                } else {
+                    newFirstEvents = currentState.firstInningsEvents
+                    newSecondEvents = currentState.secondInningsEvents + ballEvent
+                }
+
+                val newFirstState = reduce(newFirstEvents)
+                val newSecondState = if (newSecondEvents.isNotEmpty()) reduce(newSecondEvents) else null
+
+                Log.d(TAG, "Live update — event index ${event.eventIndex}, innings $inningsNumber: " +
+                    "1st ${newFirstState.runs}/${newFirstState.wickets}, " +
+                    "2nd ${newSecondState?.runs}/${newSecondState?.wickets}")
+
+                _loadState.value = currentState.copy(
+                    firstInningsState = newFirstState,
+                    secondInningsState = newSecondState,
+                    firstInningsEvents = newFirstEvents,
+                    secondInningsEvents = newSecondEvents
+                )
+            }
+            "UNDO_TO_INDEX" -> {
+                val targetIndex = event.payload.targetIndex
+                if (targetIndex == null) {
+                    Log.w(TAG, "UNDO_TO_INDEX event at index ${event.eventIndex} has null targetIndex — ignoring")
+                    return
+                }
+                Log.d(TAG, "Applying undo to index $targetIndex (event index ${event.eventIndex}, innings $inningsNumber)")
+
+                val newFirstEvents: List<BallEvent>
+                val newSecondEvents: List<BallEvent>
+                if (inningsNumber == 1) {
+                    newFirstEvents = currentState.firstInningsEvents
+                        .take(targetIndex.coerceIn(0, currentState.firstInningsEvents.size))
+                    newSecondEvents = currentState.secondInningsEvents
+                } else {
+                    newFirstEvents = currentState.firstInningsEvents
+                    newSecondEvents = currentState.secondInningsEvents
+                        .take(targetIndex.coerceIn(0, currentState.secondInningsEvents.size))
+                }
+
+                val newFirstState = reduce(newFirstEvents)
+                val newSecondState = if (newSecondEvents.isNotEmpty()) reduce(newSecondEvents) else null
+
+                _loadState.value = currentState.copy(
+                    firstInningsState = newFirstState,
+                    secondInningsState = newSecondState,
+                    firstInningsEvents = newFirstEvents,
+                    secondInningsEvents = newSecondEvents
+                )
+            }
+            else -> Log.w(TAG, "Unknown event type '${event.eventType}' at index ${event.eventIndex} — ignoring")
         }
-
-        val newFirstState = reduce(newFirstEvents)
-        val newSecondState = if (newSecondEvents.isNotEmpty()) reduce(newSecondEvents) else null
-
-        Log.d(TAG, "Live update — event index ${event.eventIndex}, innings $inningsNumber: " +
-            "1st ${newFirstState.runs}/${newFirstState.wickets}, " +
-            "2nd ${newSecondState?.runs}/${newSecondState?.wickets}")
-
-        _loadState.value = currentState.copy(
-            firstInningsState = newFirstState,
-            secondInningsState = newSecondState,
-            firstInningsEvents = newFirstEvents,
-            secondInningsEvents = newSecondEvents
-        )
     }
 
     /**

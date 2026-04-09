@@ -1,5 +1,6 @@
 package com.example.scorebroadcaster.features.scoring.data
 
+import android.util.Log
 import com.example.scorebroadcaster.features.players.data.Player
 import com.example.scorebroadcaster.features.scoring.domain.BallEvent
 import kotlinx.serialization.EncodeDefault
@@ -71,7 +72,8 @@ data class BallEventPayload(
     val strikerName: String? = null,
     val strikerSourceProfileId: String? = null,
     val nonStrikerName: String? = null,
-    val nonStrikerSourceProfileId: String? = null
+    val nonStrikerSourceProfileId: String? = null,
+    val targetIndex: Int? = null
 )
 
 // ---------------------------------------------------------------------------
@@ -179,4 +181,94 @@ fun SupabaseEvent.toBallEvent(): BallEvent {
         striker = striker,
         nonStriker = nonStriker
     )
+}
+
+// ---------------------------------------------------------------------------
+// UNDO_TO_INDEX event helpers
+// ---------------------------------------------------------------------------
+
+private const val TAG_REPLAY = "SupabaseEventReplay"
+
+/**
+ * Build a [SupabaseEvent] representing an `UNDO_TO_INDEX` command.
+ *
+ * This event is inserted into the append-only `match_events` log instead of deleting
+ * or modifying existing rows.  When the event log is replayed (by the scorer device
+ * on reload, or by a viewer via Realtime), [replayInningsEvents] processes this event
+ * by truncating the active delivery list to [targetIndex], effectively "un-doing" all
+ * deliveries at or after that position.
+ *
+ * @param matchId        The match UUID.
+ * @param userId         The authenticated user's UUID.
+ * @param inningsNumber  The innings whose delivery list should be truncated (1 or 2).
+ * @param globalIndex    Globally ordered index for this event within the match.
+ * @param targetIndex    Desired length of the active delivery list after this undo.
+ *                       Must be ≥ 0 and ≤ the current innings delivery count.
+ */
+fun buildUndoSupabaseEvent(
+    matchId: String,
+    userId: String,
+    inningsNumber: Int,
+    globalIndex: Int,
+    targetIndex: Int
+): SupabaseEvent {
+    val payload = BallEventPayload(
+        inningsNumber = inningsNumber,
+        runsOffBat = 0,
+        wides = 0,
+        noBalls = 0,
+        byes = 0,
+        legByes = 0,
+        wicket = false,
+        countsAsBall = false,
+        targetIndex = targetIndex
+    )
+    return SupabaseEvent(
+        matchId = matchId,
+        userId = userId,
+        eventIndex = globalIndex,
+        eventType = "UNDO_TO_INDEX",
+        payload = payload
+    )
+}
+
+/**
+ * Replay a single innings' remote event log, respecting `UNDO_TO_INDEX` events.
+ *
+ * Iterates through [events] in ascending [SupabaseEvent.eventIndex] order.  For each
+ * event:
+ * - `BALL`          → appended to the active delivery list.
+ * - `UNDO_TO_INDEX` → the active list is truncated to [BallEventPayload.targetIndex],
+ *                     discarding all deliveries at or beyond that position (but never
+ *                     deleting any remote rows).
+ *
+ * This function is the canonical way to rebuild innings state from the remote log.
+ * It is used both during initial load and when processing incremental Realtime events.
+ *
+ * Edge-cases handled:
+ * - [BallEventPayload.targetIndex] null  → undo event is skipped (defensive fallback).
+ * - targetIndex out of range (< 0 or > list size) → clamped to valid range.
+ *
+ * @param events All remote events for a single innings, in any order.
+ * @return       The active [BallEvent] list after all undo commands have been applied.
+ */
+fun replayInningsEvents(events: List<SupabaseEvent>): List<BallEvent> {
+    val active = mutableListOf<BallEvent>()
+    for (event in events.sortedBy { it.eventIndex }) {
+        when (event.eventType) {
+            "BALL" -> active.add(event.toBallEvent())
+            "UNDO_TO_INDEX" -> {
+                val rawTarget = event.payload.targetIndex
+                if (rawTarget == null) {
+                    Log.w(TAG_REPLAY, "UNDO_TO_INDEX event at index ${event.eventIndex} has null targetIndex — skipping")
+                    continue
+                }
+                val target = rawTarget.coerceIn(0, active.size)
+                Log.d(TAG_REPLAY, "Applying undo to index $target (event index ${event.eventIndex})")
+                while (active.size > target) active.removeLast()
+            }
+            else -> Log.w(TAG_REPLAY, "Unknown event type '${event.eventType}' at index ${event.eventIndex} — skipping")
+        }
+    }
+    return active
 }
