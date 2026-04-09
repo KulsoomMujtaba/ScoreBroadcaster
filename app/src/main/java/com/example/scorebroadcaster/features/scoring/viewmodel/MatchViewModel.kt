@@ -193,8 +193,7 @@ class MatchViewModel : ViewModel() {
         _activeMatch.value?.localId?.let { matchId ->
             val inningsNumber = _consoleState.value.inningsNumber
             val sequenceNumber = _events.value.size - 1
-            val globalIndex = if (inningsNumber == 1) sequenceNumber
-                              else _firstInningsEvents.value.size + sequenceNumber
+            val globalIndex = computeGlobalEventIndex(inningsNumber, sequenceNumber)
             Log.d("MatchViewModel", "Inserting event index $globalIndex (innings=$inningsNumber, seq=$sequenceNumber)")
             MatchRepository.insertRemoteEvent(matchId, inningsNumber, sequenceNumber, globalIndex, stamped)
         }
@@ -447,8 +446,7 @@ class MatchViewModel : ViewModel() {
 
         // Compute the global index that the UNDO event itself will occupy.
         // It is the next position in the match-level event log (one past the last BALL event).
-        val undoGlobalIndex = if (inningsNumber == 1) currentEvents.size
-                              else _firstInningsEvents.value.size + currentEvents.size
+        val undoGlobalIndex = computeGlobalEventIndex(inningsNumber, currentEvents.size)
 
         _events.value = currentEvents.dropLast(1)
         _state.value = reduce(_events.value)
@@ -1597,6 +1595,17 @@ class MatchViewModel : ViewModel() {
             }
         }
     }
+
+    /**
+     * Compute the match-global event index for a delivery at position [inningsSequenceNumber]
+     * in [inningsNumber].
+     *
+     * First-innings events start at 0.  Second-innings events are offset by the number of
+     * first-innings events so that the full match can be sorted by this single value.
+     */
+    private fun computeGlobalEventIndex(inningsNumber: Int, inningsSequenceNumber: Int): Int =
+        if (inningsNumber == 1) inningsSequenceNumber
+        else _firstInningsEvents.value.size + inningsSequenceNumber
 
     private fun incrementBall(overs: Int, balls: Int): Pair<Int, Int> =
         if (balls + 1 >= 6) Pair(overs + 1, 0) else Pair(overs, balls + 1)
