@@ -8,6 +8,8 @@ import io.github.jan.supabase.postgrest.query.Order
 import io.github.jan.supabase.realtime.PostgresAction
 import io.github.jan.supabase.realtime.RealtimeChannel
 import io.github.jan.supabase.realtime.channel
+import io.github.jan.supabase.realtime.decodeRecord
+import io.github.jan.supabase.postgrest.query.filter.FilterOperator
 import io.github.jan.supabase.realtime.postgresChangeFlow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.mapNotNull
@@ -51,13 +53,17 @@ object SupabaseEventRepository {
      * Does nothing if the Supabase client is not configured.
      */
     suspend fun insertEvent(event: SupabaseEvent) {
-        val supabase = client ?: return
+        val supabase = client
+        if (supabase == null) {
+            Log.w(TAG, "insertEvent: Supabase client is null (not configured) — skipping insert for event ${event.id} matchId=${event.matchId}")
+            return
+        }
         runCatching {
             Log.d(TAG, "Inserting event index=${event.eventIndex} for match ${event.matchId}")
             supabase.postgrest[TABLE].insert(event)
             Log.d(TAG, "Successfully inserted event index=${event.eventIndex} for match ${event.matchId}")
         }.onFailure { e ->
-            Log.e(TAG, "Failed to insert event index ${event.eventIndex}: ${e.message}")
+            Log.e(TAG, "Failed to insert event index ${event.eventIndex}: ${e.message}", e)
         }
     }
 
@@ -68,7 +74,11 @@ object SupabaseEventRepository {
      *         configured or the request fails.
      */
     suspend fun fetchMatchEvents(matchId: String): List<SupabaseEvent> {
-        val supabase = client ?: return emptyList()
+        val supabase = client
+        if (supabase == null) {
+            Log.w(TAG, "fetchMatchEvents: Supabase client is null (not configured) — skipping fetch for matchId=$matchId")
+            return emptyList()
+        }
         return runCatching {
             val result = supabase.postgrest[TABLE]
                 .select(columns = Columns.ALL) {
@@ -99,7 +109,7 @@ object SupabaseEventRepository {
             val channel = supabase.channel("viewer-match-$matchId")
             val insertFlow = channel.postgresChangeFlow<PostgresAction.Insert>(schema = SCHEMA) {
                 table = TABLE
-                filter = "match_id=eq.$matchId"
+                filter("match_id", FilterOperator.EQ, matchId)
             }
             channel.subscribe()
             Log.d(TAG, "Subscribed to match $matchId")

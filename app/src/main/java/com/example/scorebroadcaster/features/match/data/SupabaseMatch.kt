@@ -1,8 +1,6 @@
 package com.example.scorebroadcaster.features.match.data
 
 import android.util.Log
-import kotlinx.serialization.EncodeDefault
-import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -26,7 +24,6 @@ private fun String.isValidUuid(): Boolean = UUID_REGEX.matches(this)
  *
  * Only metadata is stored here — ball-by-ball events are not synced (see FUTURE CONTEXT).
  */
-@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class SupabaseMatch(
     val id: String,
@@ -41,10 +38,8 @@ data class SupabaseMatch(
     val status: String,
     @SerialName("is_published") val isPublished: Boolean = false,
     @SerialName("share_code") val shareCode: String? = null,
-    @EncodeDefault(EncodeDefault.Mode.NEVER)
-    @SerialName("created_at") val createdAt: String? = null,
-    @EncodeDefault(EncodeDefault.Mode.NEVER)
-    @SerialName("updated_at") val updatedAt: String? = null
+    @SerialName("created_at") val createdAt: String = "",
+    @SerialName("updated_at") val updatedAt: String = ""
 )
 
 /**

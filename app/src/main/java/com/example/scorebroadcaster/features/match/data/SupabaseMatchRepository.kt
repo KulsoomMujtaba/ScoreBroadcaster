@@ -69,13 +69,18 @@ object SupabaseMatchRepository {
      * Does nothing if the Supabase client is not configured.
      */
     suspend fun upsertMatch(match: SupabaseMatch) {
-        val supabase = client ?: return
+        val supabase = client
+        if (supabase == null) {
+            Log.w(TAG, "upsertMatch: Supabase client is null (not configured) — skipping upsert for match '${match.matchName}' (${match.id})")
+            return
+        }
+        Log.d(TAG, "upsertMatch: upserting match '${match.matchName}' (${match.id}) status=${match.status} userId=${match.userId}")
         runCatching {
             supabase.postgrest[TABLE]
                 .upsert(match) { onConflict = CONFLICT_COLUMN }
-            Log.d(TAG, "Match inserted: ${match.matchName}")
+            Log.d(TAG, "upsertMatch: success for '${match.matchName}' (${match.id})")
         }.onFailure { e ->
-            Log.e(TAG, "Failed to upsert match ${match.matchName}: ${e.message}")
+            Log.e(TAG, "upsertMatch: FAILED for '${match.matchName}' (${match.id}): ${e.message}", e)
         }
     }
 

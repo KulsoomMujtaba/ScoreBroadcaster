@@ -80,8 +80,10 @@ class MatchRepository(
             dao.insert(match.toEntity())
             val userId = currentUserId
             if (userId != null) {
-                Log.d("MatchRepository", "Match inserted: ${match.displayTitle}")
+                Log.d("MatchRepository", "addMatch: mirroring '${match.displayTitle}' (${match.localId}) to Supabase for user $userId")
                 SupabaseMatchRepository.upsertMatch(match.toSupabaseMatch(userId))
+            } else {
+                Log.w("MatchRepository", "addMatch: currentUserId is null — skipping Supabase mirror for '${match.displayTitle}' (${match.localId})")
             }
         }
     }
@@ -115,8 +117,10 @@ class MatchRepository(
             dao.update(match.toEntity())
             val userId = currentUserId
             if (userId != null) {
-                Log.d("MatchRepository", "Match updated: ${match.displayTitle}")
+                Log.d("MatchRepository", "updateMatch: mirroring '${match.displayTitle}' (${match.localId}) status=${match.status} to Supabase for user $userId")
                 SupabaseMatchRepository.upsertMatch(match.toSupabaseMatch(userId))
+            } else {
+                Log.w("MatchRepository", "updateMatch: currentUserId is null — skipping Supabase mirror for '${match.displayTitle}' (${match.localId}) status=${match.status}")
             }
         }
         if (_activeMatch.value?.id == match.id) {
@@ -177,11 +181,15 @@ class MatchRepository(
      * All work is done off the main thread; callers do not need to suspend.
      */
     fun syncWithRemote(userId: String) {
+        Log.d("MatchRepository", "syncWithRemote: registering userId=$userId and starting sync")
         currentUserId = userId
         scope.launch {
             val local = dao.getAll().map { it.toDomain() }
+            Log.d("MatchRepository", "syncWithRemote: local matches=${local.size}, fetching remote")
             val toHydrate = SupabaseMatchRepository.syncMatches(local, userId)
+            Log.d("MatchRepository", "syncWithRemote: hydrating ${toHydrate.size} matches into local DB")
             toHydrate.forEach { match -> dao.insert(match.toEntity()) }
+            Log.d("MatchRepository", "syncWithRemote: complete")
         }
     }
 
@@ -209,9 +217,14 @@ class MatchRepository(
         globalIndex: Int,
         event: BallEvent
     ) {
-        val userId = currentUserId ?: return
+        val userId = currentUserId
+        if (userId == null) {
+            Log.w("MatchRepository", "insertRemoteEvent: currentUserId is null — skipping remote insert for matchId=$matchId eventIndex=$globalIndex")
+            return
+        }
         scope.launch {
             val supabaseEvent = event.toSupabaseEvent(matchId, userId, inningsNumber, sequenceNumber, globalIndex)
+            Log.d("MatchRepository", "insertRemoteEvent: inserting event globalIndex=$globalIndex innings=$inningsNumber seq=$sequenceNumber matchId=$matchId userId=$userId")
             SupabaseEventRepository.insertEvent(supabaseEvent)
         }
     }
@@ -420,7 +433,11 @@ class MatchRepository(
             globalIndex: Int,
             event: BallEvent
         ) {
-            val repo = _instance ?: return
+            val repo = _instance
+            if (repo == null) {
+                Log.w("MatchRepository", "insertRemoteEvent (companion): repository not yet initialised — dropping event globalIndex=$globalIndex matchId=$matchId")
+                return
+            }
             repo.insertRemoteEvent(matchId, inningsNumber, sequenceNumber, globalIndex, event)
         }
 
