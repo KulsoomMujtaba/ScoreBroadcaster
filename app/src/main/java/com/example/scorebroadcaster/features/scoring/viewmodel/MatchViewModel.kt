@@ -31,6 +31,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import com.example.scorebroadcaster.features.scoring.data.Innings
+import java.util.concurrent.atomic.AtomicInteger
 
 class MatchViewModel : ViewModel() {
 
@@ -115,6 +116,20 @@ class MatchViewModel : ViewModel() {
     private var resumeJob: Job? = null
 
     /**
+     * Monotonically-increasing counter of all events ever written to the remote
+     * `match_events` table for the active match (BALL events **and** UNDO_TO_INDEX events
+     * combined).  Used as the `globalIndex` / `event_index` for every remote insert so
+     * that UNDO events always occupy a fresh, unique index and never collide with an
+     * existing BALL row.
+     *
+     * Reset to 0 by [initFromMatch] and seeded from the actual remote row count returned by
+     * [MatchRepository.syncMatchEvents] so the counter survives app restarts correctly.
+     *
+     * Uses [AtomicInteger] for thread-safe increments in case scoring coroutines overlap.
+     */
+    private val remoteEventCount = AtomicInteger(0)
+
+    /**
      * True while [initFromMatch] is asynchronously loading and rebuilding persisted match
      * state from the database/remote.  The scoring UI observes this to suppress the
      * innings-setup popup during the transient loading window so it is never shown
@@ -193,7 +208,7 @@ class MatchViewModel : ViewModel() {
         _activeMatch.value?.localId?.let { matchId ->
             val inningsNumber = _consoleState.value.inningsNumber
             val sequenceNumber = _events.value.size - 1
-            val globalIndex = computeGlobalEventIndex(inningsNumber, sequenceNumber)
+            val globalIndex = remoteEventCount.getAndIncrement()
             Log.d("MatchViewModel", "Inserting event index $globalIndex (innings=$inningsNumber, seq=$sequenceNumber)")
             MatchRepository.insertRemoteEvent(matchId, inningsNumber, sequenceNumber, globalIndex, stamped)
         }
@@ -444,9 +459,10 @@ class MatchViewModel : ViewModel() {
         val targetIndex = currentEvents.size - 1
         Log.d("MatchViewModel", "Undo triggered → target index $targetIndex")
 
-        // Compute the global index that the UNDO event itself will occupy.
-        // It is the next position in the match-level event log (one past the last BALL event).
-        val undoGlobalIndex = computeGlobalEventIndex(inningsNumber, currentEvents.size)
+        // Assign the next globally-unique event index for this UNDO event.
+        // remoteEventCount already accounts for all previously-inserted BALL and UNDO rows,
+        // so this never collides with an existing event_index in Supabase.
+        val undoGlobalIndex = remoteEventCount.getAndIncrement()
 
         _events.value = currentEvents.dropLast(1)
         _state.value = reduce(_events.value)
@@ -1182,6 +1198,8 @@ class MatchViewModel : ViewModel() {
             teamAName = currentTeamAName,
             teamBName = currentTeamBName
         )
+        // Reset the remote event counter; it will be seeded below from the actual remote count.
+        remoteEventCount.set(0)
         // Start with FIRST_INNINGS phase so that the setup dialog is driven by
         // needsInningsSetup (missing players) rather than by phase alone.
         // resumePersistedState will correct the phase to INNINGS_BREAK / SECOND_INNINGS /
@@ -1204,7 +1222,11 @@ class MatchViewModel : ViewModel() {
                 // Fetch remote events first so the most up-to-date log is available, including
                 // when the match is opened on a new device.  Local Room DB is updated in place;
                 // if the remote fetch fails, the existing local data is used as fallback.
-                MatchRepository.syncMatchEvents(match.localId)
+                // The raw count (BALLs + UNDOs) seeds remoteEventCount so subsequent inserts
+                // always use a unique, non-colliding event_index.
+                val rawRemoteCount = MatchRepository.syncMatchEvents(match.localId)
+                remoteEventCount.set(rawRemoteCount)
+                Log.d("ResumeFlow", "Seeded remoteEventCount=$remoteEventCount for match ${match.localId}")
                 // Check whether the match has started before loading all events so the
                 // innings-setup decision uses a single source of truth (hasMatchStarted).
                 val hasMatchStarted = MatchRepository.hasMatchStarted(match.localId)
@@ -1595,17 +1617,6 @@ class MatchViewModel : ViewModel() {
             }
         }
     }
-
-    /**
-     * Compute the match-global event index for a delivery at position [inningsSequenceNumber]
-     * in [inningsNumber].
-     *
-     * First-innings events start at 0.  Second-innings events are offset by the number of
-     * first-innings events so that the full match can be sorted by this single value.
-     */
-    private fun computeGlobalEventIndex(inningsNumber: Int, inningsSequenceNumber: Int): Int =
-        if (inningsNumber == 1) inningsSequenceNumber
-        else _firstInningsEvents.value.size + inningsSequenceNumber
 
     private fun incrementBall(overs: Int, balls: Int): Pair<Int, Int> =
         if (balls + 1 >= 6) Pair(overs + 1, 0) else Pair(overs, balls + 1)

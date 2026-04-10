@@ -276,12 +276,16 @@ class MatchRepository(
      *
      * If the remote fetch returns no events (e.g. network unavailable or fresh match),
      * the local Room data is left unchanged.
+     *
+     * @return The total number of raw remote events fetched (BALLs + UNDOs combined), or 0
+     *         if the remote fetch returned nothing.  The caller uses this count to seed the
+     *         match-global event counter so that subsequent inserts use a non-colliding index.
      */
-    suspend fun syncMatchEvents(matchId: String) {
+    suspend fun syncMatchEvents(matchId: String): Int {
         Log.d("MatchRepository", "Syncing match events for $matchId")
         val remoteEvents = SupabaseEventRepository.fetchMatchEvents(matchId)
         Log.d("MatchRepository", "Fetched ${remoteEvents.size} events for match $matchId")
-        if (remoteEvents.isEmpty()) return
+        if (remoteEvents.isEmpty()) return 0
 
         val grouped = remoteEvents.groupBy { it.payload.inningsNumber }
         Log.d("MatchRepository", "Rebuilding match state from ${remoteEvents.size} remote events")
@@ -289,6 +293,7 @@ class MatchRepository(
             val ballEvents = replayInningsEvents(events)
             saveBallEvents(matchId, inningsNumber, ballEvents)
         }
+        return remoteEvents.size
     }
 
     // ---------------------------------------------------------------------------
@@ -500,11 +505,13 @@ class MatchRepository(
         /**
          * Fetch all remote events for [matchId] from Supabase and update the local Room DB.
          *
-         * Delegates to the active instance.  No-ops if the repository is not yet initialised.
+         * Delegates to the active instance.  Returns 0 if the repository is not yet initialised.
+         *
+         * @return The total number of raw remote events fetched (BALLs + UNDOs combined).
          */
-        suspend fun syncMatchEvents(matchId: String) {
-            val repo = _instance ?: return
-            repo.syncMatchEvents(matchId)
+        suspend fun syncMatchEvents(matchId: String): Int {
+            val repo = _instance ?: return 0
+            return repo.syncMatchEvents(matchId)
         }
 
         /**
