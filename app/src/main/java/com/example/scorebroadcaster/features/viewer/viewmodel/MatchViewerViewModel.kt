@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.scorebroadcaster.features.match.data.Match
 import com.example.scorebroadcaster.features.match.data.SupabaseMatchRepository
 import com.example.scorebroadcaster.features.match.data.toMatch
+import com.example.scorebroadcaster.features.scoring.data.EventType
 import com.example.scorebroadcaster.features.scoring.data.MatchState
 import com.example.scorebroadcaster.features.scoring.data.SupabaseEvent
 import com.example.scorebroadcaster.features.scoring.data.SupabaseEventRepository
@@ -229,7 +230,7 @@ class MatchViewerViewModel : ViewModel() {
         val inningsNumber = event.payload.inningsNumber
 
         when (event.eventType) {
-            "BALL" -> {
+            EventType.BALL -> {
                 val ballEvent = event.toBallEvent()
                 val newFirstEvents: List<BallEvent>
                 val newSecondEvents: List<BallEvent>
@@ -255,7 +256,7 @@ class MatchViewerViewModel : ViewModel() {
                     secondInningsEvents = newSecondEvents
                 )
             }
-            "UNDO_TO_INDEX" -> {
+            EventType.UNDO_TO_INDEX -> {
                 val targetIndex = event.payload.targetIndex
                 if (targetIndex == null) {
                     Log.w(TAG, "UNDO_TO_INDEX event at index ${event.eventIndex} has null targetIndex — ignoring")
