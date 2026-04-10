@@ -193,8 +193,7 @@ class MatchViewModel : ViewModel() {
         _activeMatch.value?.localId?.let { matchId ->
             val inningsNumber = _consoleState.value.inningsNumber
             val sequenceNumber = _events.value.size - 1
-            val globalIndex = if (inningsNumber == 1) sequenceNumber
-                              else _firstInningsEvents.value.size + sequenceNumber
+            val globalIndex = computeGlobalEventIndex(inningsNumber, sequenceNumber)
             Log.d("MatchViewModel", "Inserting event index $globalIndex (innings=$inningsNumber, seq=$sequenceNumber)")
             MatchRepository.insertRemoteEvent(matchId, inningsNumber, sequenceNumber, globalIndex, stamped)
         }
@@ -438,18 +437,33 @@ class MatchViewModel : ViewModel() {
     }
 
     fun undo() {
-        if (_events.value.isNotEmpty()) {
-            _events.value = _events.value.dropLast(1)
-            _state.value = reduce(_events.value)
-                .copy(teamAName = currentTeamAName, teamBName = currentTeamBName)
-            _fallOfWickets.value = computeFallOfWickets(_events.value)
-            // Fully rebuild all per-player stats and batter positions from the remaining
-            // events so that batting entries, bowling entries, and striker/non-striker
-            // assignments are all consistent with the updated event log.
-            rebuildConsoleFromEvents(_events.value)
-            refreshCurrentInningsOverSummaries()
-            persistCurrentInningsEvents()
-            _undoMessage.value = "Last ball undone"
+        val currentEvents = _events.value
+        if (currentEvents.isEmpty()) return
+
+        val inningsNumber = _consoleState.value.inningsNumber
+        val targetIndex = currentEvents.size - 1
+        Log.d("MatchViewModel", "Undo triggered → target index $targetIndex")
+
+        // Compute the global index that the UNDO event itself will occupy.
+        // It is the next position in the match-level event log (one past the last BALL event).
+        val undoGlobalIndex = computeGlobalEventIndex(inningsNumber, currentEvents.size)
+
+        _events.value = currentEvents.dropLast(1)
+        _state.value = reduce(_events.value)
+            .copy(teamAName = currentTeamAName, teamBName = currentTeamBName)
+        _fallOfWickets.value = computeFallOfWickets(_events.value)
+        // Fully rebuild all per-player stats and batter positions from the remaining
+        // events so that batting entries, bowling entries, and striker/non-striker
+        // assignments are all consistent with the updated event log.
+        rebuildConsoleFromEvents(_events.value)
+        refreshCurrentInningsOverSummaries()
+        persistCurrentInningsEvents()
+        _undoMessage.value = "Last ball undone"
+
+        // Append an UNDO_TO_INDEX event to the remote log so the undo is reflected on
+        // all connected devices (viewers, other scorers) without deleting any rows.
+        _activeMatch.value?.localId?.let { matchId ->
+            MatchRepository.insertRemoteUndoEvent(matchId, inningsNumber, targetIndex, undoGlobalIndex)
         }
     }
 
@@ -1581,6 +1595,17 @@ class MatchViewModel : ViewModel() {
             }
         }
     }
+
+    /**
+     * Compute the match-global event index for a delivery at position [inningsSequenceNumber]
+     * in [inningsNumber].
+     *
+     * First-innings events start at 0.  Second-innings events are offset by the number of
+     * first-innings events so that the full match can be sorted by this single value.
+     */
+    private fun computeGlobalEventIndex(inningsNumber: Int, inningsSequenceNumber: Int): Int =
+        if (inningsNumber == 1) inningsSequenceNumber
+        else _firstInningsEvents.value.size + inningsSequenceNumber
 
     private fun incrementBall(overs: Int, balls: Int): Pair<Int, Int> =
         if (balls + 1 >= 6) Pair(overs + 1, 0) else Pair(overs, balls + 1)

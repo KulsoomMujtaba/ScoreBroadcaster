@@ -688,6 +688,51 @@ Scoring is modelled as an append-only event log:
 
 ## Development Log
 
+### 2026-04-09 – Feature: Undo Sync (Event-based)
+
+**Problem**
+
+Local undo (pressing the Undo button while scoring) only modified in-memory state on the scorer's device.  The remote Supabase event log was never updated, so viewers and any other device that reloaded the match would see a different—and incorrect—state.  The fundamental mismatch: undo was a local state hack, not part of the event log.
+
+**Solution**
+
+Introduced a new append-only event type `UNDO_TO_INDEX` that is inserted into the remote `match_events` table just like any ball delivery.  When a scorer presses Undo:
+
+1. A `UNDO_TO_INDEX` event is created with `targetIndex = currentInningsSize - 1`.
+2. The event is inserted into Supabase (async, non-blocking).
+3. Local state is updated immediately as before.
+
+When the event log is replayed on any device (initial load, app resume, or live Realtime stream), the replay function processes each event in order:
+- `BALL` event → append to active delivery list.
+- `UNDO_TO_INDEX` event → truncate active delivery list to `targetIndex`.
+
+The final active delivery list (after all undos) is what drives the UI and scorecard.
+
+**Key principle**
+
+> Never mutate history, only append.
+
+No rows are ever deleted or updated in Supabase.  The full event log—including every undo marker—is always preserved.
+
+**Example**
+
+```
+Remote log:   [BALL(0), BALL(1), BALL(2), BALL(3), UNDO_TO_INDEX(4, targetIndex=3)]
+Active after replay:  [BALL(0), BALL(1), BALL(2)]
+```
+
+**Files changed**
+
+| File | Change |
+|------|--------|
+| `SupabaseEvent.kt` | Added `targetIndex: Int? = null` to `BallEventPayload`; added `buildUndoSupabaseEvent(...)` and `replayInningsEvents(...)` functions |
+| `MatchViewModel.kt` | Modified `undo()` to compute global index, log the action, and call `MatchRepository.insertRemoteUndoEvent(...)` |
+| `MatchRepository.kt` | Added `insertRemoteUndoEvent(...)` (instance + companion); updated `syncMatchEvents` to use `replayInningsEvents` |
+| `MatchViewerViewModel.kt` | Updated `loadMatchByShareCode` to use `replayInningsEvents`; updated `handleRealtimeEvent` to handle `UNDO_TO_INDEX` events |
+| `README.md` | This entry |
+
+---
+
 ### 2026-04-08 – Bug Fix: UUID Mapping for Matches and Events
 
 **Root cause**
