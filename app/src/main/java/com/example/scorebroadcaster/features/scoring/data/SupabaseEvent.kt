@@ -122,11 +122,17 @@ fun BallEvent.toSupabaseEvent(
         nonStrikerName = nonStriker?.name,
         nonStrikerSourceProfileId = nonStriker?.sourceProfileId
     )
+    val eventType = when {
+        wicket -> EventType.WICKET
+        extras.wides > 0 || extras.noBalls > 0 || extras.byes > 0 || extras.legByes > 0 -> EventType.EXTRA
+        runsOffBat > 0 -> EventType.RUN
+        else -> EventType.BALL
+    }
     return SupabaseEvent(
         matchId = matchId,
         userId = userId,
         eventIndex = globalIndex,
-        eventType = EventType.BALL,
+        eventType = eventType,
         payload = payload
     )
 }
@@ -256,7 +262,7 @@ fun replayInningsEvents(events: List<SupabaseEvent>): List<BallEvent> {
     val active = mutableListOf<BallEvent>()
     for (event in events.sortedBy { it.eventIndex }) {
         when (event.eventType) {
-            EventType.BALL -> active.add(event.toBallEvent())
+            EventType.BALL, EventType.RUN, EventType.EXTRA, EventType.WICKET -> active.add(event.toBallEvent())
             EventType.UNDO_TO_INDEX -> {
                 val rawTarget = event.payload.targetIndex
                 if (rawTarget == null) {
