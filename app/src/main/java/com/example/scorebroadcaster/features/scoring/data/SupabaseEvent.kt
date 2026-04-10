@@ -35,7 +35,7 @@ data class SupabaseEvent @OptIn(ExperimentalSerializationApi::class) constructor
     @SerialName("match_id") val matchId: String,
     @SerialName("user_id") val userId: String,
     @SerialName("event_index") val eventIndex: Int,
-    @SerialName("event_type") val eventType: String,
+    @SerialName("event_type") val eventType: EventType,
     val payload: BallEventPayload,
     @SerialName("created_at") val createdAt: String = ""
 )
@@ -126,7 +126,7 @@ fun BallEvent.toSupabaseEvent(
         matchId = matchId,
         userId = userId,
         eventIndex = globalIndex,
-        eventType = "BALL",
+        eventType = EventType.BALL,
         payload = payload
     )
 }
@@ -227,7 +227,7 @@ fun buildUndoSupabaseEvent(
         matchId = matchId,
         userId = userId,
         eventIndex = globalIndex,
-        eventType = "UNDO_TO_INDEX",
+        eventType = EventType.UNDO_TO_INDEX,
         payload = payload
     )
 }
@@ -256,8 +256,8 @@ fun replayInningsEvents(events: List<SupabaseEvent>): List<BallEvent> {
     val active = mutableListOf<BallEvent>()
     for (event in events.sortedBy { it.eventIndex }) {
         when (event.eventType) {
-            "BALL" -> active.add(event.toBallEvent())
-            "UNDO_TO_INDEX" -> {
+            EventType.BALL -> active.add(event.toBallEvent())
+            EventType.UNDO_TO_INDEX -> {
                 val rawTarget = event.payload.targetIndex
                 if (rawTarget == null) {
                     Log.w(TAG_REPLAY, "UNDO_TO_INDEX event at index ${event.eventIndex} has null targetIndex — skipping")
