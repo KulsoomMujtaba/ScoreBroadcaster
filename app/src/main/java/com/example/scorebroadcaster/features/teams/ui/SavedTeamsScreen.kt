@@ -252,7 +252,6 @@ fun CreateSavedTeamDialog(
         MultiPlayerPickerSheet(
             savedPlayers = savedPlayers,
             initiallySelectedIds = selectedPlayers.mapNotNull { it.sourceProfileId }.toSet(),
-            maxSelectionCount = 11,
             onCreatePlayer = { name, saveToMyPlayers ->
                 val profile = PlayerProfile(
                     displayName = name,

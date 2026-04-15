@@ -1,4 +1,5 @@
 package com.example.scorebroadcaster.features.match.ui
+import android.util.Log
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -158,7 +159,6 @@ fun PlayerSetupScreen(
         MultiPlayerPickerSheet(
             savedPlayers = savedPlayers,
             initiallySelectedIds = initiallySelectedIds,
-            maxSelectionCount = 11,
             excludedPlayerIds = otherTeamExcluded,
             onCreatePlayer = { name, saveToMyPlayers ->
                 val profile = PlayerProfile(
@@ -171,16 +171,21 @@ fun PlayerSetupScreen(
                 profile
             },
             onConfirm = { profiles ->
+                val teamLabel = if (isPickingForTeamA) "Team A" else "Team B"
                 if (isPickingForTeamA) {
                     teamAPlayers.clear()
                     teamAPlayers.addAll(
                         profiles.map { Player(name = it.displayName, sourceProfileId = it.id) }
                     )
+                    Log.d("PlayerSetup", "Players confirmed for team: $teamLabel")
+                    Log.d("PlayerSetup", "Current team size: ${teamAPlayers.size}")
                 } else {
                     teamBPlayers.clear()
                     teamBPlayers.addAll(
                         profiles.map { Player(name = it.displayName, sourceProfileId = it.id) }
                     )
+                    Log.d("PlayerSetup", "Players confirmed for team: $teamLabel")
+                    Log.d("PlayerSetup", "Current team size: ${teamBPlayers.size}")
                 }
                 multiPickerForTeamA = null
             },

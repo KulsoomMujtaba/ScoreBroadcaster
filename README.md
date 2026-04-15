@@ -3299,3 +3299,34 @@ Added `ScoreboardOverlay`, a Jetpack Compose composable designed to sit on top o
 **Explanation:**
 Set up the full application from scratch. `ScoreEvent` is a sealed class covering every legal cricket delivery outcome (Run, Wicket, Wide, NoBall, Bye, LegBye). `MatchState` is an immutable data class holding runs, wickets, overs, ball count, and the last six deliveries for the over summary. `ScoreReducer` is a stateless pure function that computes the next `MatchState` from the current state and a single event, including over progression and extras handling. `MatchViewModel` stores the append-only event list and exposes a `StateFlow<MatchState>` derived by folding all events through the reducer; it also provides `dispatch` and `undo` methods. `ScoringScreen` renders the scoreboard and scoring buttons using Jetpack Compose and collects state from the ViewModel. `MainActivity` bootstraps Compose and injects the ViewModel.
 
+
+
+---
+
+### 2026-04-15
+
+**Feature:** UX Improvements: Team Flexibility + Tape Ball Overs
+
+**Files created/modified:**
+| File | Action |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/features/players/ui/MultiPlayerPickerSheet.kt` | Updated |
+| `app/src/main/java/com/example/scorebroadcaster/features/match/ui/PlayerSetupScreen.kt` | Updated |
+| `app/src/main/java/com/example/scorebroadcaster/features/teams/ui/SavedTeamsScreen.kt` | Updated |
+| `app/src/main/java/com/example/scorebroadcaster/features/match/ui/CreateMatchScreen.kt` | Updated |
+| `README.md` | Updated |
+
+**What changed:**
+
+- **Removed hardcoded 11-player limit**: `MultiPlayerPickerSheet` no longer enforces a default cap of 11 players (`maxSelectionCount` now defaults to `Int.MAX_VALUE`). The "Maximum: X players" label and per-team limit error text are hidden when no finite cap is set. All callers in `PlayerSetupScreen` and `SavedTeamsScreen` no longer pass `maxSelectionCount = 11`, allowing teams of any size. Logging added: "Player added to team: X" and "Current team size: X" on each roster confirmation.
+
+- **Added dynamic overs input for Tape Ball**: In `CreateMatchScreen`, selecting the "Tape Ball" format now shows a dedicated numeric input field labelled "Enter number of overs". The value must be greater than 0 and less than 100. The "Next" button on the Match Format step is disabled until a valid value is entered. Switching away from Tape Ball clears the entered value. Logging added: "Tape Ball selected" on format selection and "Overs set to X" when a valid overs value is entered.
+
+- **Improved match setup flexibility**: Users can now build teams of any size and configure Tape Ball matches with a freely chosen number of overs.
+
+**What did NOT change:**
+
+- Scoring engine (`ScoreReducer`, `MatchViewModel`) — untouched
+- Match reducer logic — untouched
+- Database schema (Room entities, Supabase tables) — untouched
+- Sync logic (`SupabaseMatchRepository`, `SupabaseEventRepository`) — untouched

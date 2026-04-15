@@ -67,7 +67,8 @@ import com.example.scorebroadcaster.features.players.data.Player
  *
  * @param savedPlayers          List of existing My Players profiles to display.
  * @param initiallySelectedIds  Profile IDs to pre-select when the picker opens.
- * @param maxSelectionCount     Maximum number of players that can be selected (default 11).
+ * @param maxSelectionCount     Maximum number of players that can be selected. Defaults to
+ *                              [Int.MAX_VALUE] (no limit). Pass a positive integer to cap selection.
  * @param excludedPlayerIds     Profile IDs to hide from the list (already assigned elsewhere).
  * @param onCreatePlayer        Called with a player name and a saveToMyPlayers flag; must return a [PlayerProfile].
  * @param onConfirm             Called with the ordered list of selected profiles when confirmed.
@@ -78,7 +79,7 @@ import com.example.scorebroadcaster.features.players.data.Player
 fun MultiPlayerPickerSheet(
     savedPlayers: List<PlayerProfile>,
     initiallySelectedIds: Set<String> = emptySet(),
-    maxSelectionCount: Int = 11,
+    maxSelectionCount: Int = Int.MAX_VALUE,
     excludedPlayerIds: Set<String> = emptySet(),
     onCreatePlayer: (name: String, saveToMyPlayers: Boolean) -> PlayerProfile,
     onConfirm: (List<PlayerProfile>) -> Unit,
@@ -298,28 +299,30 @@ fun MultiPlayerPickerSheet(
                         Spacer(Modifier.height(4.dp))
                     }
 
-                    // Team limit info row
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Maximum: $maxSelectionCount players",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                        )
-                    }
+                    // Team limit info row (shown only when a finite cap is configured)
+                    if (maxSelectionCount != Int.MAX_VALUE) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Maximum: $maxSelectionCount players",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                            )
+                        }
 
-                    Spacer(Modifier.height(4.dp))
-
-                    if (atLimit) {
-                        Text(
-                            text = "Maximum $maxSelectionCount players per team.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.error
-                        )
                         Spacer(Modifier.height(4.dp))
+
+                        if (atLimit) {
+                            Text(
+                                text = "Maximum $maxSelectionCount players per team.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                            Spacer(Modifier.height(4.dp))
+                        }
                     }
 
                     // Player list or empty state
