@@ -177,9 +177,9 @@ class MatchViewModel : ViewModel() {
         // Block any new ball-based event when the innings is already over.
         val currentState = _state.value
         if (currentState.isInningsOver) {
-            val maxBalls = maxOvers() * 6
+            val totalBalls = currentState.overs * 6 + currentState.balls
             Log.d("OversLimit", "Blocking event: innings complete. " +
-                    "Total balls: ${currentState.overs * 6 + currentState.balls} / Max balls: $maxBalls")
+                    "Total balls: $totalBalls / Max balls: ${maxOvers() * 6}")
             return
         }
 
@@ -232,6 +232,8 @@ class MatchViewModel : ViewModel() {
         // This runs after updateConsoleAfterEvent so that any over-end bowler-change or
         // wicket-replacement pending action is cleared before the innings transition fires.
         if (newState.isInningsOver) {
+            // Guard against any edge case where the phase has already been advanced
+            // (e.g. win condition on the same delivery sets MATCH_COMPLETE first).
             val activePhase = _consoleState.value.phase
             if (activePhase == InningsPhase.FIRST_INNINGS || activePhase == InningsPhase.SECOND_INNINGS) {
                 Log.d("OversLimit", "Overs limit reached — auto-ending innings (innings ${_consoleState.value.inningsNumber})")
