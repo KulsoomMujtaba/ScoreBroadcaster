@@ -1,5 +1,8 @@
 package com.example.scorebroadcaster.features.scoring.domain
+import android.util.Log
 import com.example.scorebroadcaster.features.scoring.data.MatchState
+
+private const val TAG = "ScoreReducer"
 
 /**
  * Pure functional scoring reducer.
@@ -7,15 +10,30 @@ import com.example.scorebroadcaster.features.scoring.data.MatchState
  * Folds a list of [BallEvent]s into a [MatchState]. Because this is a pure function with no
  * side-effects, replaying the full event log always produces the canonical match state — which
  * makes undo trivial (drop the last event and re-reduce).
+ *
+ * @param events   Ordered list of ball events for the current innings.
+ * @param maxOvers Maximum overs allowed for this innings (e.g. 10 for T10, 20 for T20).
+ *                 Pass 0 (default) to disable the limit — used by the viewer and for
+ *                 first-innings snapshot calculations where enforcement is not needed.
  */
-fun reduce(events: List<BallEvent>): MatchState =
-    events.fold(MatchState()) { state, event -> applyEvent(state, event) }
+fun reduce(events: List<BallEvent>, maxOvers: Int = 0): MatchState =
+    events.fold(MatchState()) { state, event -> applyEvent(state, event, maxOvers) }
 
-private fun applyEvent(state: MatchState, event: BallEvent): MatchState {
+private fun applyEvent(state: MatchState, event: BallEvent, maxOvers: Int): MatchState {
     val (overs, balls) = if (event.countsAsBall) {
         incrementBall(state.overs, state.balls)
     } else {
         Pair(state.overs, state.balls)
+    }
+
+    val newTotalBalls = overs * 6 + balls
+    // isInningsOver is true when a limit is configured (maxOvers > 0) and the total
+    // legal deliveries for this innings have reached that limit.  Using `maxOvers > 0`
+    // as the guard avoids any arithmetic with sentinel values for the "no limit" case.
+    val isInningsOver = maxOvers > 0 && newTotalBalls >= maxOvers * 6
+
+    if (isInningsOver && !state.isInningsOver) {
+        Log.d(TAG, "Overs limit reached. Total balls: $newTotalBalls / Max balls: ${maxOvers * 6}")
     }
 
     val totalRuns = event.runsOffBat + event.extras.total
@@ -30,7 +48,8 @@ private fun applyEvent(state: MatchState, event: BallEvent): MatchState {
         noBalls = state.noBalls + event.extras.noBalls,
         byes = state.byes + event.extras.byes,
         legByes = state.legByes + event.extras.legByes,
-        lastBalls = updateLastBalls(state.lastBalls, buildBallLabel(event))
+        lastBalls = updateLastBalls(state.lastBalls, buildBallLabel(event)),
+        isInningsOver = isInningsOver
     )
 }
 

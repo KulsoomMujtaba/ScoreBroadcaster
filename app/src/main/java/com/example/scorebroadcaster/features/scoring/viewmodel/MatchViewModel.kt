@@ -147,6 +147,12 @@ class MatchViewModel : ViewModel() {
     // ---------------------------------------------------------------------------
 
     /**
+     * Returns the maximum overs for the active match, or 0 if no match is loaded.
+     * Passed to [reduce] so the reducer can compute [MatchState.isInningsOver].
+     */
+    private fun maxOvers(): Int = _activeMatch.value?.overs ?: 0
+
+    /**
      * Record a [ScoreEvent] from the UI.
      *
      * The event is converted to a [BallEvent] before being appended to the internal log.
@@ -161,8 +167,22 @@ class MatchViewModel : ViewModel() {
      *
      * Use this for deliveries that cannot be expressed as a single [ScoreEvent], such as
      * extras with a wicket (e.g. run-out on a wide or no-ball).
+     *
+     * Enforces the overs limit at the domain level: if the innings has already consumed all
+     * allocated overs ([MatchState.isInningsOver] is true), the event is silently dropped and
+     * the innings end is triggered if it has not been triggered yet.
      */
     fun addBallEvent(ballEvent: BallEvent) {
+        // ── Domain-level overs limit guard ────────────────────────────────────────────────────
+        // Block any new ball-based event when the innings is already over.
+        val currentState = _state.value
+        if (currentState.isInningsOver) {
+            val totalBalls = currentState.overs * 6 + currentState.balls
+            Log.d("OversLimit", "Blocking event: innings complete. " +
+                    "Total balls: $totalBalls / Max balls: ${maxOvers() * 6}")
+            return
+        }
+
         if (ballEvent.wicket) {
             Log.d("WicketFlow", "Wicket recorded: ${ballEvent.dismissalDetail?.dismissalType} — ${ballEvent.dismissalDetail?.batter?.name}")
         }
@@ -178,7 +198,7 @@ class MatchViewModel : ViewModel() {
         )
         val prevState = _state.value
         _events.value = _events.value + stamped
-        val newState = reduce(_events.value)
+        val newState = reduce(_events.value, maxOvers())
             .copy(teamAName = currentTeamAName, teamBName = currentTeamBName)
         _state.value = newState
         if (stamped.wicket) {
@@ -201,6 +221,34 @@ class MatchViewModel : ViewModel() {
             val updated = currentMatch.copy(status = MatchStatus.IN_PROGRESS)
             _activeMatch.value = updated
             MatchRepository.updateMatch(updated)
+        }
+
+        // ── Win condition: chasing team reaches or exceeds the target ─────────────────────────
+        // Checked before the overs-limit check so a winning boundary on the last ball is
+        // correctly attributed to a win rather than an overs-limit draw.
+        // (The existing win check in updateConsoleAfterEvent handles this; this is a no-op here.)
+
+        // ── Overs limit: auto-end innings when all allocated overs have been bowled ───────────
+        // This runs after updateConsoleAfterEvent so that any over-end bowler-change or
+        // wicket-replacement pending action is cleared before the innings transition fires.
+        if (newState.isInningsOver) {
+            // Guard against any edge case where the phase has already been advanced
+            // (e.g. win condition on the same delivery sets MATCH_COMPLETE first).
+            val activePhase = _consoleState.value.phase
+            if (activePhase == InningsPhase.FIRST_INNINGS || activePhase == InningsPhase.SECOND_INNINGS) {
+                Log.d("OversLimit", "Overs limit reached — auto-ending innings (innings ${_consoleState.value.inningsNumber})")
+                // Clear any pending action set by the last delivery (e.g. SelectBowler after the
+                // final over) so the innings-transition UI is not blocked.
+                _consoleState.value = _consoleState.value.copy(
+                    pendingAction = null,
+                    bowlerChangePending = false
+                )
+                if (_consoleState.value.inningsNumber == 1) {
+                    endFirstInnings()
+                } else {
+                    endMatch()
+                }
+            }
         }
 
         // Async remote insert — must come after local append so sequenceNumber is accurate.
@@ -456,6 +504,7 @@ class MatchViewModel : ViewModel() {
         if (currentEvents.isEmpty()) return
 
         val inningsNumber = _consoleState.value.inningsNumber
+        val currentPhase = _consoleState.value.phase
         val targetIndex = currentEvents.size - 1
         Log.d("MatchViewModel", "Undo triggered → target index $targetIndex")
 
@@ -465,9 +514,43 @@ class MatchViewModel : ViewModel() {
         val undoGlobalIndex = remoteEventCount.getAndIncrement()
 
         _events.value = currentEvents.dropLast(1)
-        _state.value = reduce(_events.value)
+        val rebuiltState = reduce(_events.value, maxOvers())
             .copy(teamAName = currentTeamAName, teamBName = currentTeamBName)
+        _state.value = rebuiltState
         _fallOfWickets.value = computeFallOfWickets(_events.value)
+
+        // ── Reopen innings if the last ball was the one that ended it ─────────────────────
+        // This covers both overs-limit auto-endings and explicit all-out / win endings so
+        // that pressing Undo always returns the scorer to the active innings state.
+        when {
+            currentPhase == InningsPhase.INNINGS_BREAK -> {
+                // First innings ended — undo reverts it to FIRST_INNINGS.
+                Log.d("OversLimit", "Undo from INNINGS_BREAK — reopening first innings")
+                _firstInningsEvents.value = emptyList()
+                _consoleState.value = _consoleState.value.copy(
+                    phase = InningsPhase.FIRST_INNINGS
+                )
+                _activeMatch.value?.let { match ->
+                    val updated = match.copy(status = MatchStatus.IN_PROGRESS)
+                    _activeMatch.value = updated
+                    MatchRepository.updateMatch(updated)
+                }
+            }
+            currentPhase == InningsPhase.MATCH_COMPLETE && inningsNumber == 2 -> {
+                // Second innings ended (overs, win, or all-out) — undo reverts to SECOND_INNINGS.
+                Log.d("OversLimit", "Undo from MATCH_COMPLETE — reopening second innings")
+                _consoleState.value = _consoleState.value.copy(
+                    phase = InningsPhase.SECOND_INNINGS
+                )
+                _activeMatch.value?.let { match ->
+                    val updated = match.copy(status = MatchStatus.IN_PROGRESS)
+                    _activeMatch.value = updated
+                    MatchRepository.updateMatch(updated)
+                }
+            }
+            else -> Unit
+        }
+
         // Fully rebuild all per-player stats and batter positions from the remaining
         // events so that batting entries, bowling entries, and striker/non-striker
         // assignments are all consistent with the updated event log.
@@ -507,7 +590,7 @@ class MatchViewModel : ViewModel() {
             val current = _events.value
             if (globalIndex < 0 || globalIndex >= current.size) return
             _events.value = current.toMutableList().apply { set(globalIndex, updatedEvent) }
-            _state.value = reduce(_events.value)
+            _state.value = reduce(_events.value, maxOvers())
                 .copy(teamAName = currentTeamAName, teamBName = currentTeamBName)
             _fallOfWickets.value = computeFallOfWickets(_events.value)
             refreshMaidensFromEvents(_events.value)
@@ -539,7 +622,7 @@ class MatchViewModel : ViewModel() {
             val current = _events.value
             if (globalIndex < 0 || globalIndex >= current.size) return
             _events.value = _events.value.filterIndexed { index, _ -> index != globalIndex }
-            _state.value = reduce(_events.value)
+            _state.value = reduce(_events.value, maxOvers())
                 .copy(teamAName = currentTeamAName, teamBName = currentTeamBName)
             _fallOfWickets.value = computeFallOfWickets(_events.value)
             refreshMaidensFromEvents(_events.value)
@@ -1299,12 +1382,12 @@ class MatchViewModel : ViewModel() {
             // ── 1. Match already completed ────────────────────────────────────────────
             match.status == MatchStatus.COMPLETED -> {
                 if (secondEvents.isNotEmpty()) {
-                    val firstState = reduce(firstEvents)
+                    val firstState = reduce(firstEvents, match.overs)
                     _firstInningsEvents.value = firstEvents
                     currentTeamAName = match.bowlingFirst.name
                     currentTeamBName = match.battingFirst.name
                     _events.value = secondEvents
-                    _state.value = reduce(secondEvents)
+                    _state.value = reduce(secondEvents, match.overs)
                         .copy(teamAName = currentTeamAName, teamBName = currentTeamBName)
                     _fallOfWickets.value = computeFallOfWickets(secondEvents)
                     _consoleState.value = ScoringConsoleState(
@@ -1329,7 +1412,7 @@ class MatchViewModel : ViewModel() {
                     )
                 } else if (firstEvents.isNotEmpty()) {
                     _events.value = firstEvents
-                    _state.value = reduce(firstEvents)
+                    _state.value = reduce(firstEvents, match.overs)
                         .copy(teamAName = currentTeamAName, teamBName = currentTeamBName)
                     _fallOfWickets.value = computeFallOfWickets(firstEvents)
                     _consoleState.value = ScoringConsoleState(
@@ -1346,13 +1429,13 @@ class MatchViewModel : ViewModel() {
 
             // ── 2. Second innings in progress ─────────────────────────────────────────
             secondEvents.isNotEmpty() -> {
-                val firstState = reduce(firstEvents)
+                val firstState = reduce(firstEvents, match.overs)
                 _firstInningsEvents.value = firstEvents
                 // In the second innings the batting team is the one that bowled first.
                 currentTeamAName = match.bowlingFirst.name
                 currentTeamBName = match.battingFirst.name
                 _events.value = secondEvents
-                _state.value = reduce(secondEvents)
+                _state.value = reduce(secondEvents, match.overs)
                     .copy(teamAName = currentTeamAName, teamBName = currentTeamBName)
                 _fallOfWickets.value = computeFallOfWickets(secondEvents)
                 // Reconstruct the current bowler from the last stamped ball event.
@@ -1405,7 +1488,7 @@ class MatchViewModel : ViewModel() {
 
             // ── 3. Innings break ──────────────────────────────────────────────────────
             firstEvents.isNotEmpty() && match.status == MatchStatus.INNINGS_BREAK -> {
-                val firstState = reduce(firstEvents)
+                val firstState = reduce(firstEvents, match.overs)
                 _firstInningsEvents.value = firstEvents
                 _consoleState.value = ScoringConsoleState(
                     inningsNumber = 1,
@@ -1432,7 +1515,7 @@ class MatchViewModel : ViewModel() {
             // ── 4. First innings in progress ──────────────────────────────────────────
             firstEvents.isNotEmpty() -> {
                 _events.value = firstEvents
-                _state.value = reduce(firstEvents)
+                _state.value = reduce(firstEvents, match.overs)
                     .copy(teamAName = currentTeamAName, teamBName = currentTeamBName)
                 _fallOfWickets.value = computeFallOfWickets(firstEvents)
                 // Reconstruct the current bowler from the last stamped ball event.
@@ -1504,8 +1587,8 @@ class MatchViewModel : ViewModel() {
 
         // Determine whether this delivery ended the current over.  Compare MatchState ball
         // counts before and after this specific delivery to detect the over boundary.
-        val stateAfter = reduce(events.take(lastIdx + 1))
-        val stateBefore = if (lastIdx > 0) reduce(events.take(lastIdx)) else MatchState()
+        val stateAfter = reduce(events.take(lastIdx + 1), maxOvers())
+        val stateBefore = if (lastIdx > 0) reduce(events.take(lastIdx), maxOvers()) else MatchState()
         val overEnded = event.countsAsBall &&
                 stateAfter.balls == 0 &&
                 stateAfter.overs > stateBefore.overs
