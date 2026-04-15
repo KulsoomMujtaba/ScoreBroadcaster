@@ -128,6 +128,11 @@ class MatchSessionViewModel(application: Application) : AndroidViewModel(applica
         savedPlayerRepository.removePlayer(id)
     }
 
+    /** Update an existing saved player profile locally and mirror the change to Supabase when signed in. */
+    fun updateSavedPlayer(player: PlayerProfile) {
+        savedPlayerRepository.updatePlayerWithRemote(player, currentUserId)
+    }
+
     /**
      * Trigger the one-way local → Supabase sync for the signed-in [userId].
      *
