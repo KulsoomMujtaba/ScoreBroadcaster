@@ -1,4 +1,5 @@
 package com.example.scorebroadcaster.features.players.ui
+import android.util.Log
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -7,10 +8,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
@@ -23,6 +24,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -40,9 +42,10 @@ import com.example.scorebroadcaster.features.players.data.Player
  *
  * Layout hierarchy:
  * 1. **Search** — top search field that instantly filters the My Players list.
- * 2. **My Players** — scrollable list; one tap selects a player and closes the dialog.
- *    Hidden entirely when there are no eligible players in My Players.
- * 3. **Quick Create** — inline text field + button to create a brand-new private player.
+ * 2. **My Players** — vertically scrollable [LazyColumn] (max 300 dp); one tap selects a player
+ *    and closes the dialog. Shows an empty-state message when no eligible players exist.
+ * 3. **Quick Create** — always-visible inline text field + button to create a brand-new private
+ *    player.
  *
  * @param savedPlayers        Existing private player profiles (My Players) to display and search.
  * @param onDismiss           Called when the dialog is cancelled without a selection.
@@ -109,8 +112,7 @@ fun PlayerPickerDialog(
         title = { Text("Add Player") },
         text = {
             Column(
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-                modifier = Modifier.verticalScroll(rememberScrollState())
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 // --- Section 1: Search (only when saved players exist) ---
                 if (hasSavedPlayers) {
@@ -127,43 +129,56 @@ fun PlayerPickerDialog(
                     )
                 }
 
-                // --- Section 2: My Players (only when saved players exist) ---
-                if (hasSavedPlayers) {
-                    if (filtered.isEmpty()) {
-                        Text(
-                            text = "No players found",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                        )
-                    } else {
-                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            filtered.forEach { profile ->
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .heightIn(min = 48.dp)
-                                        .clickable { onSelect(profile) }
-                                        .padding(horizontal = 4.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    Icon(
-                                        Icons.Default.Person,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(20.dp),
-                                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                // --- Section 2: My Players ---
+                if (!hasSavedPlayers) {
+                    // Empty state: no players in My Players yet
+                    Text(
+                        text = "No players available. Create a new player below.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
+                } else if (filtered.isEmpty()) {
+                    Text(
+                        text = "No players found",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                    )
+                } else {
+                    LaunchedEffect(filtered.size) {
+                        Log.d("PlayerPickerDialog", "Displaying ${filtered.size} players in add-player UI")
+                    }
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 300.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        items(filtered, key = { it.id }) { profile ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(min = 48.dp)
+                                    .clickable { onSelect(profile) }
+                                    .padding(horizontal = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.Person,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(20.dp),
+                                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                )
+                                Column {
+                                    Text(
+                                        text = profile.displayName,
+                                        style = MaterialTheme.typography.bodyMedium
                                     )
-                                    Column {
-                                        Text(
-                                            text = profile.displayName,
-                                            style = MaterialTheme.typography.bodyMedium
-                                        )
-                                        Text(
-                                            text = "My Players",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                                        )
-                                    }
+                                    Text(
+                                        text = "My Players",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                                    )
                                 }
                             }
                         }
