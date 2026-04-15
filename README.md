@@ -688,7 +688,43 @@ Scoring is modelled as an append-only event log:
 
 ## Development Log
 
-### 2026-04-09 – Feature: Undo Sync (Event-based)
+### 2026-04-15 – UX Improvement: Vertical Player List in Add Player Flow
+
+**Problem**
+
+The "Add Player" dialog (`PlayerPickerDialog`) rendered the saved-player list inside a plain `Column` with `forEach`, wrapped in a single `verticalScroll` region covering the entire dialog content. For large player lists (20+) this was not performant and mixed the scroll context of the player list with the rest of the dialog content, making it awkward to reach the "Create new player" section at the bottom. The component also lacked a clear empty-state message when no saved players existed.
+
+**Solution**
+
+- Replaced `Column + forEach` with `LazyColumn` (bounded by `heightIn(max = 300.dp)`) so only the player list scrolls vertically and list items are rendered lazily — no work done for off-screen players.
+- Removed `verticalScroll` from the outer dialog `Column`; the Quick Create section is now always visible without scrolling past the player list.
+- Added an explicit empty state: when no eligible saved players exist, the dialog shows *"No players available. Create a new player below."* guiding the user directly to the Quick Create field.
+- Added `SideEffect { Log.d("PlayerPickerDialog", "Displaying X players in add-player UI") }` for development visibility.
+
+**Impact**
+
+- Faster and more intuitive player selection — list renders lazily and scrolls independently.
+- Quick Create section is always reachable without extra scrolling.
+- Clear guidance when the player roster is empty.
+
+**Scope**
+
+Applied specifically to `PlayerPickerDialog` (the single-select add-player dialog used during active match flows). `MultiPlayerPickerSheet` (bulk team-building) already used `LazyColumn` and was not changed.
+
+**What did NOT change**
+
+- Player model, team model, repository layer — untouched.
+- `MultiPlayerPickerSheet` — already uses `LazyColumn`; not modified.
+- Scoring engine, sync logic, database schema — untouched.
+
+**Files changed**
+
+| File | Action |
+|------|--------|
+| `app/src/main/java/com/example/scorebroadcaster/features/players/ui/PlayerPickerDialog.kt` | Updated — `LazyColumn` replaces `Column + forEach`; empty state added; `Log.d` added |
+| `README.md` | Added this Development Log entry |
+
+
 
 **Problem**
 
