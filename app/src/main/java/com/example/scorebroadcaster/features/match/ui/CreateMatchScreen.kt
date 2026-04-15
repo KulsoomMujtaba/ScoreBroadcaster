@@ -1,4 +1,5 @@
 package com.example.scorebroadcaster.features.match.ui
+import android.util.Log
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -78,6 +79,7 @@ fun CreateMatchScreen(
 
     var selectedFormat by remember { mutableStateOf(MatchFormat.T20) }
     var customOvers by remember { mutableStateOf("") }
+    var tapeBallOvers by remember { mutableStateOf("") }
     var tossWinnerIsA by remember { mutableStateOf(true) }
     var tossDecision by remember { mutableStateOf(TossDecision.BAT) }
 
@@ -94,12 +96,14 @@ fun CreateMatchScreen(
     val teamBReady = teamBName.isNotBlank()
     val sameTeamError = teamAReady && teamBReady &&
             finalTeamAName.equals(finalTeamBName, ignoreCase = true)
-    val oversValue = if (selectedFormat == MatchFormat.CUSTOM) {
-        customOvers.toIntOrNull() ?: 0
-    } else {
-        selectedFormat.defaultOvers
+    val oversValue = when (selectedFormat) {
+        MatchFormat.CUSTOM -> customOvers.toIntOrNull() ?: 0
+        MatchFormat.TAPE_BALL -> tapeBallOvers.toIntOrNull() ?: 0
+        else -> selectedFormat.defaultOvers
     }
     val customOversError = selectedFormat == MatchFormat.CUSTOM && oversValue <= 0
+    val tapeBallOversError = selectedFormat == MatchFormat.TAPE_BALL &&
+            (oversValue <= 0 || oversValue >= 100)
 
     val stepLabels = listOf("Teams", "Match Format", "Toss")
 
@@ -187,10 +191,45 @@ fun CreateMatchScreen(
                     MatchFormat.entries.forEach { format ->
                         FilterChip(
                             selected = selectedFormat == format,
-                            onClick = { selectedFormat = format },
+                            onClick = {
+                                if (selectedFormat != format) {
+                                    // Clear Tape Ball overs when switching away from that format
+                                    if (format != MatchFormat.TAPE_BALL) {
+                                        tapeBallOvers = ""
+                                    }
+                                    selectedFormat = format
+                                    if (format == MatchFormat.TAPE_BALL) {
+                                        Log.d("CreateMatch", "Tape Ball selected")
+                                    }
+                                }
+                            },
                             label = { Text(FORMAT_CHIP_LABELS[format] ?: format.label) }
                         )
                     }
+                }
+
+                if (selectedFormat == MatchFormat.TAPE_BALL) {
+                    OutlinedTextField(
+                        value = tapeBallOvers,
+                        onValueChange = { input ->
+                            tapeBallOvers = input.filter { c -> c.isDigit() }
+                            val v = tapeBallOvers.toIntOrNull()
+                            if (v != null && v > 0 && v < 100) {
+                                Log.d("CreateMatch", "Overs set to $v")
+                            }
+                        },
+                        label = { Text("Enter number of overs *") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        isError = tapeBallOversError,
+                        supportingText = if (tapeBallOversError) {
+                            { Text("Enter a valid number of overs (1–99)") }
+                        } else null,
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Number,
+                            imeAction = ImeAction.Next
+                        )
+                    )
                 }
 
                 if (selectedFormat == MatchFormat.CUSTOM) {
@@ -223,7 +262,7 @@ fun CreateMatchScreen(
                     }
                     Button(
                         onClick = { currentStep = 2 },
-                        enabled = !customOversError,
+                        enabled = !customOversError && !tapeBallOversError,
                         modifier = Modifier.weight(1f)
                     ) {
                         Text("Next")
