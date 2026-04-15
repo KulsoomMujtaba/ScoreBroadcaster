@@ -3,7 +3,7 @@ import com.example.scorebroadcaster.features.scoring.domain.BallEvent
 
 sealed class ScoreEvent {
     data class Run(val runs: Int) : ScoreEvent()
-    data class Wicket(val dismissal: DismissalDetail) : ScoreEvent()
+    data class Wicket(val dismissal: DismissalDetail, val runsCompleted: Int = 0) : ScoreEvent()
     data class Wide(val runs: Int) : ScoreEvent()
     data class NoBall(val runs: Int) : ScoreEvent()
     data class Bye(val runs: Int) : ScoreEvent()
@@ -22,6 +22,7 @@ fun ScoreEvent.toBallEvent(): BallEvent = when (this) {
         countsAsBall = true
     )
     is ScoreEvent.Wicket -> BallEvent(
+        runsOffBat = runsCompleted,
         wicket = true,
         dismissalDetail = dismissal,
         countsAsBall = true
