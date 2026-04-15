@@ -385,9 +385,9 @@ fun ScoringScreen(
                     nonStriker = console.nonStriker,
                     bowlingTeamPlayers = bowlingTeamPlayers,
                     currentBowler = console.currentBowler,
-                    onConfirm = { dismissal ->
+                    onConfirm = { dismissal, runsCompleted ->
                         showWicketDialog = false
-                        matchViewModel.addEvent(ScoreEvent.Wicket(dismissal))
+                        matchViewModel.addEvent(ScoreEvent.Wicket(dismissal, runsCompleted))
                     },
                     onDismiss = { showWicketDialog = false }
                 )
@@ -1600,7 +1600,7 @@ internal fun WicketDetailsDialog(
     nonStriker: Player?,
     bowlingTeamPlayers: List<Player>,
     currentBowler: Player?,
-    onConfirm: (DismissalDetail) -> Unit,
+    onConfirm: (DismissalDetail, Int) -> Unit,
     onDismiss: () -> Unit
 ) {
     // Default to striker out (the most common case)
@@ -1609,6 +1609,7 @@ internal fun WicketDetailsDialog(
     var selectedFielder by remember { mutableStateOf<Player?>(null) }
     var selectedFielder2 by remember { mutableStateOf<Player?>(null) }
     var showSecondFielder by remember { mutableStateOf(false) }
+    var runOutRunsText by remember { mutableStateOf("0") }
 
     // Fielder is relevant for Caught, Stumped, and Run Out dismissals.
     val requiresFielder = selectedType in listOf(
@@ -1648,17 +1649,22 @@ internal fun WicketDetailsDialog(
                 Text("How?", style = MaterialTheme.typography.labelMedium)
                 // Two rows of chips for the 6 dismissal types
                 val types = DismissalType.entries
+                val onTypeSelected: (DismissalType) -> Unit = { type ->
+                    selectedType = type
+                    selectedFielder = null
+                    selectedFielder2 = null
+                    showSecondFielder = false
+                    runOutRunsText = "0"
+                    if (type == DismissalType.RUN_OUT) {
+                        Log.d("WicketFlow", "Run-out selected")
+                    }
+                }
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         types.take(3).forEach { type ->
                             FilterChip(
                                 selected = selectedType == type,
-                                onClick = {
-                                    selectedType = type
-                                    selectedFielder = null
-                                    selectedFielder2 = null
-                                    showSecondFielder = false
-                                },
+                                onClick = { onTypeSelected(type) },
                                 label = { Text(type.label) }
                             )
                         }
@@ -1667,12 +1673,7 @@ internal fun WicketDetailsDialog(
                         types.drop(3).forEach { type ->
                             FilterChip(
                                 selected = selectedType == type,
-                                onClick = {
-                                    selectedType = type
-                                    selectedFielder = null
-                                    selectedFielder2 = null
-                                    showSecondFielder = false
-                                },
+                                onClick = { onTypeSelected(type) },
                                 label = { Text(type.label) }
                             )
                         }
@@ -1754,9 +1755,25 @@ internal fun WicketDetailsDialog(
                         }
                     }
                 }
+
+                // --- Runs completed (Run Out only) ---
+                if (selectedType == DismissalType.RUN_OUT) {
+                    HorizontalDivider()
+                    Text("How many runs were completed?", style = MaterialTheme.typography.labelMedium)
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        (0..6).forEach { runs ->
+                            FilterChip(
+                                selected = runOutRunsText == runs.toString(),
+                                onClick = { runOutRunsText = runs.toString() },
+                                label = { Text("$runs") }
+                            )
+                        }
+                    }
+                }
             }
         },
         confirmButton = {
+            val runsCompleted = runOutRunsText.toIntOrNull()?.coerceIn(0, 6) ?: 0
             Button(
                 onClick = {
                     val out = batterOut ?: return@Button
@@ -1766,13 +1783,17 @@ internal fun WicketDetailsDialog(
                             listOfNotNull(selectedFielder, selectedFielder2)
                         else -> listOfNotNull(selectedFielder)
                     }
+                    if (selectedType == DismissalType.RUN_OUT) {
+                        Log.d("WicketFlow", "Runs completed: $runsCompleted")
+                    }
                     onConfirm(
                         DismissalDetail(
                             batter = out,
                             dismissalType = selectedType,
                             fielders = fieldersList,
                             bowler = currentBowler
-                        )
+                        ),
+                        runsCompleted
                     )
                 },
                 enabled = batterOut != null

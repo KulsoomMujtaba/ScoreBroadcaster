@@ -70,6 +70,54 @@ The core promise is simple: open the app, start a match, score every ball, and s
 
 ---
 
+## Feature: Run-Out Runs Handling
+
+### Problem
+
+When a wicket type **Run Out** was selected, the app did not prompt the scorer to enter how many
+runs were completed before the run-out occurred.  As a result, those runs were silently dropped,
+causing the total score to be incorrect whenever a run-out happened mid-run.
+
+### Solution
+
+- Extended `ScoreEvent.Wicket` with an optional `runsCompleted: Int = 0` field (fully backward
+  compatible — defaults to 0 for all other dismissal types).
+- Updated `ScoreEvent.Wicket.toBallEvent()` to map `runsCompleted` → `BallEvent.runsOffBat` so
+  the existing reducer naturally adds those runs to the total.
+- Added a "How many runs were completed?" chip selector (0–6) to `WicketDetailsDialog`, visible
+  only when **Run Out** is selected.
+- Added log statements: `"Run-out selected"` and `"Runs completed: X"` under the `WicketFlow`
+  tag.
+
+### Impact
+
+- Runs completed before a run-out are now correctly added to the batting team's total.
+- Strike rotation works correctly: the existing `oddRuns` logic in `updateConsoleAfterEvent`
+  naturally handles the run-crossing swap based on `runsOffBat % 2 == 1`.
+- All other wicket types are unaffected (no behavioural change — `runsCompleted` defaults to 0).
+- Undo works correctly because run-out runs are stored in `BallEvent.runsOffBat` alongside the
+  wicket flag — the reducer replays correctly after an undo.
+
+### What did NOT change
+
+- Event type structure — no new `EventType` enum value added.
+- `match_events` Supabase table — `runsOffBat` was already a column in `BallEventPayload`; a
+  run-out with completed runs serialises identically to a regular run delivery.
+- Sync / replay logic — untouched; existing `replayInningsEvents` handles run-out runs
+  automatically because `BallEventPayload.runsOffBat` is already populated.
+- `ScoreReducer` — untouched; `totalRuns = runsOffBat + extras.total` already covers this case.
+- `BallEvent`, `MatchState`, `DismissalDetail`, database schema — all untouched.
+
+### Files changed
+
+| File | Change |
+|------|--------|
+| `features/scoring/data/ScoreEvent.kt` | `ScoreEvent.Wicket` gets `runsCompleted: Int = 0`; `toBallEvent()` sets `runsOffBat = runsCompleted` |
+| `features/scoring/ui/ScoringScreen.kt` | `WicketDetailsDialog` — runs chip selector for Run Out; updated `onConfirm` signature; call site passes `runsCompleted` |
+| `README.md` | Development Log entry added |
+
+---
+
 ## Feature: Match Publishing + Viewer Mode (v1)
 
 ### Private → Public model
