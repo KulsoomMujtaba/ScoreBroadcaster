@@ -213,10 +213,6 @@ fun CreateMatchScreen(
                         value = tapeBallOvers,
                         onValueChange = { input ->
                             tapeBallOvers = input.filter { c -> c.isDigit() }
-                            val v = tapeBallOvers.toIntOrNull()
-                            if (v != null && v > 0 && v < 100) {
-                                Log.d("CreateMatch", "Overs set to $v")
-                            }
                         },
                         label = { Text("Enter number of overs *") },
                         modifier = Modifier.fillMaxWidth(),
@@ -261,7 +257,12 @@ fun CreateMatchScreen(
                         Text("Back")
                     }
                     Button(
-                        onClick = { currentStep = 2 },
+                        onClick = {
+                            if (selectedFormat == MatchFormat.TAPE_BALL) {
+                                Log.d("CreateMatch", "Overs set to $oversValue")
+                            }
+                            currentStep = 2
+                        },
                         enabled = !customOversError && !tapeBallOversError,
                         modifier = Modifier.weight(1f)
                     ) {

@@ -177,14 +177,14 @@ fun PlayerSetupScreen(
                     teamAPlayers.addAll(
                         profiles.map { Player(name = it.displayName, sourceProfileId = it.id) }
                     )
-                    Log.d("PlayerSetup", "Player added to team: $teamLabel")
+                    Log.d("PlayerSetup", "Players confirmed for team: $teamLabel")
                     Log.d("PlayerSetup", "Current team size: ${teamAPlayers.size}")
                 } else {
                     teamBPlayers.clear()
                     teamBPlayers.addAll(
                         profiles.map { Player(name = it.displayName, sourceProfileId = it.id) }
                     )
-                    Log.d("PlayerSetup", "Player added to team: $teamLabel")
+                    Log.d("PlayerSetup", "Players confirmed for team: $teamLabel")
                     Log.d("PlayerSetup", "Current team size: ${teamBPlayers.size}")
                 }
                 multiPickerForTeamA = null
