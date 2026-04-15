@@ -350,12 +350,16 @@ fun ScoringScreen(
             }
 
             // --- Scoring buttons ---
-            // Scoring is disabled when setup is still pending (players not identified) to
-            // prevent silent no-ops in addBallEvent when striker is null.
+            // Scoring is disabled when:
+            //  - setup is still pending (players not identified), OR
+            //  - the innings has consumed all allocated overs (isInningsOver).
+            // The overs-limit check here is a UX guard only; the domain-level enforcement
+            // lives in MatchViewModel.addBallEvent() and the ScoreReducer.
             val scoringEnabled = (console.phase == InningsPhase.FIRST_INNINGS ||
                     console.phase == InningsPhase.SECOND_INNINGS) &&
                     console.pendingAction == null &&
-                    console.striker != null
+                    console.striker != null &&
+                    !state.isInningsOver
             // Wicket details dialog state — shown before dispatching the Wicket event
             var showWicketDialog by remember { mutableStateOf(false) }
             // Extras entry dialog state

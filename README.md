@@ -3330,3 +3330,53 @@ Set up the full application from scratch. `ScoreEvent` is a sealed class coverin
 - Match reducer logic — untouched
 - Database schema (Room entities, Supabase tables) — untouched
 - Sync logic (`SupabaseMatchRepository`, `SupabaseEventRepository`) — untouched
+
+---
+
+## Bug Fix: Overs Limit Enforcement
+
+### Root cause
+
+The scoring engine had no central enforcement of the maximum overs per innings.  `MatchViewModel.addBallEvent()` unconditionally appended every delivery to the event log regardless of how many overs had already been bowled, allowing scoring to continue indefinitely past the configured match limit (e.g. 10 overs for T10, 20 for T20, custom for Tape Ball).
+
+### Fix
+
+Overs-limit enforcement is now applied at the **state/domain level** — not in the UI — using two complementary mechanisms:
+
+1. **`MatchState.isInningsOver`** — a new boolean flag computed by the `ScoreReducer` whenever the total legal balls delivered reaches `maxOvers × 6`.  Because the reducer is a pure function replayed from the full event log, this flag is always accurate after undo, ball edits, and app restarts.
+
+2. **`MatchViewModel.addBallEvent()` guard** — before appending any delivery, the ViewModel checks `_state.value.isInningsOver`.  If `true`, the event is silently dropped and the block is logged.  This is the primary enforcement point; the UI check is a secondary UX guard.
+
+When the overs limit is reached the innings ends automatically:
+- **First innings** → transitions to `InningsPhase.INNINGS_BREAK` (same path as an all-out).
+- **Second innings** → transitions to `InningsPhase.MATCH_COMPLETE`.
+
+Any pending bowler-change or next-batter prompt triggered by the final delivery is cleared before the innings transition so the UI is never left in a blocked state.
+
+Undo is fully supported: pressing Undo after an auto-ended innings drops the last ball from the event log and, if the innings-end phase (`INNINGS_BREAK` or `MATCH_COMPLETE`) is detected, reverts the phase back to the active innings state and restores the match status to `IN_PROGRESS`.
+
+### Key principle
+
+> Game rules are enforced at the state/domain level, not in the UI layer.
+
+The UI (`ScoringScreen`) observes `state.isInningsOver` to disable scoring buttons, but this is a UX convenience only.  The canonical enforcement lives in `MatchViewModel` and the `ScoreReducer`.
+
+Extras handling follows cricket rules: **wides** and **no-balls** (`countsAsBall = false`) do not increment the legal-ball counter and therefore do not advance the innings towards the overs limit.  Byes and leg-byes are legal deliveries and do count.
+
+### What did NOT change
+
+- `Match` schema — `overs` field already existed and is unchanged
+- `BallEvent` / `ScoreEvent` models — untouched
+- Players and teams logic — untouched
+- Sync logic (`SupabaseMatchRepository`, `SupabaseEventRepository`) — untouched
+- Event schema (Room `BallEventEntity`, Supabase `match_events`) — untouched
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `features/scoring/data/MatchState.kt` | Added `isInningsOver: Boolean = false` field |
+| `features/scoring/domain/ScoreReducer.kt` | `reduce()` now accepts `maxOvers: Int = 0`; `applyEvent()` sets `isInningsOver` and logs overs-limit events |
+| `features/scoring/viewmodel/MatchViewModel.kt` | `addBallEvent()` guards against over-limit; auto-ends innings; `undo()` reopens innings; all `reduce()` calls pass `maxOvers()` |
+| `features/scoring/ui/ScoringScreen.kt` | `scoringEnabled` includes `!state.isInningsOver` (UX guard) |
+| `README.md` | This Development Log entry |

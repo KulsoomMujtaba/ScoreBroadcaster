@@ -13,5 +13,13 @@ data class MatchState(
     val wides: Int = 0,
     val noBalls: Int = 0,
     val byes: Int = 0,
-    val legByes: Int = 0
+    val legByes: Int = 0,
+    /**
+     * True when the innings has consumed all its allocated overs (i.e. total legal balls
+     * delivered equals [maxOvers] * 6).  Set by the scorer at domain/reducer level;
+     * the UI uses this to disable scoring controls as a secondary guard.
+     *
+     * Always false when [maxOvers] is 0 (no limit configured, default for viewer or legacy state).
+     */
+    val isInningsOver: Boolean = false
 )
