@@ -1,5 +1,6 @@
 package com.example.scorebroadcaster.features.teams.data
 
+import android.util.Log
 import com.example.scorebroadcaster.features.players.data.PlayerProfile
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
@@ -83,6 +84,7 @@ class SavedTeamRepository(
      */
     fun updateTeamWithRemote(team: SavedTeam, userId: String?) {
         scope.launch {
+            Log.d("SavedTeamRepository", "Updating team ${team.id} (name=${team.name}, players=${team.players.size})")
             dao.update(team.toEntity())
             if (userId != null) {
                 SupabaseTeamRepository.upsertTeam(team.toSupabaseTeam(userId))

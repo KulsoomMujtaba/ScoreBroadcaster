@@ -14,6 +14,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
@@ -57,6 +58,7 @@ fun MyPlayersScreen(
 ) {
     val myPlayers by matchSessionViewModel.savedPlayers.collectAsState()
     var showCreateDialog by remember { mutableStateOf(false) }
+    var playerToEdit by remember { mutableStateOf<PlayerProfile?>(null) }
 
     Column(
         modifier = modifier
@@ -88,7 +90,8 @@ fun MyPlayersScreen(
             myPlayers.forEach { profile ->
                 MyPlayerCard(
                     profile = profile,
-                    onDelete = { matchSessionViewModel.removeSavedPlayer(profile.id) }
+                    onDelete = { matchSessionViewModel.removeSavedPlayer(profile.id) },
+                    onEdit = { playerToEdit = profile }
                 )
             }
         }
@@ -103,6 +106,17 @@ fun MyPlayersScreen(
             }
         )
     }
+
+    playerToEdit?.let { profile ->
+        EditMyPlayerDialog(
+            profile = profile,
+            onDismiss = { playerToEdit = null },
+            onConfirm = { updated ->
+                matchSessionViewModel.updateSavedPlayer(updated)
+                playerToEdit = null
+            }
+        )
+    }
 }
 
 // =============================================================================
@@ -110,7 +124,7 @@ fun MyPlayersScreen(
 // =============================================================================
 
 @Composable
-private fun MyPlayerCard(profile: PlayerProfile, onDelete: () -> Unit) {
+private fun MyPlayerCard(profile: PlayerProfile, onDelete: () -> Unit, onEdit: () -> Unit) {
     Surface(
         tonalElevation = 2.dp,
         shape = MaterialTheme.shapes.medium,
@@ -136,6 +150,12 @@ private fun MyPlayerCard(profile: PlayerProfile, onDelete: () -> Unit) {
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                )
+            }
+            IconButton(onClick = onEdit) {
+                Icon(
+                    Icons.Default.Edit,
+                    contentDescription = "Edit ${profile.displayName}"
                 )
             }
             IconButton(onClick = onDelete) {
@@ -189,6 +209,47 @@ fun CreateMyPlayerDialog(
                             playerSourceType = PlayerSourceType.PRIVATE
                         )
                     )
+                },
+                enabled = displayName.isNotBlank()
+            ) { Text("Save") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
+}
+
+// =============================================================================
+// Edit My Player dialog
+// =============================================================================
+
+@Composable
+fun EditMyPlayerDialog(
+    profile: PlayerProfile,
+    onDismiss: () -> Unit,
+    onConfirm: (PlayerProfile) -> Unit
+) {
+    var displayName by remember { mutableStateOf(profile.displayName) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Edit Player") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedTextField(
+                    value = displayName,
+                    onValueChange = { displayName = it },
+                    label = { Text("Player name *") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done)
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    onConfirm(profile.copy(displayName = displayName.trim()))
                 },
                 enabled = displayName.isNotBlank()
             ) { Text("Save") }

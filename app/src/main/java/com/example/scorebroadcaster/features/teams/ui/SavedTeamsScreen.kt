@@ -15,6 +15,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
@@ -54,6 +55,7 @@ fun SavedTeamsScreen(
     val savedTeams by matchSessionViewModel.savedTeams.collectAsState()
     val savedPlayers by matchSessionViewModel.savedPlayers.collectAsState()
     var showCreateDialog by remember { mutableStateOf(false) }
+    var teamToEdit by remember { mutableStateOf<SavedTeam?>(null) }
 
     Column(
         modifier = modifier
@@ -84,7 +86,8 @@ fun SavedTeamsScreen(
             savedTeams.forEach { team ->
                 SavedTeamCard(
                     team = team,
-                    onDelete = { matchSessionViewModel.removeSavedTeam(team.id) }
+                    onDelete = { matchSessionViewModel.removeSavedTeam(team.id) },
+                    onEdit = { teamToEdit = team }
                 )
             }
         }
@@ -101,6 +104,19 @@ fun SavedTeamsScreen(
             onCreatePlayer = { profile -> matchSessionViewModel.addSavedPlayer(profile) }
         )
     }
+
+    teamToEdit?.let { team ->
+        EditSavedTeamDialog(
+            team = team,
+            savedPlayers = savedPlayers,
+            onDismiss = { teamToEdit = null },
+            onConfirm = { updated ->
+                matchSessionViewModel.updateSavedTeam(updated)
+                teamToEdit = null
+            },
+            onCreatePlayer = { profile -> matchSessionViewModel.addSavedPlayer(profile) }
+        )
+    }
 }
 
 // =============================================================================
@@ -108,7 +124,7 @@ fun SavedTeamsScreen(
 // =============================================================================
 
 @Composable
-private fun SavedTeamCard(team: SavedTeam, onDelete: () -> Unit) {
+private fun SavedTeamCard(team: SavedTeam, onDelete: () -> Unit, onEdit: () -> Unit) {
     Surface(
         tonalElevation = 2.dp,
         shape = MaterialTheme.shapes.medium,
@@ -125,12 +141,20 @@ private fun SavedTeamCard(team: SavedTeam, onDelete: () -> Unit) {
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold
                 )
-                IconButton(onClick = onDelete) {
-                    Icon(
-                        Icons.Default.Delete,
-                        contentDescription = "Delete ${team.name}",
-                        tint = MaterialTheme.colorScheme.error
-                    )
+                Row {
+                    IconButton(onClick = onEdit) {
+                        Icon(
+                            Icons.Default.Edit,
+                            contentDescription = "Edit ${team.name}"
+                        )
+                    }
+                    IconButton(onClick = onDelete) {
+                        Icon(
+                            Icons.Default.Delete,
+                            contentDescription = "Delete ${team.name}",
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                    }
                 }
             }
             if (team.players.isEmpty()) {
@@ -248,6 +272,131 @@ fun CreateSavedTeamDialog(
     )
 
     // Show MultiPlayerPickerSheet when "Add Players" is tapped
+    if (showMultiPicker) {
+        MultiPlayerPickerSheet(
+            savedPlayers = savedPlayers,
+            initiallySelectedIds = selectedPlayers.mapNotNull { it.sourceProfileId }.toSet(),
+            onCreatePlayer = { name, saveToMyPlayers ->
+                val profile = PlayerProfile(
+                    displayName = name,
+                    playerSourceType = PlayerSourceType.PRIVATE
+                )
+                if (saveToMyPlayers) {
+                    onCreatePlayer(profile)
+                }
+                profile
+            },
+            onConfirm = { profiles ->
+                selectedPlayers.clear()
+                selectedPlayers.addAll(
+                    profiles.map { profile ->
+                        Player(name = profile.displayName, sourceProfileId = profile.id)
+                    }
+                )
+                showMultiPicker = false
+            },
+            onDismiss = { showMultiPicker = false }
+        )
+    }
+}
+
+// =============================================================================
+// Edit saved team dialog (name + composition)
+// =============================================================================
+
+@Composable
+fun EditSavedTeamDialog(
+    team: SavedTeam,
+    savedPlayers: List<PlayerProfile> = emptyList(),
+    onDismiss: () -> Unit,
+    onConfirm: (SavedTeam) -> Unit,
+    onCreatePlayer: (PlayerProfile) -> Unit = {}
+) {
+    var teamName by remember { mutableStateOf(team.name) }
+    val selectedPlayers = remember {
+        mutableStateListOf<Player>().also { it.addAll(team.players) }
+    }
+    var showMultiPicker by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Edit Team") },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier.verticalScroll(rememberScrollState())
+            ) {
+                OutlinedTextField(
+                    value = teamName,
+                    onValueChange = { teamName = it },
+                    label = { Text("Team name *") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next)
+                )
+
+                HorizontalDivider()
+
+                Text("Players", style = MaterialTheme.typography.labelMedium)
+
+                OutlinedButton(
+                    onClick = { showMultiPicker = true },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(
+                        Icons.Default.Add,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Text("  Edit Players")
+                }
+
+                if (selectedPlayers.isNotEmpty()) {
+                    val count = selectedPlayers.size
+                    Text(
+                        text = "$count player${if (count == 1) "" else "s"} selected",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    selectedPlayers.forEachIndexed { index, player ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = player.name,
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.weight(1f)
+                            )
+                            IconButton(
+                                onClick = { selectedPlayers.removeAt(index) },
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.Close,
+                                    contentDescription = "Remove ${player.name}",
+                                    tint = MaterialTheme.colorScheme.error
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    onConfirm(team.copy(name = teamName.trim(), players = selectedPlayers.toList()))
+                },
+                enabled = teamName.isNotBlank()
+            ) { Text("Save") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
+
     if (showMultiPicker) {
         MultiPlayerPickerSheet(
             savedPlayers = savedPlayers,

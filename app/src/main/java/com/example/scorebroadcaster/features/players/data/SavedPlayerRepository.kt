@@ -1,4 +1,5 @@
 package com.example.scorebroadcaster.features.players.data
+import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
@@ -67,6 +68,20 @@ class SavedPlayerRepository(
 
     fun updatePlayer(player: PlayerProfile) {
         scope.launch { dao.update(player.toEntity()) }
+    }
+
+    /**
+     * Update [player] locally and, when [userId] is provided, also mirror the change
+     * to Supabase asynchronously so the UI is never blocked.
+     */
+    fun updatePlayerWithRemote(player: PlayerProfile, userId: String? = null) {
+        scope.launch {
+            Log.d("SavedPlayerRepository", "Updating player ${player.id} (name=${player.displayName})")
+            dao.update(player.toEntity())
+            if (userId != null) {
+                SupabasePlayerRepository.upsertRemotePlayer(player.toSupabasePlayer(userId))
+            }
+        }
     }
 
     fun findById(id: String): PlayerProfile? = _state.value.find { it.id == id }
