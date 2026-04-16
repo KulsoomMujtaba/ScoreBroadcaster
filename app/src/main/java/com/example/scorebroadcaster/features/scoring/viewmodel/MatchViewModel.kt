@@ -209,7 +209,7 @@ class MatchViewModel : ViewModel() {
         }
 
         if (ballEvent.wicket) {
-            Log.d("WicketFlow", "Wicket recorded: ${ballEvent.dismissalDetail?.dismissalType} — ${ballEvent.dismissalDetail?.batter?.name}")
+            Log.d("WicketFlow", "Wicket: ${ballEvent.dismissalDetail?.dismissalType?.label} — ${ballEvent.dismissalDetail?.batter?.name}")
         }
         val console = _consoleState.value
         // Stamp the current bowler onto the event so MaidenOverCalculator can derive maiden

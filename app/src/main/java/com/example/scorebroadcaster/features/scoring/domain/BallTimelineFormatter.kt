@@ -97,7 +97,12 @@ object BallTimelineFormatter {
 
             event.wicket -> {
                 val type = event.dismissalDetail?.dismissalType
-                if (type == DismissalType.RUN_OUT) "W (run out)" else "W"
+                when (type) {
+                    DismissalType.RUN_OUT -> "W (run out)"
+                    DismissalType.HIT_WICKET -> "Hit Wicket"
+                    DismissalType.OBSTRUCTING_FIELD -> "Obstructing the Field"
+                    else -> "W"
+                }
             }
 
             else -> if (event.runsOffBat == 0) "." else "${event.runsOffBat}"

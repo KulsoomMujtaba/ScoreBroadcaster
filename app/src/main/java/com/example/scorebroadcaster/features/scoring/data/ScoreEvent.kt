@@ -25,7 +25,7 @@ fun ScoreEvent.toBallEvent(): BallEvent = when (this) {
         runsOffBat = runsCompleted,
         wicket = true,
         dismissalDetail = dismissal,
-        countsAsBall = true
+        countsAsBall = dismissal.dismissalType != DismissalType.OBSTRUCTING_FIELD
     )
     is ScoreEvent.Wide -> BallEvent(
         // Wide penalty is 1 run; any extra runs from overthrows etc. go in wides total

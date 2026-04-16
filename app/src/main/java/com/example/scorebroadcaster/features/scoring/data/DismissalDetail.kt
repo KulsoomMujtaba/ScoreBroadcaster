@@ -17,9 +17,10 @@ data class DismissalDetail(
 ) {
     /**
      * Whether this dismissal is credited to the bowler.
-     * Run Out dismissals do NOT credit the bowler; all others do.
+     * Run Out and Obstructing the Field dismissals do NOT credit the bowler; all others do.
      */
-    val bowlerCredited: Boolean get() = dismissalType != DismissalType.RUN_OUT
+    val bowlerCredited: Boolean get() = dismissalType != DismissalType.RUN_OUT &&
+            dismissalType != DismissalType.OBSTRUCTING_FIELD
 
     /**
      * Human-readable scorecard string following cricket convention, e.g.:
@@ -51,6 +52,10 @@ data class DismissalDetail(
                 val fielderText = fielders.joinToString(" / ") { it.name }
                 "run out ($fielderText)"
             } else "run out"
+        DismissalType.HIT_WICKET ->
+            "hit wicket b ${bowler?.name ?: "?"}"
+        DismissalType.OBSTRUCTING_FIELD ->
+            "obstructing field"
         DismissalType.OTHER ->
             "out"
     }
