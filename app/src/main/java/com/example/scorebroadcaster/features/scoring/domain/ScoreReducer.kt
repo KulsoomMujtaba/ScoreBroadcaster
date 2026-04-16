@@ -38,6 +38,24 @@ private fun applyEvent(state: MatchState, event: BallEvent, maxOvers: Int): Matc
 
     val totalRuns = event.runsOffBat + event.extras.total
 
+    val isExtra = event.extras.total > 0
+    if (isExtra) {
+        val extraType = when {
+            event.extras.wides   > 0 -> "WIDE"
+            event.extras.noBalls > 0 -> "NO_BALL"
+            event.extras.byes    > 0 -> "BYE"
+            else                     -> "LEG_BYE"
+        }
+        val extraRuns = when {
+            event.extras.wides   > 0 -> event.extras.wides - 1
+            event.extras.noBalls > 0 -> event.runsOffBat
+            event.extras.byes    > 0 -> event.extras.byes
+            else                     -> event.extras.legByes
+        }
+        Log.d(TAG, "Extra event: type=$extraType, runs=$extraRuns")
+        Log.d(TAG, "Total runs updated to ${state.runs + totalRuns}")
+    }
+
     return state.copy(
         runs = state.runs + totalRuns,
         wickets = if (event.wicket) state.wickets + 1 else state.wickets,
@@ -56,10 +74,15 @@ private fun applyEvent(state: MatchState, event: BallEvent, maxOvers: Int): Matc
 /** Generates a short human-readable label for the over-summary strip. */
 private fun buildBallLabel(event: BallEvent): String = when {
     event.wicket -> "W"
-    event.extras.wides > 0 -> "Wd"
-    event.extras.noBalls > 0 -> "NB"
+    event.extras.wides > 0 -> {
+        val extra = event.extras.wides - 1
+        if (extra > 0) "Wd+$extra" else "Wd"
+    }
+    event.extras.noBalls > 0 -> {
+        if (event.runsOffBat > 0) "Nb+${event.runsOffBat}" else "Nb"
+    }
     event.extras.byes > 0 -> "B${event.extras.byes}"
-    event.extras.legByes > 0 -> "LB${event.extras.legByes}"
+    event.extras.legByes > 0 -> "Lb${event.extras.legByes}"
     else -> event.runsOffBat.toString()
 }
 

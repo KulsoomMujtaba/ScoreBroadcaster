@@ -276,6 +276,24 @@ class MatchViewModel : ViewModel() {
         val isBye = event.extras.byes > 0
         val isLegBye = event.extras.legByes > 0
 
+        // --- Log extra event details ---
+        if (isWide || isNoBall || isBye || isLegBye) {
+            val extraType = when {
+                isWide   -> "WIDE"
+                isNoBall -> "NO_BALL"
+                isBye    -> "BYE"
+                else     -> "LEG_BYE"
+            }
+            val extraRuns = when {
+                isWide   -> event.extras.wides - 1
+                isNoBall -> event.runsOffBat
+                isBye    -> event.extras.byes
+                else     -> event.extras.legByes
+            }
+            Log.d("ExtraEvent", "Extra event: type=$extraType, runs=$extraRuns")
+            Log.d("ExtraEvent", "Total runs updated to ${newState.runs}")
+        }
+
         // --- Update striker batting entry ---
         // For a wicket: determine if the striker or non-striker was dismissed.
         val strikerIsOut = event.wicket &&
@@ -374,11 +392,17 @@ class MatchViewModel : ViewModel() {
         val wicketFell = event.wicket
 
         // --- Strike rotation ---
-        // Runs from bat and byes/leg-byes can rotate the strike; wides and no-balls do not.
-        val oddRuns = when {
-            isWide || isNoBall -> false
-            else -> (event.runsOffBat + event.extras.byes + event.extras.legByes) % 2 == 1
+        // Runs taken by the batsmen (physical running) can rotate the strike for all extra types.
+        // For Wide: additional runs = wides - 1 (excluding the 1-run penalty).
+        // For No Ball: runs off bat determine the rotation.
+        // For Bye / Leg Bye: bye or leg-bye runs determine the rotation.
+        val runsForStrike = when {
+            isWide   -> event.extras.wides - 1
+            isNoBall -> event.runsOffBat
+            else     -> event.runsOffBat + event.extras.byes + event.extras.legByes
         }
+        val oddRuns = runsForStrike % 2 == 1
+        Log.d("ExtraEvent", "Strike swapped: $oddRuns")
         // Strike rotation — three sequential steps applied in order:
         //
         //  1. Run-crossing rotation: odd runs on a legal delivery mean the batters crossed

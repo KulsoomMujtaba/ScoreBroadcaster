@@ -73,25 +73,25 @@ object BallTimelineFormatter {
 
         return when {
             isWide -> {
-                // Wide penalty is 1; anything beyond is additional runs
+                // Wide penalty is 1; anything beyond is additional runs taken by batsmen
                 val extra = event.extras.wides - 1
-                val runsStr = if (extra > 0) "+$extra" else ""
+                val runsStr = if (extra > 0) " + $extra" else ""
                 val wicketStr = if (event.wicket) "+W" else ""
-                "wd$runsStr$wicketStr"
+                "Wd$runsStr$wicketStr"
             }
 
             isNoBall -> {
-                // Runs off bat credited separately from penalty
+                // Runs off bat credited separately from the 1-run penalty
                 val runsSuffix = when {
-                    event.wicket                -> "+W"   // run-out on a no-ball
-                    event.runsOffBat > 0        -> "+${event.runsOffBat}"
-                    else                        -> ""
+                    event.wicket             -> "+W"   // run-out on a no-ball
+                    event.runsOffBat > 0     -> " + ${event.runsOffBat}"
+                    else                     -> ""
                 }
-                "nb$runsSuffix"
+                "Nb$runsSuffix"
             }
 
-            isBye   -> "b${event.extras.byes}"
-            isLegBye -> "lb${event.extras.legByes}"
+            isBye    -> "B ${event.extras.byes}"
+            isLegBye -> "Lb ${event.extras.legByes}"
 
             event.wicket -> {
                 val type = event.dismissalDetail?.dismissalType
