@@ -3659,3 +3659,64 @@ Three files were updated — all logic changes are at the domain/reducer level, 
 | `features/scoring/domain/BallTimelineFormatter.kt` | `formatBall()` uses updated display strings (capitalised, space-separated) |
 | `features/scoring/viewmodel/MatchViewModel.kt` | `updateConsoleAfterEvent()` fixes strike rotation for Wide/No Ball; logs extra events |
 | `README.md` | Added this Development Log entry |
+
+---
+
+## Feature: Flexible Bowler Change Flow
+
+### Problem
+
+Once a bowler was selected at the start of an over, the app provided no way to change the bowler
+during that over.  This caused issues when:
+
+- The wrong bowler was selected by mistake.
+- The scorer needed to correct the bowler assignment mid-over.
+
+### Solution
+
+- Removed all restrictions on bowler re-selection: `changeBowler()` now works at any point during
+  an innings — before the first ball, mid-over, or at a natural over boundary.
+- Added a **Change Bowler** button to the "At the Crease" players card, visible whenever a bowler
+  is active.  Tapping it opens a bottom sheet listing all bowling-team players for selection.
+- Added a `ChangeBowlerMidOverBottomSheet` composable (separate from the end-of-over sheet) with
+  subtitle text that makes the mid-over intent clear.
+- Emits a one-shot snackbar message **"Bowler changed for remaining deliveries"** whenever the
+  bowler is changed mid-over (i.e. `state.balls > 0`), so the scorer always knows what happened.
+
+### Key behaviour
+
+- Bowler change applies **only to future deliveries** — past `BallEvent` entries in the event log
+  are never touched.
+- `currentBowler` in `ScoringConsoleState` is updated immediately; the next ball stamped by
+  `addBallEvent()` picks up the new bowler automatically.
+- Undo continues to work correctly: undoing a ball after a mid-over bowler change simply removes
+  that ball from the log; the `currentBowler` state is not affected by undo (consistent with
+  the existing state-based model).
+
+### Tradeoff
+
+Per-ball bowler tracking is not yet implemented.  The app stores the bowler as
+`currentBowler` state rather than attaching a `bowlerId` to each individual `BallEvent`.
+This means historical stats (e.g. "which balls did bowler X bowl in over 3?") cannot be derived
+from the event log alone for overs where the bowler changed mid-over.
+
+### Future enhancement
+
+Attach `bowlerId` to each `BallEvent` for full per-ball accuracy.  This would allow retroactive
+stat recalculation and make mid-over bowler changes fully transparent in the event history.
+
+### Logging added
+
+All changes are logged under the `BowlerChange` tag:
+
+- `"Bowler changed from X to Y"`
+- `"Applied to future deliveries only"`
+- `"Current over: ball count = X"`
+
+### Files changed
+
+| File | Change |
+|------|--------|
+| `features/scoring/viewmodel/MatchViewModel.kt` | `changeBowler()` — added logging, mid-over message emission, and documentation comment; added `_bowlerChangedMessage` StateFlow + `clearBowlerChangedMessage()` |
+| `features/scoring/ui/ScoringScreen.kt` | `PlayersSection` — "Change Bowler" button on bowler row; `ChangeBowlerMidOverBottomSheet` composable; `showChangeBowlerSheet` state; `bowlerChangedMessage` snackbar observer |
+| `README.md` | This development log entry |

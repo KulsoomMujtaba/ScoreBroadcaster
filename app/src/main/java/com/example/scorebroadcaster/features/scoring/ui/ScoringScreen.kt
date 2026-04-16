@@ -184,6 +184,7 @@ fun ScoringScreen(
     // Undo message snackbar
     val undoMessage by matchViewModel.undoMessage.collectAsState()
     val validationError by matchViewModel.validationError.collectAsState()
+    val bowlerChangedMessage by matchViewModel.bowlerChangedMessage.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     LaunchedEffect(undoMessage) {
         val msg = undoMessage
@@ -199,6 +200,13 @@ fun ScoringScreen(
             matchViewModel.clearValidationError()
         }
     }
+    LaunchedEffect(bowlerChangedMessage) {
+        val msg = bowlerChangedMessage
+        if (!msg.isNullOrEmpty()) {
+            snackbarHostState.showSnackbar(message = msg, duration = SnackbarDuration.Short)
+            matchViewModel.clearBowlerChangedMessage()
+        }
+    }
 
     // Controls the manual result selection dialog shown when the scorer ends the match
     // before it is naturally completed (win / all-out / overs-limit).
@@ -211,6 +219,10 @@ fun ScoringScreen(
     LaunchedEffect(console.pendingAction is PendingAction.SelectBowler) {
         showSelectBowlerSheet = console.pendingAction is PendingAction.SelectBowler
     }
+
+    // State for the mid-over bowler change bottom sheet.
+    // Triggered by the scorer tapping "Change Bowler" on the players card.
+    var showChangeBowlerSheet by rememberSaveable { mutableStateOf(false) }
 
     Box(modifier = modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize()) {
@@ -277,7 +289,8 @@ fun ScoringScreen(
             ) {
                 PlayersSection(
                     console = console,
-                    onSwapStrike = { matchViewModel.swapStrike() }
+                    onSwapStrike = { matchViewModel.swapStrike() },
+                    onChangeBowler = { showChangeBowlerSheet = true }
                 )
                 Spacer(modifier = Modifier.height(12.dp))
             }
@@ -602,6 +615,40 @@ fun ScoringScreen(
                 }
             }
             null -> Unit
+        }
+
+        // --- Mid-over bowler change bottom sheet ---
+        // Shown when the scorer taps "Change Bowler" on the players card mid-over.
+        // Applies only to future deliveries; past events are not modified.
+        if (showChangeBowlerSheet && activeMatch != null) {
+            val bowlingTeamPlayers = when (console.inningsNumber) {
+                1 -> activeMatch.bowlingFirst.players
+                else -> activeMatch.battingFirst.players
+            }
+            val opposingPlayers = when (console.inningsNumber) {
+                1 -> activeMatch.battingFirst.players
+                else -> activeMatch.bowlingFirst.players
+            }
+            val excProfileIds = opposingPlayers.mapNotNull { it.sourceProfileId }.toSet()
+            val excNames = opposingPlayers.map { normalizePlayerName(it.name) }.toSet()
+            ChangeBowlerMidOverBottomSheet(
+                availablePlayers = bowlingTeamPlayers,
+                savedPlayers = savedPlayers,
+                excludedProfileIds = excProfileIds,
+                excludedNames = excNames,
+                onPlayerSelected = { player ->
+                    showChangeBowlerSheet = false
+                    matchViewModel.changeBowler(player)
+                },
+                onPickFromSaved = { profile, isNew ->
+                    if (isNew) onSavePrivatePlayer(profile)
+                    val player = profile.toMatchPlayer()
+                    matchViewModel.addPlayerToTeam(player, addToBattingTeam = false)
+                    showChangeBowlerSheet = false
+                    matchViewModel.changeBowler(player)
+                },
+                onDismiss = { showChangeBowlerSheet = false }
+            )
         }
 
         // --- Openers setup dialog ---
@@ -1035,7 +1082,11 @@ private fun OverBlock(over: OverSummary) {
 // =============================================================================
 
 @Composable
-private fun PlayersSection(console: ScoringConsoleState, onSwapStrike: () -> Unit) {
+private fun PlayersSection(
+    console: ScoringConsoleState,
+    onSwapStrike: () -> Unit,
+    onChangeBowler: () -> Unit
+) {
     Surface(
         tonalElevation = 2.dp,
         shape = MaterialTheme.shapes.medium,
@@ -1101,11 +1152,31 @@ private fun PlayersSection(console: ScoringConsoleState, onSwapStrike: () -> Uni
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp))
 
-            // Bowler
-            console.currentBowlerEntry?.let { BowlerRow(entry = it) }
-                ?: console.currentBowler?.let {
-                    Text(it.name, style = MaterialTheme.typography.bodySmall)
+            // Bowler row with inline "Change Bowler" button to allow re-selection at any time.
+            // Changing bowler applies only to future deliveries — past events are unchanged.
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(modifier = Modifier.weight(1f)) {
+                    console.currentBowlerEntry?.let { BowlerRow(entry = it) }
+                        ?: console.currentBowler?.let {
+                            Text(it.name, style = MaterialTheme.typography.bodySmall)
+                        }
                 }
+                if (console.currentBowler != null) {
+                    TextButton(
+                        onClick = onChangeBowler,
+                        modifier = Modifier.defaultMinSize(minHeight = 32.dp)
+                    ) {
+                        Text(
+                            "Change",
+                            style = MaterialTheme.typography.labelSmall
+                        )
+                    }
+                }
+            }
         }
     }
 }
@@ -2996,6 +3067,111 @@ private fun SelectBowlerBottomSheet(
             )
             Text(
                 text = "New over — select the bowler to continue scoring.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 16.dp)
+            )
+
+            if (availablePlayers.isEmpty()) {
+                Text(
+                    text = "No available players to select",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+            }
+            availablePlayers.forEach { player ->
+                TextButton(
+                    onClick = { onPlayerSelected(player) },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = player.name,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+            OutlinedButton(
+                onClick = { showSavedPicker = true },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(
+                    Icons.Default.Person,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp)
+                )
+                Text("Add Player")
+            }
+        }
+    }
+
+    if (showSavedPicker) {
+        PlayerPickerDialog(
+            savedPlayers = savedPlayers,
+            excludedProfileIds = excludedProfileIds,
+            excludedNames = excludedNames,
+            onDismiss = { showSavedPicker = false },
+            onSelect = { profile ->
+                showSavedPicker = false
+                onPickFromSaved(profile, false)
+            },
+            onCreateAndSelect = { profile ->
+                showSavedPicker = false
+                onPickFromSaved(profile, true)
+            }
+        )
+    }
+}
+
+// =============================================================================
+// Mid-over bowler change bottom sheet
+// =============================================================================
+
+/**
+ * Bottom sheet allowing the scorer to change the current bowler mid-over or at any time
+ * during an innings.
+ *
+ * Selecting a player calls [onPlayerSelected] immediately; the change applies only to
+ * future deliveries.  Past events are never modified.
+ *
+ * The sheet is dismissible: closing it without selecting a player leaves the current
+ * bowler unchanged.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ChangeBowlerMidOverBottomSheet(
+    availablePlayers: List<Player>,
+    savedPlayers: List<PlayerProfile>,
+    excludedProfileIds: Set<String> = emptySet(),
+    excludedNames: Set<String> = emptySet(),
+    onPlayerSelected: (Player) -> Unit,
+    onPickFromSaved: (profile: PlayerProfile, isNew: Boolean) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var showSavedPicker by rememberSaveable { mutableStateOf(false) }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 32.dp)
+                .verticalScroll(rememberScrollState()),
+        ) {
+            Text(
+                text = "Change Bowler",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(bottom = 4.dp)
+            )
+            Text(
+                text = "Select the new bowler. The change applies to future deliveries only.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(bottom = 16.dp)
