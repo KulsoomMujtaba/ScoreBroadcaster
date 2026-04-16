@@ -1,4 +1,8 @@
 package com.devhub.scored.navigation
+import android.content.Intent
+import android.net.Uri
+import android.util.Log
+import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,6 +23,7 @@ import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Person
@@ -47,6 +52,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
@@ -54,6 +60,9 @@ import androidx.navigation.NavController
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.currentBackStackEntryAsState
 import kotlinx.coroutines.launch
+
+private const val PRIVACY_POLICY_URL =
+    "https://docs.google.com/document/d/1d8c6IOqUwHz7jXLD33xIEWFWMAmEkf8rmmvsK5wi1Hw/edit?pli=1&tab=t.0"
 
 // ---------------------------------------------------------------------------
 // Bottom navigation tabs
@@ -240,6 +249,8 @@ fun AppDrawer(
     signedInEmail: String? = null,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+
     ModalDrawerSheet(modifier = modifier) {
         Spacer(Modifier.height(16.dp))
         Text(
@@ -328,6 +339,22 @@ fun AppDrawer(
             label = "About",
             selected = false,
             onClick = { /* placeholder – no-op until about screen is added */ }
+        )
+        DrawerNavItem(
+            icon = Icons.Default.Lock,
+            label = "Privacy Policy",
+            selected = false,
+            onClick = {
+                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(PRIVACY_POLICY_URL))
+                val resolved = context.packageManager
+                    .resolveActivity(intent, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY) != null
+                if (resolved) {
+                    Log.d("AppDrawer", "Privacy Policy opened")
+                    context.startActivity(intent)
+                } else {
+                    Toast.makeText(context, "Unable to open link", Toast.LENGTH_SHORT).show()
+                }
+            }
         )
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
