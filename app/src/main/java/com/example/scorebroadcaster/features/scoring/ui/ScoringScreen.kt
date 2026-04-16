@@ -200,6 +200,10 @@ fun ScoringScreen(
         }
     }
 
+    // Controls the manual result selection dialog shown when the scorer ends the match
+    // before it is naturally completed (win / all-out / overs-limit).
+    var showManualResultDialog by remember { mutableStateOf(false) }
+
     // State for the dismissible select-bowler bottom sheet.
     // Auto-opens when the over ends and SelectBowler becomes pending; can be dismissed
     // to unblock navigation while scoring remains gated until a bowler is chosen.
@@ -435,7 +439,21 @@ fun ScoringScreen(
                 InningsControlSection(
                     console = console,
                     onEndFirstInnings = { matchViewModel.endFirstInnings() },
-                    onEndMatch = { matchViewModel.endMatch() }
+                    onEndMatch = { showManualResultDialog = true }
+                )
+            }
+
+            // Manual result selection dialog — shown when the scorer ends the match
+            // before a natural completion (win / all-out / overs-limit).
+            if (showManualResultDialog && activeMatch != null) {
+                ManualResultSelectionDialog(
+                    teamAName = activeMatch.teamA.name,
+                    teamBName = activeMatch.teamB.name,
+                    onResultSelected = { resultLabel ->
+                        showManualResultDialog = false
+                        matchViewModel.endMatchWithManualResult(resultLabel)
+                    },
+                    onDismiss = { showManualResultDialog = false }
                 )
             }
 
@@ -1440,7 +1458,7 @@ private fun MatchCompleteSection(
             )
             if (console.inningsNumber == 2) {
                 val runsNeeded = console.target - runsScored
-                val result = when {
+                val result = console.manualResultLabel ?: when {
                     runsScored >= console.target ->
                         "$battingTeamName won by ${10 - wickets} wickets!"
                     wickets >= 10 ->
@@ -1454,6 +1472,13 @@ private fun MatchCompleteSection(
                             "   |   2nd innings: $runsScored/$wickets",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                )
+            } else if (console.manualResultLabel != null) {
+                // Match ended manually during/before the 2nd innings (e.g. abandoned)
+                Text(
+                    console.manualResultLabel,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Medium
                 )
             }
         }
@@ -2898,4 +2923,64 @@ private fun SelectBowlerBottomSheet(
             }
         )
     }
+}
+
+// =============================================================================
+// Manual result selection dialog
+// =============================================================================
+
+/**
+ * Modal dialog shown when the scorer taps "End Match" before the match has been
+ * naturally completed (win / all-out / overs-limit).
+ *
+ * Presents four result options and forwards the chosen label to [onResultSelected].
+ * The dialog can be cancelled via the Cancel button or back-press, in which case
+ * [onDismiss] is called and the match is not ended.
+ *
+ * @param teamAName  Name of the first team (as configured for the match).
+ * @param teamBName  Name of the second team (as configured for the match).
+ * @param onResultSelected Called with the human-readable result label chosen by the scorer.
+ * @param onDismiss Called when the scorer cancels the dialog without choosing.
+ */
+@Composable
+private fun ManualResultSelectionDialog(
+    teamAName: String,
+    teamBName: String,
+    onResultSelected: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Select Match Result") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = "Match not fully completed. Select result:",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                listOf(
+                    "$teamAName won (manual)",
+                    "$teamBName won (manual)",
+                    "Match Abandoned",
+                    "Match Drawn"
+                ).forEach { option ->
+                    TextButton(
+                        onClick = { onResultSelected(option) },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = option,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
 }

@@ -1226,6 +1226,35 @@ class MatchViewModel : ViewModel() {
             phase = InningsPhase.MATCH_COMPLETE,
             pendingAction = null
         )
+        persistMatchAsCompleted()
+    }
+
+    /**
+     * Manually end the match with a scorer-selected result.
+     *
+     * Called when the scorer chooses to end an incomplete match via the result-selection
+     * dialog. Stores [resultLabel] verbatim in [ScoringConsoleState.manualResultLabel] so
+     * the scorecard can display it instead of auto-calculating a (potentially incorrect)
+     * result from the current scoring state.
+     *
+     * Normal auto-result logic is skipped for any match where [resultLabel] is set.
+     *
+     * @param resultLabel Human-readable result chosen by the scorer, e.g.
+     *   "Team A won (manual)", "Match Abandoned", or "Match Drawn".
+     */
+    fun endMatchWithManualResult(resultLabel: String) {
+        Log.d("MatchViewModel", "Manual match end triggered")
+        Log.d("MatchViewModel", "User selected result: $resultLabel")
+        _consoleState.value = _consoleState.value.copy(
+            phase = InningsPhase.MATCH_COMPLETE,
+            pendingAction = null,
+            manualResultLabel = resultLabel
+        )
+        persistMatchAsCompleted()
+    }
+
+    /** Persists the active match status as [MatchStatus.COMPLETED] after the match ends. */
+    private fun persistMatchAsCompleted() {
         _activeMatch.value?.let { match ->
             val updated = match.copy(status = MatchStatus.COMPLETED)
             _activeMatch.value = updated
