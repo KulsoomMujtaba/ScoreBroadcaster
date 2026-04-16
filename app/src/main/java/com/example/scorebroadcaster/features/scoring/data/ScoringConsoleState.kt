@@ -115,7 +115,16 @@ data class ScoringConsoleState(
      * called for the current innings. Survives undo. Used by ScoringScreen to distinguish
      * "setup never done" from "setup done but zero deliveries remain after undo".
      */
-    val inningsSetupCompleted: Boolean = false
+    val inningsSetupCompleted: Boolean = false,
+
+    /**
+     * Human-readable result string set when the scorer manually ends the match before it
+     * is naturally completed (e.g. "Team A won (manual)", "Match Abandoned", "Match Drawn").
+     *
+     * When non-null the scorecard displays this label verbatim instead of auto-calculating
+     * the result from the scoring state.  Null for all naturally-completed matches.
+     */
+    val manualResultLabel: String? = null
 ) {
     /**
      * Partnership duration expressed as overs, e.g. 33 balls → "5.3 overs".
