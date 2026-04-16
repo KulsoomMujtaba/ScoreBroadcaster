@@ -60,4 +60,6 @@ END;
 $$;
 
 -- Allow any authenticated user to call this function on their own behalf.
+-- Revoke first to ensure idempotency if the migration is reapplied.
+REVOKE EXECUTE ON FUNCTION public.delete_account() FROM authenticated;
 GRANT EXECUTE ON FUNCTION public.delete_account() TO authenticated;

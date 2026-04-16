@@ -285,7 +285,14 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                 }
 
                 // Step 2: Clear the local Room database.
-                db.clearAllTables()
+                try {
+                    db.clearAllTables()
+                } catch (dbEx: Exception) {
+                    // Remote deletion already succeeded. Log the local cleanup failure so
+                    // the user is still considered deleted, but the failure is surfaced for
+                    // diagnostics.  The account no longer exists on the server regardless.
+                    Log.w("AuthViewModel", "clearAllTables failed after successful remote deletion", dbEx)
+                }
 
                 _deleteAccountState.value = DeleteAccountState.SUCCESS
 
@@ -293,8 +300,10 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                 // already gone so the session tokens are invalid regardless).
                 try {
                     authClient.signOut()
-                } catch (_: Exception) {
-                    // Session is already invalidated on the server — safe to ignore.
+                } catch (signOutEx: Exception) {
+                    // Session is already invalidated on the server — safe to ignore, but
+                    // log at debug level to aid troubleshooting.
+                    Log.d("AuthViewModel", "signOut after deletion threw (expected if session already gone)", signOutEx)
                 }
             } catch (e: Exception) {
                 Log.e("AuthViewModel", "Delete account failed", e)
