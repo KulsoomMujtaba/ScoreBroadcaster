@@ -30,6 +30,9 @@ import com.example.scorebroadcaster.features.players.data.Player
  *                        restart without re-opening the innings-setup dialog.
  * @param nonStriker      The batter at the non-striker's end.  Same persistence rationale as
  *                        [striker].
+ * @param isPenalty       True when this event represents penalty runs awarded by the umpire
+ *                        (not associated with a delivery).  Penalty runs are added directly to
+ *                        the team total without affecting the ball count, over count, or strike.
  */
 data class BallEvent(
     val runsOffBat: Int = 0,
@@ -39,5 +42,6 @@ data class BallEvent(
     val countsAsBall: Boolean = true,
     val bowler: Player? = null,
     val striker: Player? = null,
-    val nonStriker: Player? = null
+    val nonStriker: Player? = null,
+    val isPenalty: Boolean = false
 )

@@ -22,5 +22,7 @@ enum class EventType {
 
     UNDO_TO_INDEX,
 
-    SCORE_CORRECTION
+    SCORE_CORRECTION,
+
+    PENALTY_RUNS
 }

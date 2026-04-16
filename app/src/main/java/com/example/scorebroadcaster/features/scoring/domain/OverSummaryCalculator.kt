@@ -49,6 +49,8 @@ object OverSummaryCalculator {
      * - Run-outs with runs are combined: `"1W"` for 1 run + wicket.
      */
     fun ballLabel(event: BallEvent): String {
+        if (event.isPenalty) return "P${event.runsOffBat}"
+
         val isWide   = event.extras.wides   > 0
         val isNoBall = event.extras.noBalls > 0
         val isBye    = event.extras.byes    > 0

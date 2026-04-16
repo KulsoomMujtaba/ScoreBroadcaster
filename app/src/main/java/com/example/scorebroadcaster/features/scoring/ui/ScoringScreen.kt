@@ -364,19 +364,27 @@ fun ScoringScreen(
                     console.pendingAction == null &&
                     console.striker != null &&
                     !state.isInningsOver
+            // Penalty runs can be awarded whenever an innings is in progress —
+            // including after the overs limit is reached — but not during setup or match-complete.
+            val penaltyEnabled = console.phase == InningsPhase.FIRST_INNINGS ||
+                    console.phase == InningsPhase.SECOND_INNINGS
             // Wicket details dialog state — shown before dispatching the Wicket event
             var showWicketDialog by remember { mutableStateOf(false) }
             // Extras entry dialog state
             var extrasDialogType by remember { mutableStateOf<ExtraType?>(null) }
             // Overthrow delivery dialog state
             var showOverthrowDialog by remember { mutableStateOf(false) }
+            // Penalty runs dialog state
+            var showPenaltyDialog by remember { mutableStateOf(false) }
             ScoringButtonsSection(
                 onEvent = { matchViewModel.addEvent(it) },
                 onUndo = { matchViewModel.undo() },
                 onWicket = { showWicketDialog = true },
                 onExtras = { type -> extrasDialogType = type },
                 onOverthrows = { showOverthrowDialog = true },
-                enabled = scoringEnabled
+                onPenaltyRuns = { showPenaltyDialog = true },
+                enabled = scoringEnabled,
+                penaltyEnabled = penaltyEnabled
             )
             if (showWicketDialog) {
                 val bowlingTeamPlayers = when {
@@ -430,6 +438,16 @@ fun ScoringScreen(
                         matchViewModel.addBallEvent(ballEvent)
                     },
                     onDismiss = { showOverthrowDialog = false }
+                )
+            }
+            // Penalty runs dialog
+            if (showPenaltyDialog) {
+                PenaltyRunsDialog(
+                    onConfirm = { runs ->
+                        showPenaltyDialog = false
+                        matchViewModel.addPenaltyRuns(runs)
+                    },
+                    onDismiss = { showPenaltyDialog = false }
                 )
             }
             Spacer(modifier = Modifier.height(8.dp))
@@ -988,6 +1006,7 @@ private fun OverBlock(over: OverSummary) {
                     // directly here and in BallTimelineScreen to keep the design intent explicit.
                     label == "6" -> BoundarySixContainer
                     label.startsWith("Wd") || label.startsWith("Nb") -> MaterialTheme.colorScheme.tertiaryContainer
+                    label.startsWith("P") -> MaterialTheme.colorScheme.secondaryContainer
                     else -> MaterialTheme.colorScheme.surfaceVariant
                 }
                 val textColor = when {
@@ -995,6 +1014,7 @@ private fun OverBlock(over: OverSummary) {
                     label == "4" -> MaterialTheme.colorScheme.onSecondaryContainer
                     label == "6" -> OnBoundarySixContainer
                     label.startsWith("Wd") || label.startsWith("Nb") -> MaterialTheme.colorScheme.onTertiaryContainer
+                    label.startsWith("P") -> MaterialTheme.colorScheme.onSecondaryContainer
                     else -> MaterialTheme.colorScheme.onSurfaceVariant
                 }
                 Surface(color = bgColor, shape = MaterialTheme.shapes.small) {
@@ -1326,52 +1346,70 @@ private fun ExtrasButtonsGrid(
 }
 
 /**
- * Side-by-side Wicket and Undo buttons.
+ * Scoring action row: Wicket, Undo, and "+5 Penalty" buttons.
  * Wicket uses errorContainer for a destructive appearance.
  * Undo uses secondary/onSecondary for a clearly visible filled button that is
  * secondary in visual weight (distinct from the red Wicket) and always clickable.
+ * Penalty uses tertiaryContainer to signal a special, non-delivery action.
  */
 @Composable
 private fun ActionButtonsRow(
     onWicket: () -> Unit,
     onUndo: () -> Unit,
-    wicketEnabled: Boolean
+    onPenaltyRuns: () -> Unit,
+    wicketEnabled: Boolean,
+    penaltyEnabled: Boolean
 ) {
-    Row(
+    Column(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        Button(
-            onClick = onWicket,
-            enabled = wicketEnabled,
-            colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.errorContainer,
-                contentColor = MaterialTheme.colorScheme.onErrorContainer
-            ),
-            modifier = Modifier
-                .weight(1f)
-                .defaultMinSize(minHeight = 52.dp)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Text("Wicket", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+            Button(
+                onClick = onWicket,
+                enabled = wicketEnabled,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.errorContainer,
+                    contentColor = MaterialTheme.colorScheme.onErrorContainer
+                ),
+                modifier = Modifier
+                    .weight(1f)
+                    .defaultMinSize(minHeight = 52.dp)
+            ) {
+                Text("Wicket", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+            }
+            Button(
+                onClick = onUndo,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.secondary,
+                    contentColor = MaterialTheme.colorScheme.onSecondary
+                ),
+                modifier = Modifier
+                    .weight(1f)
+                    .defaultMinSize(minHeight = 52.dp)
+            ) {
+                Text("Undo", style = MaterialTheme.typography.labelLarge)
+            }
         }
-        Button(
-            onClick = onUndo,
-            colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.secondary,
-                contentColor = MaterialTheme.colorScheme.onSecondary
-            ),
+        // Penalty runs button — full width, distinct colour, available during active innings
+        OutlinedButton(
+            onClick = onPenaltyRuns,
+            enabled = penaltyEnabled,
             modifier = Modifier
-                .weight(1f)
-                .defaultMinSize(minHeight = 52.dp)
+                .fillMaxWidth()
+                .defaultMinSize(minHeight = 48.dp)
         ) {
-            Text("Undo", style = MaterialTheme.typography.labelLarge)
+            Text("+5 Penalty Runs", style = MaterialTheme.typography.labelLarge)
         }
     }
 }
 
 /**
  * Full scoring control pad split into three labelled sections:
- * Runs → Extras → Actions (Wicket / Undo).
+ * Runs → Extras → Actions (Wicket / Undo / Penalty).
  */
 @Composable
 private fun ScoringButtonsSection(
@@ -1380,7 +1418,9 @@ private fun ScoringButtonsSection(
     onWicket: () -> Unit,
     onExtras: (ExtraType) -> Unit,
     onOverthrows: () -> Unit,
-    enabled: Boolean
+    onPenaltyRuns: () -> Unit,
+    enabled: Boolean,
+    penaltyEnabled: Boolean
 ) {
     Column(
         modifier = Modifier
@@ -1395,7 +1435,13 @@ private fun ScoringButtonsSection(
             ExtrasButtonsGrid(onExtras = onExtras, onOverthrows = onOverthrows, enabled = enabled)
         }
         ScoringControlsSection(label = "Actions") {
-            ActionButtonsRow(onWicket = onWicket, onUndo = onUndo, wicketEnabled = enabled)
+            ActionButtonsRow(
+                onWicket = onWicket,
+                onUndo = onUndo,
+                onPenaltyRuns = onPenaltyRuns,
+                wicketEnabled = enabled,
+                penaltyEnabled = penaltyEnabled
+            )
         }
     }
 }
@@ -2388,6 +2434,80 @@ internal fun OverthrowRunDialog(
                     )
                 }
             ) { Text("Confirm") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
+}
+
+// =============================================================================
+// Penalty runs dialog
+// =============================================================================
+
+/**
+ * Dialog shown when the scorer taps "+5 Penalty Runs".
+ *
+ * Allows the scorer to award 5 penalty runs (the standard cricket amount) or enter
+ * a custom number of penalty runs.  The confirmed runs are dispatched to the ViewModel
+ * as a penalty event that credits the batting team's total without affecting ball count
+ * or strike.
+ */
+@Composable
+internal fun PenaltyRunsDialog(
+    onConfirm: (Int) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var selectedRuns by remember { mutableStateOf(5) }
+    var useCustom by remember { mutableStateOf(false) }
+    var customText by remember { mutableStateOf("") }
+
+    val finalRuns = if (useCustom) customText.toIntOrNull()?.coerceAtLeast(1) ?: selectedRuns
+                   else selectedRuns
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Award Penalty Runs") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    "Penalty runs are credited to the batting team without affecting the ball count or strike.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text("Runs", style = MaterialTheme.typography.labelMedium)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf(5).forEach { runs ->
+                        FilterChip(
+                            selected = !useCustom && selectedRuns == runs,
+                            onClick = { selectedRuns = runs; useCustom = false },
+                            label = { Text("$runs") }
+                        )
+                    }
+                    FilterChip(
+                        selected = useCustom,
+                        onClick = { useCustom = true },
+                        label = { Text("Custom") }
+                    )
+                }
+                if (useCustom) {
+                    OutlinedTextField(
+                        value = customText,
+                        onValueChange = { customText = it.filter { c -> c.isDigit() } },
+                        label = { Text("Penalty runs") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+                Text(
+                    "Penalty runs: $finalRuns",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+        },
+        confirmButton = {
+            Button(onClick = { onConfirm(finalRuns) }) { Text("Confirm") }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("Cancel") }

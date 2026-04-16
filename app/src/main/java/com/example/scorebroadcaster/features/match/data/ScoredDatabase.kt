@@ -36,6 +36,8 @@ import com.example.scorebroadcaster.features.teams.data.SavedTeamPlayerCrossRef
  *       involving two fielders.
  * - v8: Added `teamAId` and `teamBId` columns to `matches` so team UUIDs are persisted
  *       locally and reused for Supabase sync instead of being regenerated on each load.
+ * - v9: Added `isPenalty` column to `ball_events` to support penalty runs that are not
+ *       associated with a delivery.
  *
  * Use [getInstance] to obtain the singleton database instance.
  */
@@ -47,7 +49,7 @@ import com.example.scorebroadcaster.features.teams.data.SavedTeamPlayerCrossRef
         MatchEntity::class,
         BallEventEntity::class
     ],
-    version = 8,
+    version = 9,
     exportSchema = false
 )
 @TypeConverters(PlayerListTypeConverter::class)

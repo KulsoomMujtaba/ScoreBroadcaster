@@ -73,7 +73,8 @@ data class BallEventPayload(
     val strikerSourceProfileId: String? = null,
     val nonStrikerName: String? = null,
     val nonStrikerSourceProfileId: String? = null,
-    val targetIndex: Int? = null
+    val targetIndex: Int? = null,
+    val isPenalty: Boolean = false
 )
 
 // ---------------------------------------------------------------------------
@@ -120,9 +121,11 @@ fun BallEvent.toSupabaseEvent(
         strikerName = striker?.name,
         strikerSourceProfileId = striker?.sourceProfileId,
         nonStrikerName = nonStriker?.name,
-        nonStrikerSourceProfileId = nonStriker?.sourceProfileId
+        nonStrikerSourceProfileId = nonStriker?.sourceProfileId,
+        isPenalty = isPenalty
     )
     val eventType = when {
+        isPenalty -> EventType.PENALTY_RUNS
         wicket -> EventType.WICKET
         extras.wides > 0 || extras.noBalls > 0 || extras.byes > 0 || extras.legByes > 0 -> EventType.EXTRA
         runsOffBat > 0 -> EventType.RUN
@@ -185,7 +188,8 @@ fun SupabaseEvent.toBallEvent(): BallEvent {
         countsAsBall = p.countsAsBall,
         bowler = bowler,
         striker = striker,
-        nonStriker = nonStriker
+        nonStriker = nonStriker,
+        isPenalty = p.isPenalty
     )
 }
 
@@ -262,7 +266,8 @@ fun replayInningsEvents(events: List<SupabaseEvent>): List<BallEvent> {
     val active = mutableListOf<BallEvent>()
     for (event in events.sortedBy { it.eventIndex }) {
         when (event.eventType) {
-            EventType.BALL, EventType.RUN, EventType.EXTRA, EventType.WICKET -> active.add(event.toBallEvent())
+            EventType.BALL, EventType.RUN, EventType.EXTRA, EventType.WICKET,
+            EventType.PENALTY_RUNS -> active.add(event.toBallEvent())
             EventType.UNDO_TO_INDEX -> {
                 val rawTarget = event.payload.targetIndex
                 if (rawTarget == null) {

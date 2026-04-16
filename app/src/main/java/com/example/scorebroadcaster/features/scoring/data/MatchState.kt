@@ -14,6 +14,8 @@ data class MatchState(
     val noBalls: Int = 0,
     val byes: Int = 0,
     val legByes: Int = 0,
+    /** Penalty runs awarded by the umpire (not counted as extras, not tied to a delivery). */
+    val penaltyRuns: Int = 0,
     /**
      * True when the innings has consumed all its allocated overs (i.e. total legal balls
      * delivered equals [maxOvers] * 6).  Set by the scorer at domain/reducer level;

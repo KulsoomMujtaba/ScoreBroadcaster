@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -293,6 +294,7 @@ private fun BallChip(ball: IndexedBall, onClick: () -> Unit) {
     val isFour       = ball.event.runsOffBat >= 4 && !isExtra && !isSix
 
     val containerColor = when {
+        ball.event.isPenalty -> MaterialTheme.colorScheme.secondaryContainer
         isWicket -> MaterialTheme.colorScheme.errorContainer
         // BoundarySixContainer is a cricket-domain semantic colour (dark green for a six)
         // that has no standard M3 equivalent in our scheme — used directly for explicitness.
@@ -302,6 +304,7 @@ private fun BallChip(ball: IndexedBall, onClick: () -> Unit) {
         else     -> MaterialTheme.colorScheme.surfaceVariant
     }
     val contentColor = when {
+        ball.event.isPenalty -> MaterialTheme.colorScheme.onSecondaryContainer
         isWicket -> MaterialTheme.colorScheme.onErrorContainer
         isSix    -> OnBoundarySixContainer
         isFour   -> MaterialTheme.colorScheme.onSecondaryContainer
@@ -313,7 +316,7 @@ private fun BallChip(ball: IndexedBall, onClick: () -> Unit) {
         shape    = MaterialTheme.shapes.small,
         color    = containerColor,
         modifier = Modifier
-            .size(width = 40.dp, height = 36.dp)
+            .defaultMinSize(minWidth = if (ball.event.isPenalty) 72.dp else 40.dp, minHeight = 36.dp)
             .clickable(role = Role.Button, onClick = onClick)
     ) {
         Column(

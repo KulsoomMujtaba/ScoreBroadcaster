@@ -163,6 +163,27 @@ class MatchViewModel : ViewModel() {
     }
 
     /**
+     * Award penalty runs to the batting team.
+     *
+     * Penalty runs are credited directly to the team total and are visible in the timeline.
+     * They do not count as a delivery, do not affect the ball/over count, and do not change
+     * the striker.  The innings does not need to be active — penalty runs can be awarded at
+     * any time during or after an over.
+     *
+     * @param runs Number of penalty runs to award (typically 5).
+     */
+    fun addPenaltyRuns(runs: Int) {
+        Log.d("MatchViewModel", "Penalty runs awarded: $runs")
+        addBallEvent(
+            BallEvent(
+                runsOffBat = runs,
+                countsAsBall = false,
+                isPenalty = true
+            )
+        )
+    }
+
+    /**
      * Record a fully-constructed [BallEvent] directly.
      *
      * Use this for deliveries that cannot be expressed as a single [ScoreEvent], such as
@@ -175,8 +196,9 @@ class MatchViewModel : ViewModel() {
     fun addBallEvent(ballEvent: BallEvent) {
         // ── Domain-level overs limit guard ────────────────────────────────────────────────────
         // Block any new ball-based event when the innings is already over.
+        // Penalty runs bypass this guard — they can be awarded at any point.
         val currentState = _state.value
-        if (currentState.isInningsOver) {
+        if (currentState.isInningsOver && !ballEvent.isPenalty) {
             val totalBalls = currentState.overs * 6 + currentState.balls
             Log.d("OversLimit", "Blocking event: innings complete. " +
                     "Total balls: $totalBalls / Max balls: ${maxOvers() * 6}")
@@ -270,6 +292,9 @@ class MatchViewModel : ViewModel() {
         val console = _consoleState.value
         if (console.phase == InningsPhase.SETUP || console.phase == InningsPhase.MATCH_COMPLETE) return
         val striker = console.striker ?: return
+
+        // Penalty runs: credited to team total only — no delivery mechanics, no strike change.
+        if (event.isPenalty) return
 
         val isWide = event.extras.wides > 0
         val isNoBall = event.extras.noBalls > 0

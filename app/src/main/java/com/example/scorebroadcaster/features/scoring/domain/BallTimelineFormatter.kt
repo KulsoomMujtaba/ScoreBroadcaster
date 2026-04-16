@@ -66,6 +66,8 @@ object BallTimelineFormatter {
      * - `lb3`       — 3 leg-byes
      */
     fun formatBall(event: BallEvent): String {
+        if (event.isPenalty) return "Penalty +${event.runsOffBat}"
+
         val isWide   = event.extras.wides   > 0
         val isNoBall = event.extras.noBalls > 0
         val isBye    = event.extras.byes    > 0
