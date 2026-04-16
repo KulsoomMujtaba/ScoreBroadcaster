@@ -100,7 +100,7 @@ object BallTimelineFormatter {
                 when (type) {
                     DismissalType.RUN_OUT -> "W (run out)"
                     DismissalType.HIT_WICKET -> "Hit Wicket"
-                    DismissalType.OBSTRUCTING_FIELD -> "Obstructing Field"
+                    DismissalType.OBSTRUCTING_FIELD -> "Obstructing the Field"
                     else -> "W"
                 }
             }
