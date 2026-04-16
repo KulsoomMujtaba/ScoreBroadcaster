@@ -3163,7 +3163,6 @@ private fun ChangeBowlerMidOverBottomSheet(
                 .padding(horizontal = 24.dp)
                 .padding(bottom = 32.dp)
                 .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(0.dp)
         ) {
             Text(
                 text = "Change Bowler",
