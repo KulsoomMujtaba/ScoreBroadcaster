@@ -14,7 +14,7 @@ val localProperties = Properties().apply {
 }
 
 android {
-    namespace = "com.example.scorebroadcaster"
+    namespace = "com.devhub.scored"
     compileSdk {
         version = release(36)
     }
