@@ -27,8 +27,14 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.HorizontalDivider
@@ -140,6 +146,7 @@ private val immersiveRoutes = setOf("live_preview", "stream_preview")
 fun AppShell(
     navController: NavController,
     onSignOut: () -> Unit = {},
+    onDeleteAccount: () -> Unit = {},
     signedInEmail: String? = null,
     modifier: Modifier = Modifier,
     content: @Composable (PaddingValues) -> Unit
@@ -175,6 +182,10 @@ fun AppShell(
                 onSignOut = {
                     scope.launch { drawerState.close() }
                     onSignOut()
+                },
+                onDeleteAccount = {
+                    scope.launch { drawerState.close() }
+                    onDeleteAccount()
                 }
             )
         }
@@ -246,10 +257,16 @@ fun AppDrawer(
     currentRoute: String?,
     onNavigate: (String) -> Unit,
     onSignOut: () -> Unit = {},
+    onDeleteAccount: () -> Unit = {},
     signedInEmail: String? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+
+    // Two-stage delete account confirmation state.
+    var showDeleteConfirmDialog by remember { mutableStateOf(false) }
+    var showDeleteVerifyDialog by remember { mutableStateOf(false) }
+    var deleteConfirmInput by remember { mutableStateOf("") }
 
     ModalDrawerSheet(modifier = modifier) {
         Spacer(Modifier.height(16.dp))
@@ -364,6 +381,93 @@ fun AppDrawer(
             label = "Sign Out",
             selected = false,
             onClick = onSignOut
+        )
+
+        DrawerNavItem(
+            icon = Icons.Default.Delete,
+            label = "Delete Account",
+            selected = false,
+            onClick = { showDeleteConfirmDialog = true }
+        )
+    }
+
+    // Stage 1 — initial confirmation dialog.
+    if (showDeleteConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirmDialog = false },
+            title = { Text("Delete Account?") },
+            text = {
+                Text(
+                    "This will permanently delete your account and all your data. " +
+                        "This action cannot be undone."
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showDeleteConfirmDialog = false
+                        deleteConfirmInput = ""
+                        showDeleteVerifyDialog = true
+                    }
+                ) {
+                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirmDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // Stage 2 — type "DELETE" to confirm.
+    if (showDeleteVerifyDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                showDeleteVerifyDialog = false
+                deleteConfirmInput = ""
+            },
+            title = { Text("Are you absolutely sure?") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Type DELETE to confirm permanent account deletion.")
+                    OutlinedTextField(
+                        value = deleteConfirmInput,
+                        onValueChange = { deleteConfirmInput = it },
+                        singleLine = true,
+                        placeholder = { Text("DELETE") }
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = deleteConfirmInput == "DELETE",
+                    onClick = {
+                        showDeleteVerifyDialog = false
+                        deleteConfirmInput = ""
+                        onDeleteAccount()
+                    }
+                ) {
+                    Text(
+                        "Confirm",
+                        color = if (deleteConfirmInput == "DELETE")
+                            MaterialTheme.colorScheme.error
+                        else
+                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showDeleteVerifyDialog = false
+                        deleteConfirmInput = ""
+                    }
+                ) {
+                    Text("Cancel")
+                }
+            }
         )
     }
 }

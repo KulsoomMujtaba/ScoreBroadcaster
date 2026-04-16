@@ -1,17 +1,24 @@
 package com.devhub.scored.features.auth.viewmodel
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import android.util.Log
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.devhub.scored.core.supabase.SupabaseClientProvider
 import com.devhub.scored.features.auth.data.AuthErrorMapper
 import com.devhub.scored.features.auth.data.ProfileRepository
 import com.devhub.scored.features.auth.data.UserProfile
+import com.devhub.scored.features.match.data.ScoredDatabase
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.providers.builtin.Email
 import io.github.jan.supabase.auth.status.SessionStatus
+import io.github.jan.supabase.postgrest.postgrest
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+
+/** Represents the lifecycle state of an in-progress account deletion request. */
+enum class DeleteAccountState { IDLE, IN_PROGRESS, SUCCESS, ERROR }
 
 /**
  * ViewModel for Supabase email/password authentication.
@@ -22,10 +29,13 @@ import kotlinx.coroutines.launch
  * - [isAuthenticated] — true when a valid Supabase session is present.
  * - [currentUserEmail] — email of the signed-in user, or null.
  * - [currentProfile] — the signed-in user's app-level profile, or null.
+ * - [deleteAccountState] — lifecycle state of an in-progress account deletion.
  * - [isLoading] — true while an auth network call is in-flight.
  * - [authError] — human-readable error message from the last failed operation, or null.
  */
-class AuthViewModel : ViewModel() {
+class AuthViewModel(application: Application) : AndroidViewModel(application) {
+
+    private val db get() = ScoredDatabase.getInstance(getApplication())
 
     private val auth get() = SupabaseClientProvider.clientOrNull?.auth
 
@@ -50,6 +60,9 @@ class AuthViewModel : ViewModel() {
 
     private val _resetSuccess = MutableStateFlow(false)
     val resetSuccess: StateFlow<Boolean> = _resetSuccess.asStateFlow()
+
+    private val _deleteAccountState = MutableStateFlow(DeleteAccountState.IDLE)
+    val deleteAccountState: StateFlow<DeleteAccountState> = _deleteAccountState.asStateFlow()
 
     init {
         observeSession()
@@ -232,4 +245,69 @@ class AuthViewModel : ViewModel() {
     }
 
     private fun mapAuthError(e: Exception): String = AuthErrorMapper.map(e)
+
+    /**
+     * Permanently deletes the signed-in user's account and all associated data.
+     *
+     * Deletion order:
+     *  1. All backend user data is removed via the `delete_account` Supabase RPC
+     *     (team_players → teams → players → match_events → matches → profiles →
+     *     auth.users).  The server-side function is SECURITY DEFINER so it can
+     *     delete from the protected auth.users table while still being scoped to
+     *     the calling user via `auth.uid()`.
+     *  2. The local Room database is cleared so no residual data remains on device.
+     *  3. The in-memory session is invalidated (sign-out).
+     *
+     * Outcomes are published on [deleteAccountState].  Callers should observe
+     * [DeleteAccountState.SUCCESS] to navigate to the login screen and
+     * [DeleteAccountState.ERROR] to surface an error message.
+     */
+    fun deleteAccount() {
+        val authClient = auth
+        if (authClient == null) {
+            _authError.value = SupabaseClientProvider.missingConfigMessage
+            return
+        }
+
+        viewModelScope.launch {
+            _isLoading.value = true
+            _authError.value = null
+            _deleteAccountState.value = DeleteAccountState.IN_PROGRESS
+            Log.d("AuthViewModel", "Delete account initiated")
+
+            try {
+                val supabase = SupabaseClientProvider.clientOrNull
+                if (supabase != null) {
+                    // Step 1: Delete all user data + auth account via SECURITY DEFINER RPC.
+                    supabase.postgrest.rpc("delete_account")
+                    Log.d("AuthViewModel", "User data deletion completed")
+                    Log.d("AuthViewModel", "Auth account deleted")
+                }
+
+                // Step 2: Clear the local Room database.
+                db.clearAllTables()
+
+                _deleteAccountState.value = DeleteAccountState.SUCCESS
+
+                // Step 3: Invalidate the local session (best-effort; the auth row is
+                // already gone so the session tokens are invalid regardless).
+                try {
+                    authClient.signOut()
+                } catch (_: Exception) {
+                    // Session is already invalidated on the server — safe to ignore.
+                }
+            } catch (e: Exception) {
+                Log.e("AuthViewModel", "Delete account failed", e)
+                _authError.value = "Failed to delete account. Please try again."
+                _deleteAccountState.value = DeleteAccountState.ERROR
+            } finally {
+                _isLoading.value = false
+            }
+        }
+    }
+
+    /** Resets [deleteAccountState] to [DeleteAccountState.IDLE]. */
+    fun clearDeleteAccountState() {
+        _deleteAccountState.value = DeleteAccountState.IDLE
+    }
 }

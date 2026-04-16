@@ -3756,3 +3756,61 @@ access to the app's externally-hosted privacy policy document.
 |------|--------|
 | `navigation/AppShell.kt` | Added `PRIVACY_POLICY_URL` constant; added `LocalContext` import; added `Privacy Policy` `DrawerNavItem` with intent launch and toast fallback |
 | `README.md` | This development log entry |
+
+---
+
+## Feature: Account Deletion (Compliance)
+
+### Reason
+
+Play Store requires that apps using user accounts provide an in-app mechanism to permanently
+delete the account and all associated data. This feature satisfies that requirement.
+
+### What is deleted
+
+All user data is removed, in the following order:
+
+| Data | Table |
+|------|-------|
+| Team–player associations | `team_players` |
+| Saved teams | `teams` |
+| Saved player profiles | `players` |
+| Match events (ball-by-ball log) | `match_events` |
+| Matches | `matches` |
+| User profile | `profiles` |
+| Authentication account | `auth.users` |
+
+Local Room database tables are also cleared after the remote deletion succeeds.
+
+### Flow
+
+1. User opens the side navigation drawer and taps **Delete Account**.
+2. A first confirmation dialog appears: *"Delete Account?"* with a Cancel / Delete choice.
+3. If the user taps Delete, a second dialog asks them to type **DELETE** to confirm.
+4. Once "DELETE" is typed and Confirm is tapped:
+   - A `delete_account()` Supabase RPC (SECURITY DEFINER) is invoked server-side.
+   - All data is deleted in dependency order; the auth user row is deleted last.
+   - The local Room database is cleared.
+   - The local session is invalidated.
+   - The app returns to the sign-in screen automatically (driven by the Supabase session
+     status flow becoming `NotAuthenticated`).
+5. If any step fails, an error message is shown: *"Failed to delete account. Please try again."*
+   No partial deletion is committed silently.
+
+### Important
+
+- **Irreversible**: there is no grace period or soft-delete; data is permanently removed.
+- **Self-only**: the server-side function uses `auth.uid()` so users can only delete their
+  own account — never another user's.
+- **Secure**: deletion is performed via a SECURITY DEFINER Postgres function so the client
+  never needs the service-role key.
+
+### Files changed
+
+| File | Change |
+|------|--------|
+| `supabase/migrations/20260416_delete_account.sql` | New `delete_account()` SECURITY DEFINER RPC function |
+| `features/auth/viewmodel/AuthViewModel.kt` | Changed to `AndroidViewModel`; added `deleteAccount()`, `clearDeleteAccountState()`, `DeleteAccountState` enum, and `deleteAccountState` StateFlow |
+| `navigation/AppShell.kt` | Added `onDeleteAccount` callback to `AppShell` and `AppDrawer`; two-stage confirmation dialog; **Delete Account** drawer item |
+| `MainActivity.kt` | Wired `onDeleteAccount = { authViewModel.deleteAccount() }` and added `LaunchedEffect` to observe `DeleteAccountState.SUCCESS` |
+| `README.md` | This development log entry |

@@ -40,6 +40,7 @@ import com.devhub.scored.features.streaming.ui.StreamPreviewScreen
 import com.devhub.scored.features.streaming.ui.StreamSetupScreen
 import com.devhub.scored.core.theme.ScoreBroadcasterTheme
 import com.devhub.scored.features.auth.viewmodel.AuthViewModel
+import com.devhub.scored.features.auth.viewmodel.DeleteAccountState
 import com.devhub.scored.features.streaming.viewmodel.LiveStreamViewModel
 import com.devhub.scored.features.match.viewmodel.MatchSessionViewModel
 import com.devhub.scored.features.scoring.viewmodel.MatchViewModel
@@ -147,9 +148,19 @@ class MainActivity : ComponentActivity() {
                                         "(${scoringState.overs}.${scoringState.balls})  $inningsPart"
                             } else null
 
+                        // Observe account deletion state: clear local ViewModel state on
+                        // success (authentication state change handles navigation to sign-in).
+                        val deleteAccountState by authViewModel.deleteAccountState.collectAsState()
+                        LaunchedEffect(deleteAccountState) {
+                            if (deleteAccountState == DeleteAccountState.SUCCESS) {
+                                authViewModel.clearDeleteAccountState()
+                            }
+                        }
+
                         AppShell(
                             navController = navController,
                             onSignOut = { authViewModel.signOut() },
+                            onDeleteAccount = { authViewModel.deleteAccount() },
                             signedInEmail = authViewModel.currentUserEmail.collectAsState().value,
                             modifier = Modifier.fillMaxSize()
                         ) { paddingValues ->
