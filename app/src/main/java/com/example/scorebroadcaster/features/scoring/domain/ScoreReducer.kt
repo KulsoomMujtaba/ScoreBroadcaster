@@ -20,6 +20,15 @@ fun reduce(events: List<BallEvent>, maxOvers: Int = 0): MatchState =
     events.fold(MatchState()) { state, event -> applyEvent(state, event, maxOvers) }
 
 private fun applyEvent(state: MatchState, event: BallEvent, maxOvers: Int): MatchState {
+    // Penalty runs are credited directly to the team total with no delivery mechanics.
+    if (event.isPenalty) {
+        Log.d(TAG, "Penalty runs added: ${event.runsOffBat}")
+        return state.copy(
+            runs = state.runs + event.runsOffBat,
+            penaltyRuns = state.penaltyRuns + event.runsOffBat
+        )
+    }
+
     val (overs, balls) = if (event.countsAsBall) {
         incrementBall(state.overs, state.balls)
     } else {

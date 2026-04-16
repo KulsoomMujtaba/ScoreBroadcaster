@@ -56,6 +56,9 @@ data class BallEventEntity(
     val eventNonStrikerName: String?,
     val eventNonStrikerSourceProfileId: String?,
 
+    /** True when this event represents penalty runs (not a delivery). */
+    val isPenalty: Boolean = false,
+
     val createdAt: Long
 )
 
@@ -114,7 +117,8 @@ fun BallEventEntity.toDomain(): BallEvent {
         countsAsBall = countsAsBall,
         bowler = bowler,
         striker = striker,
-        nonStriker = nonStriker
+        nonStriker = nonStriker,
+        isPenalty = isPenalty
     )
 }
 
@@ -153,5 +157,6 @@ fun BallEvent.toEntity(
     eventStrikerSourceProfileId = striker?.sourceProfileId,
     eventNonStrikerName = nonStriker?.name,
     eventNonStrikerSourceProfileId = nonStriker?.sourceProfileId,
+    isPenalty = isPenalty,
     createdAt = System.currentTimeMillis()
 )

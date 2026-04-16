@@ -67,6 +67,79 @@ The core promise is simple: open the app, start a match, score every ball, and s
 | Match events persistence to Supabase (append-only event log) | ✅ Done | `SupabaseEventRepository`, `SupabaseEvent`, `MatchRepository`, `MatchViewModel` |
 | Match publishing + share code generation | ✅ Done | `MatchDetailsScreen`, `MatchSessionViewModel`, `MatchRepository`, `SupabaseMatchRepository` |
 | Read-only viewer mode (enter share code → view match) | ✅ Done | `EnterShareCodeScreen`, `MatchViewerScreen`, `MatchViewerViewModel` |
+| Penalty runs (umpire-awarded, no ball count / strike change) | ✅ Done | `ScoringScreen`, `MatchViewModel`, `ScoreReducer` |
+
+---
+
+## Feature: Penalty Runs Support
+
+### What are penalty runs?
+
+In cricket, **penalty runs** are runs awarded by the umpire directly to a batting or fielding
+team as a sanction for rule violations (e.g. ball handling, deliberate time-wasting, fielder
+obstruction).  They are defined in Law 41 of the Laws of Cricket.
+
+The key distinction from extras: **penalty runs are not associated with any delivery**.  They are
+not credited to any batter's individual score and are not counted as byes, leg-byes, wides, or
+no-balls.  They do not use up a ball, do not advance the over count, and do not change which
+batter is on strike.
+
+### Difference from extras
+
+| Property | Extras (Wide / No-Ball / Bye / Leg-Bye) | Penalty Runs |
+|----------|-----------------------------------------|--------------|
+| Tied to a delivery | Yes | No |
+| Counts as a ball | Only Bye / Leg-Bye | Never |
+| Changes strike | Possibly (odd byes/leg-byes) | Never |
+| Credited to batter | No | No |
+| Counted in `state.extras` | Yes | No (tracked in `state.penaltyRuns`) |
+| Bowler charged | Yes (wides/no-balls) | No |
+
+### Implementation approach
+
+The feature follows the existing event-driven architecture without modifying any existing event
+types or data contracts:
+
+1. **`EventType.PENALTY_RUNS`** — a new enum value that identifies penalty-run events in the
+   remote Supabase log.  The local Room entity uses an `isPenalty: Boolean` flag instead to
+   stay schema-minimal; the enum value is used only for remote classification.
+2. **`BallEvent.isPenalty`** — a new `Boolean` flag (default `false`) added to the domain model.
+   When `true`, the reducer credits the runs to the team total and returns immediately without
+   touching ball count, over count, or any extras counter.
+3. **`MatchState.penaltyRuns`** — a new accumulator field that tracks total penalty runs awarded
+   in the current innings, separate from `extras`.
+4. **`MatchViewModel.addPenaltyRuns(runs)`** — new public method that wraps a `BallEvent` with
+   `isPenalty = true`, `countsAsBall = false`, and dispatches it through the existing
+   `addBallEvent` pipeline.  The overs-limit guard in `addBallEvent` is bypassed for penalty
+   events so they can be awarded even after all overs are complete.
+5. **`updateConsoleAfterEvent`** — short-circuits immediately for penalty events: no batter
+   stats, no bowler stats, no strike rotation, no partnership update.
+6. **Timeline** — `BallTimelineFormatter.formatBall` returns `"Penalty +X"` for penalty events;
+   `OverSummaryCalculator.ballLabel` returns `"PX"` (compact form for the ribbon chip).  Penalty
+   events appear in the over card where they were recorded since they are still in the event log.
+7. **Undo** — works automatically: penalty events are stored in the innings event log just like
+   any other `BallEvent`.  Dropping the last event and re-reducing restores the pre-penalty state.
+8. **Persistence** — `BallEventEntity` gains an `isPenalty` column (DB version bumped from 8 → 9,
+   destructive migration active for development).  `BallEventPayload` gains an `isPenalty` field
+   for Supabase round-trips.  `replayInningsEvents` handles `PENALTY_RUNS` event type.
+
+### Files changed
+
+| File | Change |
+|------|--------|
+| `features/scoring/data/EventType.kt` | Added `PENALTY_RUNS` enum value |
+| `features/scoring/domain/BallEvent.kt` | Added `isPenalty: Boolean = false` parameter |
+| `features/scoring/data/MatchState.kt` | Added `penaltyRuns: Int = 0` field |
+| `features/scoring/domain/ScoreReducer.kt` | Short-circuit for penalty events: adds runs, skips all delivery logic |
+| `features/scoring/data/BallEventEntity.kt` | Added `isPenalty` column; updated `toDomain()` and `toEntity()` |
+| `features/match/data/ScoredDatabase.kt` | Version 8 → 9 (new `isPenalty` column) |
+| `features/scoring/data/SupabaseEvent.kt` | `BallEventPayload.isPenalty`; `toSupabaseEvent` uses `PENALTY_RUNS`; `toBallEvent` maps `isPenalty`; `replayInningsEvents` handles `PENALTY_RUNS` |
+| `features/scoring/viewmodel/MatchViewModel.kt` | `addPenaltyRuns(runs)`; overs guard bypassed for penalties; `updateConsoleAfterEvent` returns early for penalty |
+| `features/scoring/domain/BallTimelineFormatter.kt` | `formatBall` returns `"Penalty +X"` for penalty events |
+| `features/scoring/domain/OverSummaryCalculator.kt` | `ballLabel` returns `"PX"` for penalty events |
+| `features/scoring/ui/ScoringScreen.kt` | `+5 Penalty Runs` button in Actions; `PenaltyRunsDialog`; penalty chip colour in ribbon |
+| `features/scoring/ui/BallTimelineScreen.kt` | Penalty chip colour and wider min-width in timeline |
+| `README.md` | This development log entry |
 
 ---
 
