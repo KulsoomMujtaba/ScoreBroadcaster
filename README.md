@@ -191,6 +191,47 @@ causing the total score to be incorrect whenever a run-out happened mid-run.
 
 ---
 
+## Feature: Additional Wicket Types
+
+### What was added
+
+- **Hit Wicket** (`DismissalType.HIT_WICKET`) — the batter dislodges the bails with their bat
+  or body while playing a shot or setting off for a run.
+- **Obstructing the Field** (`DismissalType.OBSTRUCTING_FIELD`) — the batter wilfully obstructs
+  a fielder.
+
+### Reason
+
+The previous wicket-type list was incomplete, preventing scorers from accurately recording all
+recognised cricket dismissals.  Adding these two types improves scoring completeness and supports
+advanced cricket rules.
+
+### Impact
+
+- Both new dismissal types are selectable from the Wicket Details dialog (auto-populated from the
+  `DismissalType` enum — no extra UI code required).
+- **Hit Wicket**: counts as a legal ball (`countsAsBall = true`); bowler is credited; shown as
+  `"Hit Wicket"` in the timeline.
+- **Obstructing the Field**: does **not** count as a legal ball (`countsAsBall = false`); bowler
+  is **not** credited; shown as `"Obstructing Field"` in the timeline.
+- Undo works automatically — both types are stored as ordinary `BallEvent` entries in the event
+  log; dropping the last event and re-reducing restores the pre-wicket state.
+- The existing `ScoreReducer`, `MatchState`, event schema, and `match_events` Supabase table are
+  all untouched.
+
+### Files changed
+
+| File | Change |
+|------|--------|
+| `features/scoring/data/DismissalType.kt` | Added `HIT_WICKET` and `OBSTRUCTING_FIELD` enum values |
+| `features/scoring/data/DismissalDetail.kt` | `bowlerCredited` excludes `OBSTRUCTING_FIELD`; `toScorecardString()` handles both new types |
+| `features/scoring/data/ScoreEvent.kt` | `toBallEvent()` sets `countsAsBall = false` for `OBSTRUCTING_FIELD` |
+| `features/scoring/domain/BallTimelineFormatter.kt` | `formatBall` shows `"Hit Wicket"` / `"Obstructing Field"` for new types |
+| `features/scoring/viewmodel/MatchViewModel.kt` | Wicket log uses `.label` (→ `"Wicket: Hit Wicket"` / `"Wicket: Obstructing Field"`) |
+| `README.md` | This development log entry |
+
+---
+
 ## Feature: Match Publishing + Viewer Mode (v1)
 
 ### Private → Public model

@@ -5,5 +5,7 @@ enum class DismissalType(val label: String) {
     LBW("LBW"),
     RUN_OUT("Run Out"),
     STUMPED("Stumped"),
+    HIT_WICKET("Hit Wicket"),
+    OBSTRUCTING_FIELD("Obstructing the Field"),
     OTHER("Other")
 }
