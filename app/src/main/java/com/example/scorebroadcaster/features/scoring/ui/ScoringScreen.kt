@@ -2934,7 +2934,8 @@ private fun SelectBowlerBottomSheet(
  * naturally completed (win / all-out / overs-limit).
  *
  * Presents four result options and forwards the chosen label to [onResultSelected].
- * The dialog cannot be dismissed without making a selection.
+ * The dialog can be cancelled via the Cancel button or back-press, in which case
+ * [onDismiss] is called and the match is not ended.
  *
  * @param teamAName  Name of the first team (as configured for the match).
  * @param teamBName  Name of the second team (as configured for the match).

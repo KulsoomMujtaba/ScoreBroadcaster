@@ -1226,11 +1226,7 @@ class MatchViewModel : ViewModel() {
             phase = InningsPhase.MATCH_COMPLETE,
             pendingAction = null
         )
-        _activeMatch.value?.let { match ->
-            val updated = match.copy(status = MatchStatus.COMPLETED)
-            _activeMatch.value = updated
-            MatchRepository.updateMatch(updated)
-        }
+        persistMatchAsCompleted()
     }
 
     /**
@@ -1254,6 +1250,11 @@ class MatchViewModel : ViewModel() {
             pendingAction = null,
             manualResultLabel = resultLabel
         )
+        persistMatchAsCompleted()
+    }
+
+    /** Persists the active match status as [MatchStatus.COMPLETED] after the match ends. */
+    private fun persistMatchAsCompleted() {
         _activeMatch.value?.let { match ->
             val updated = match.copy(status = MatchStatus.COMPLETED)
             _activeMatch.value = updated
