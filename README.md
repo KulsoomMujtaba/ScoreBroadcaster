@@ -3464,3 +3464,84 @@ Extras handling follows cricket rules: **wides** and **no-balls** (`countsAsBall
 | `features/scoring/viewmodel/MatchViewModel.kt` | `addBallEvent()` guards against over-limit; auto-ends innings; `undo()` reopens innings; all `reduce()` calls pass `maxOvers()` |
 | `features/scoring/ui/ScoringScreen.kt` | `scoringEnabled` includes `!state.isInningsOver` (UX guard) |
 | `README.md` | This Development Log entry |
+
+---
+
+## Bug Fix: Extras Handling (Wide, No Ball, Bye, Leg Bye)
+
+### Problem
+
+Extras (Wide, No Ball, Bye, Leg Bye) were not fully handled in scoring:
+
+- **Strike** was never rotated for Wide or No Ball deliveries even when batsmen ran an odd number of extra runs (e.g. a Wide + 1 should rotate the strike, but did not).
+- **Timeline chips** showed lower-case abbreviated labels (`wd`, `nb`, `b2`, `lb3`) without the additional runs, making it impossible to tell from the timeline whether a Wide was a simple +1 or a Wide + extra runs.
+- **Over-summary strip** (`lastBalls`) showed static `"Wd"` / `"NB"` labels regardless of how many runs were scored, losing context on the scored-ball history strip.
+
+### Fix
+
+Three files were updated — all logic changes are at the domain/reducer level, not UI-only:
+
+1. **`MatchViewModel.updateConsoleAfterEvent()` — strike rotation**
+
+   Replaced the blanket `isWide || isNoBall -> false` guard with per-type run extraction:
+
+   | Extra type | Runs used for strike rotation |
+   |---|---|
+   | Wide | `extras.wides - 1` (runs physically run; excludes the automatic +1 penalty) |
+   | No Ball | `runsOffBat` (runs scored off bat) |
+   | Bye / Leg Bye | `extras.byes` / `extras.legByes` (unchanged — already correct) |
+
+   Strike is now swapped whenever the batsmen run an odd number of runs, regardless of extra type.
+
+2. **`BallTimelineFormatter.formatBall()` — timeline display**
+
+   Updated display strings to follow the format specified in the problem statement:
+
+   | Outcome | Display |
+   |---|---|
+   | Wide, no extra runs | `Wd` |
+   | Wide + 1 extra run | `Wd + 1` |
+   | No ball, no runs off bat | `Nb` |
+   | No ball + 2 runs off bat | `Nb + 2` |
+   | Bye, 1 run | `B 1` |
+   | Leg bye, 2 runs | `Lb 2` |
+
+3. **`ScoreReducer.buildBallLabel()` — over-summary strip**
+
+   Updated the short label used in the scored-ball history strip to include extra runs:
+
+   - `"Wd"` / `"Wd+2"` instead of a static `"Wd"`
+   - `"Nb"` / `"Nb+4"` instead of a static `"NB"`
+   - `"B1"`, `"Lb3"` (already included the count; now uses consistent casing `B`/`Lb`)
+
+4. **Logging** added at both the reducer and ViewModel layers:
+
+   - `"Extra event: type=X, runs=Y"` — logged in both `ScoreReducer.applyEvent()` and `MatchViewModel.updateConsoleAfterEvent()` whenever an extra is processed.
+   - `"Total runs updated to Z"` — logged in `ScoreReducer.applyEvent()` after the new total is computed.
+   - `"Strike swapped: true/false"` — logged in `MatchViewModel.updateConsoleAfterEvent()` for every delivery.
+
+### Key principle
+
+> Extras affect score and strike differently depending on type.
+
+- **Wide / No Ball** add a 1-run penalty on top of any runs physically run; neither delivery counts as a legal ball.
+- **Bye / Leg Bye** add only the runs physically run; both count as legal balls.
+- Strike rotation is determined solely by whether the batsmen ran an **odd number of runs** — the extra-type penalty (the automatic +1) does not participate in this calculation.
+
+### What did NOT change
+
+- `EventType` enum — no new event types added
+- `BallEvent` / `ExtrasBreakdown` models — untouched
+- `ScoreEvent.toBallEvent()` mapping — untouched
+- Room `BallEventEntity` schema — untouched
+- Supabase `match_events` table — untouched
+- Sync logic (`SupabaseMatchRepository`, `SupabaseEventRepository`) — untouched
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `features/scoring/domain/ScoreReducer.kt` | `buildBallLabel()` includes extra runs; `applyEvent()` logs extra event details |
+| `features/scoring/domain/BallTimelineFormatter.kt` | `formatBall()` uses updated display strings (capitalised, space-separated) |
+| `features/scoring/viewmodel/MatchViewModel.kt` | `updateConsoleAfterEvent()` fixes strike rotation for Wide/No Ball; logs extra events |
+| `README.md` | Added this Development Log entry |
