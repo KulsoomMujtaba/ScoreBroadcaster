@@ -2462,8 +2462,11 @@ internal fun PenaltyRunsDialog(
     var useCustom by remember { mutableStateOf(false) }
     var customText by remember { mutableStateOf("") }
 
-    val finalRuns = if (useCustom) customText.toIntOrNull()?.coerceAtLeast(1) ?: selectedRuns
-                   else selectedRuns
+    // When custom mode is active the input must be a valid positive integer;
+    // null means the text is empty or non-numeric, which disables the Confirm button.
+    val customRuns: Int? = if (useCustom) customText.toIntOrNull()?.takeIf { it >= 1 } else null
+    val finalRuns: Int? = if (useCustom) customRuns else selectedRuns
+    val isValid = finalRuns != null
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -2495,19 +2498,25 @@ internal fun PenaltyRunsDialog(
                         value = customText,
                         onValueChange = { customText = it.filter { c -> c.isDigit() } },
                         label = { Text("Penalty runs") },
+                        isError = customText.isNotEmpty() && customRuns == null,
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
-                Text(
-                    "Penalty runs: $finalRuns",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.primary
-                )
+                if (isValid) {
+                    Text(
+                        "Penalty runs: $finalRuns",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
             }
         },
         confirmButton = {
-            Button(onClick = { onConfirm(finalRuns) }) { Text("Confirm") }
+            Button(
+                onClick = { finalRuns?.let { onConfirm(it) } },
+                enabled = isValid
+            ) { Text("Confirm") }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("Cancel") }

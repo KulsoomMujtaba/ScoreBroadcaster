@@ -176,6 +176,9 @@ class MatchViewModel : ViewModel() {
         Log.d("MatchViewModel", "Penalty runs awarded: $runs")
         addBallEvent(
             BallEvent(
+                // runsOffBat is the only "runs" field on BallEvent.  For penalty events the
+                // ScoreReducer reads this value and credits it to the team total directly;
+                // it is NOT credited to any individual batter's tally.
                 runsOffBat = runs,
                 countsAsBall = false,
                 isPenalty = true
