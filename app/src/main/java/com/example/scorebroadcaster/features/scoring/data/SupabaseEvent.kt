@@ -1,6 +1,8 @@
 package com.example.scorebroadcaster.features.scoring.data
 
+import android.os.Build
 import android.util.Log
+import androidx.annotation.RequiresApi
 import com.example.scorebroadcaster.features.players.data.Player
 import com.example.scorebroadcaster.features.scoring.domain.BallEvent
 import kotlinx.serialization.EncodeDefault
@@ -262,6 +264,7 @@ fun buildUndoSupabaseEvent(
  * @param events All remote events for a single innings, in any order.
  * @return       The active [BallEvent] list after all undo commands have been applied.
  */
+@RequiresApi(Build.VERSION_CODES.VANILLA_ICE_CREAM)
 fun replayInningsEvents(events: List<SupabaseEvent>): List<BallEvent> {
     val active = mutableListOf<BallEvent>()
     for (event in events.sortedBy { it.eventIndex }) {
