@@ -102,6 +102,17 @@ class MatchViewModel : ViewModel() {
     fun clearValidationError() { _validationError.value = null }
 
     /**
+     * One-shot message emitted when the bowler is changed mid-over (i.e. while balls > 0
+     * in the current over).  Cleared by [clearBowlerChangedMessage].
+     *
+     * The UI should observe this flow and display the message via a Snackbar.
+     */
+    private val _bowlerChangedMessage = MutableStateFlow<String?>(null)
+    val bowlerChangedMessage: StateFlow<String?> = _bowlerChangedMessage.asStateFlow()
+
+    fun clearBowlerChangedMessage() { _bowlerChangedMessage.value = null }
+
+    /**
      * Completed partnerships from the first innings.
      * Populated when the first innings ends; stays empty until then.
      */
@@ -1092,7 +1103,17 @@ class MatchViewModel : ViewModel() {
         }
     }
 
-    /** Called at the end of each over when the scorer picks the new bowler. */
+    /**
+     * Called to change the current bowler.  Works at any point during an innings:
+     * at the end of an over (when [ScoringConsoleState.pendingAction] is
+     * [PendingAction.SelectBowler]) as well as mid-over at the scorer's discretion.
+     *
+     * // NOTE:
+     * // Bowler is currently stored as state (currentBowlerId / currentBowler)
+     * // and NOT per event.
+     * // Changing bowler applies only to future deliveries — past events are never modified.
+     * // Future enhancement: attach bowlerId to each event for full per-ball accuracy.
+     */
     fun changeBowler(player: Player) {
         val match = _activeMatch.value
         if (match != null) {
@@ -1105,6 +1126,13 @@ class MatchViewModel : ViewModel() {
             }
         }
         val console = _consoleState.value
+        val previousBowlerName = console.currentBowler?.name ?: "none"
+        val currentBallCount = _state.value.balls
+
+        Log.d("BowlerChange", "Bowler changed from $previousBowlerName to ${player.name}")
+        Log.d("BowlerChange", "Applied to future deliveries only")
+        Log.d("BowlerChange", "Current over: ball count = $currentBallCount")
+
         val existingEntry = console.allBowlingEntries.find { it.player.id == player.id }
         val entry = existingEntry ?: BowlingEntry(player = player)
         val updatedAll = if (existingEntry != null) console.allBowlingEntries
@@ -1115,6 +1143,12 @@ class MatchViewModel : ViewModel() {
             allBowlingEntries = updatedAll,
             pendingAction = null
         )
+
+        // Notify the UI when a bowler change happens mid-over so a confirmation
+        // message can be shown to the scorer.
+        if (currentBallCount > 0) {
+            _bowlerChangedMessage.value = "Bowler changed for remaining deliveries"
+        }
     }
 
     /**
