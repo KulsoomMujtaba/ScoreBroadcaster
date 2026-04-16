@@ -3720,3 +3720,39 @@ All changes are logged under the `BowlerChange` tag:
 | `features/scoring/viewmodel/MatchViewModel.kt` | `changeBowler()` — added logging, mid-over message emission, and documentation comment; added `_bowlerChangedMessage` StateFlow + `clearBowlerChangedMessage()` |
 | `features/scoring/ui/ScoringScreen.kt` | `PlayersSection` — "Change Bowler" button on bowler row; `ChangeBowlerMidOverBottomSheet` composable; `showChangeBowlerSheet` state; `bowlerChangedMessage` snackbar observer |
 | `README.md` | This development log entry |
+
+---
+
+## Feature: Privacy Policy Access in App
+
+### What was added
+
+A **Privacy Policy** entry has been added to the side navigation drawer, giving users easy
+access to the app's externally-hosted privacy policy document.
+
+### Changes
+
+- Added navigation entry for **Privacy Policy** in the `AppDrawer` side menu, positioned
+  after the **About** item in the utility section near the bottom.
+- On tap, the app launches an `Intent(Intent.ACTION_VIEW)` to open the policy URL in the
+  device's default external browser — the document is never embedded inside the app.
+- If no browser app is available, a `Toast` message **"Unable to open link"** is displayed
+  as a graceful fallback.
+- A log entry `"Privacy Policy opened"` is emitted under the `AppDrawer` tag whenever the
+  link is successfully launched.
+- Linked to the externally hosted document:
+  `https://docs.google.com/document/d/1d8c6IOqUwHz7jXLD33xIEWFWMAmEkf8rmmvsK5wi1Hw/edit?pli=1&tab=t.0`
+- Ensures compliance and user transparency (required for Play Store).
+
+### Key behaviour
+
+- No authentication is required to access the link.
+- No backend, database, or authentication-flow changes.
+- Implementation is lightweight — a single intent call with a fallback toast.
+
+### Files changed
+
+| File | Change |
+|------|--------|
+| `navigation/AppShell.kt` | Added `PRIVACY_POLICY_URL` constant; added `LocalContext` import; added `Privacy Policy` `DrawerNavItem` with intent launch and toast fallback |
+| `README.md` | This development log entry |
