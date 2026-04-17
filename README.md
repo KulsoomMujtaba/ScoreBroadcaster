@@ -3756,3 +3756,35 @@ access to the app's externally-hosted privacy policy document.
 |------|--------|
 | `navigation/AppShell.kt` | Added `PRIVACY_POLICY_URL` constant; added `LocalContext` import; added `Privacy Policy` `DrawerNavItem` with intent launch and toast fallback |
 | `README.md` | This development log entry |
+
+---
+
+## Development Log — Bug Fix: Kotlin removeFirst/removeLast Compatibility
+
+### Issue
+
+Play Store flagged a runtime incompatibility in:
+
+`com.devhub.scored.features.scoring.data.SupabaseEventKt.replayInningsEvents`
+
+Kotlin's `removeFirst()` and `removeLast()` extension functions conflict with Java APIs introduced in Android 15, causing crashes on Android 14 and below.
+
+### Fix
+
+Replaced all usages of `removeLast()` (and `removeFirst()` if present) with safe `removeAt()` calls guarded by an `isNotEmpty()` check:
+
+- `list.removeLast()` → `if (list.isNotEmpty()) { list.removeAt(list.lastIndex) }`
+- `list.removeFirst()` → `if (list.isNotEmpty()) { list.removeAt(0) }`
+
+### Impact
+
+- Prevents crashes on Android 14 and below
+- No change to reducer logic, event structure, or business logic
+- App behaviour remains identical
+
+### Files changed
+
+| File | Change |
+|------|--------|
+| `features/scoring/data/SupabaseEvent.kt` | Replaced `active.removeLast()` with `removeAt(active.lastIndex)` guarded by `isNotEmpty()` check |
+| `README.md` | This development log entry |

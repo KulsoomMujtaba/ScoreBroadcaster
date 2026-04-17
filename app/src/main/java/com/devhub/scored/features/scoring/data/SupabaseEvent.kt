@@ -279,7 +279,12 @@ fun replayInningsEvents(events: List<SupabaseEvent>): List<BallEvent> {
                 }
                 val target = rawTarget.coerceIn(0, active.size)
                 Log.d(TAG_REPLAY, "Applying undo to index $target (event index ${event.eventIndex})")
-                while (active.size > target) active.removeLast()
+                while (active.size > target) {
+                    if (active.isNotEmpty()) {
+                        active.removeAt(active.lastIndex)
+                        Log.d(TAG_REPLAY, "Removed last element safely")
+                    }
+                }
             }
             else -> Log.w(TAG_REPLAY, "Unknown event type '${event.eventType}' at index ${event.eventIndex} — skipping")
         }
