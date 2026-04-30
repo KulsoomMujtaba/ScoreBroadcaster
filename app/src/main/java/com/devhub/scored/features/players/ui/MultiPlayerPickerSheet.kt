@@ -190,6 +190,7 @@ fun MultiPlayerPickerSheet(
                             else "Done (${selected.size})"
                             Button(
                                 onClick = { onConfirm(selected.toList()) },
+                                enabled = selected.isNotEmpty(),
                                 modifier = Modifier.padding(end = 8.dp)
                             ) {
                                 Text(label)
@@ -487,7 +488,7 @@ internal fun AddPlayerOptionsDialog(
                     onClick = onQuickAdd,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Column(horizontalAlignment = Alignment.Start) {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = "Add as Quick Player",
                             style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold)
@@ -504,7 +505,7 @@ internal fun AddPlayerOptionsDialog(
                     onClick = onSaveAndAdd,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Column(horizontalAlignment = Alignment.Start) {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = "Save & Add Player",
                             style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold)
