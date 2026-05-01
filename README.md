@@ -71,6 +71,67 @@ The core promise is simple: open the app, start a match, score every ball, and s
 
 ---
 
+## Player Model Refactor (Future-proofed)
+
+### What changed
+
+The `Player` data class (match-level snapshot) has been refactored to cleanly distinguish between
+quick (ad-hoc) players and saved (profile-backed) players, while laying internal groundwork for a
+future global player system — without exposing any of that complexity in the UI.
+
+### Introduced: Quick Players
+
+A **quick player** is one created on-the-fly by typing a name during match setup or scoring.
+It exists only within the match context and is never synced to the backend.
+
+- `type = PlayerType.QUICK`
+- `sourceProfileId == null`
+- Not persisted remotely
+
+### Introduced: Saved Players (explicit type)
+
+A **saved player** is backed by a `PlayerProfile` owned by the current user and stored in the
+local Room database (optionally synced to Supabase).
+
+- `type = PlayerType.SAVED`
+- `sourceProfileId` references the backing `PlayerProfile.id`
+- `userId` holds the owning user's id when available
+
+### Prepared for future global system (no UI exposure yet)
+
+Two internal fields were added to `Player` to future-proof the model.  They are not displayed
+or editable anywhere in the current UI:
+
+| Field | Type | Purpose |
+|-------|------|---------|
+| `sourceType` | `PlayerOrigin` (LOCAL / FUTURE_GLOBAL) | Distinguishes locally-created players from future cross-account ones |
+| `externalUserId` | `String?` | Reserved for linking a player to a global user identity |
+
+`PlayerOrigin.FUTURE_GLOBAL` is reserved and not assigned today.  When global player support
+is added, no UI changes will be required — only the backend layer needs to populate these fields.
+
+### Match system unchanged
+
+Both player types are treated identically by the scoring engine.  `MatchViewModel`,
+`ScoreReducer`, and all match-state logic remain untouched.
+
+### Backward compatibility
+
+`PlayerListTypeConverter` handles JSON rows written before the new fields were introduced.
+Missing keys fall back to sensible defaults (type derived from `sourceProfileId`, sourceType
+defaults to LOCAL).
+
+### Files changed
+
+| File | Change |
+|------|--------|
+| `features/players/data/Player.kt` | Added `PlayerType` and `PlayerOrigin` enums; added `type`, `userId`, `sourceType`, `externalUserId` fields to `Player` |
+| `features/players/data/PlayerProfile.kt` | `toMatchPlayer()` now sets `type = SAVED` and propagates `userId = linkedUserId` |
+| `features/players/data/PlayerListTypeConverter.kt` | Serialises / deserialises new fields; backward-compat defaults for legacy rows |
+| `README.md` | This section |
+
+---
+
 ## Feature: Penalty Runs Support
 
 ### What are penalty runs?

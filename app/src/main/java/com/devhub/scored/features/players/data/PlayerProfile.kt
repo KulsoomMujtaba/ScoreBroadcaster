@@ -48,5 +48,6 @@ data class PlayerProfile(
  */
 fun PlayerProfile.toMatchPlayer(): Player = Player(
     name = displayName,
-    sourceProfileId = id
+    sourceProfileId = id,
+    userId = linkedUserId
 )
